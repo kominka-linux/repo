@@ -13,42 +13,20 @@ jobs:
       fail-fast: false
       matrix:
         pkg:
-          - baseinit
-          - baselayout
-          - bison
+          # Missing x86_64 builds
           - boringssl
-          - bzip2
-          - ca-certificates
-          - cargo
-          - cmake
           - curl
-          - dosfstools
-          - dropbear
-          - e2fsprogs
           - git
-          - glibc
           - go
-          - libevent
-          - libudev-zero
-          - linux
           - linux-pam
-          - m4
-          - make
           - muon
-          - perl
-          - pkgconf
-          - runit
-          - samurai
-          - sqlite
-          - strace
           - sudo-rs
-          - tailscale
           - tmux
-          - xz
-          - ysh
-          - zig
           - zlib
-          - busybox
+          # Rebuild with strip enabled
+          - cargo
+          - zig
+          - tailscale
 
     steps:
       - uses: actions/checkout@v4
