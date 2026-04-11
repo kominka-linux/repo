@@ -1,0 +1,58 @@
+#!/usr/local/bin/ysh
+
+var name    = 'linux'
+var ver     = '6.19.12'
+var rel     = '1'
+var deps    = []
+var mkdeps  = ['make', 'bison', 'perl']
+
+var sources = [
+    'https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-VERSION.tar.xz',
+    'files/kernel.config',
+    'files/kernel-x86_64.config',
+]
+var checksums = [
+    'ce5c4f1205f9729286b569b037649591555f31ca1e03cc504bd3b70b8e58a8d5',
+    'da2120ab4dd52ef2f86be7b9ff4ee1e7df8bc6eb2d8e7304494f63c727ceb835',
+    '6f328f7cd16b5de2e2e6b19874a3eab549895e93ebee813878ea9e46897c78b7',
+]
+
+proc build(dest) {
+    var ARCH = $(uname -m)
+
+    # Merge tinyconfig with our arch-specific fragment.
+    make ARCH=$ARCH tinyconfig
+
+    case (ARCH) {
+        x86_64  { scripts/kconfig/merge_config.sh -m .config kernel-x86_64.config }
+        *       { scripts/kconfig/merge_config.sh -m .config kernel.config }
+    }
+
+    make ARCH=$ARCH olddefconfig
+
+    # Build the kernel image.
+    case (ARCH) {
+        x86_64 {
+            make -j$[ENV => get("MAKEFLAGS", "") => split() => join("")] ARCH=$ARCH bzImage
+            mkdir -p "${dest}/usr/share/kominka"
+            cp arch/x86/boot/bzImage "${dest}/usr/share/kominka/Image"
+        }
+        * {
+            make -j$[ENV => get("MAKEFLAGS", "") => split() => join("")] ARCH=$ARCH Image
+            mkdir -p "${dest}/usr/share/kominka"
+            cp arch/arm64/boot/Image "${dest}/usr/share/kominka/Image"
+        }
+    }
+
+    # Install kernel headers (replaces linux-headers package).
+    make ARCH=$ARCH headers
+
+    find usr/include -name '*.h' -type f | while read -r file {
+        mkdir -p "${dest}/${file%/*}"
+        cp -f $file "${dest}/${file}"
+    }
+
+    # Save the final .config for reference.
+    mkdir -p "${dest}/usr/share/kominka"
+    cp .config "${dest}/usr/share/kominka/kernel.config"
+}
