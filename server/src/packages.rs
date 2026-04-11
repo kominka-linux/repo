@@ -54,17 +54,14 @@ const KNOWN_ARCHES: &[&str] = &["aarch64-linux-gnu", "x86_64-linux-gnu"];
 
 fn valid_pkg_name(name: &str) -> bool {
     !name.is_empty()
-        && name
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'.' || b == b'-' || b == b'_')
+        && name.bytes().all(|b| {
+            b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'.' || b == b'-' || b == b'_'
+        })
         && name.as_bytes()[0].is_ascii_alphanumeric()
 }
 
 // GET /{arch}/packages.json
-pub async fn get_index(
-    State(state): State<Arc<AppState>>,
-    Path(arch): Path<String>,
-) -> Response {
+pub async fn get_index(State(state): State<Arc<AppState>>, Path(arch): Path<String>) -> Response {
     if !KNOWN_ARCHES.contains(&arch.as_str()) {
         return StatusCode::NOT_FOUND.into_response();
     }
@@ -133,13 +130,21 @@ pub async fn upload(
         return (StatusCode::BAD_REQUEST, r#"{"error":"unknown arch"}"#).into_response();
     }
     if !valid_pkg_name(&pkg) {
-        return (StatusCode::BAD_REQUEST, r#"{"error":"invalid package name"}"#).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            r#"{"error":"invalid package name"}"#,
+        )
+            .into_response();
     }
 
     let deps: Vec<String> = if deps_raw.is_empty() {
         vec![]
     } else {
-        deps_raw.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+        deps_raw
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
     };
 
     // Read body and compute SHA-256.
@@ -160,7 +165,10 @@ pub async fn upload(
     let key = format!("{arch}/{pkg}/{hash}.tar.gz");
     if let Err(e) = state.s3.put(&key, bytes, "application/octet-stream").await {
         tracing::error!("upload failed: {e}");
-        return (StatusCode::INTERNAL_SERVER_ERROR, r#"{"error":"upload failed"}"#)
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            r#"{"error":"upload failed"}"#,
+        )
             .into_response();
     }
 
@@ -174,7 +182,10 @@ pub async fn upload(
     };
     if let Err(e) = update_index(&state, &arch, &pkg, entry).await {
         tracing::error!("index update failed: {e}");
-        return (StatusCode::INTERNAL_SERVER_ERROR, r#"{"error":"index update failed"}"#)
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            r#"{"error":"index update failed"}"#,
+        )
             .into_response();
     }
 
@@ -201,7 +212,11 @@ pub async fn publish(
         return (StatusCode::BAD_REQUEST, r#"{"error":"unknown arch"}"#).into_response();
     }
     if !valid_pkg_name(&body.pkg) {
-        return (StatusCode::BAD_REQUEST, r#"{"error":"invalid package name"}"#).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            r#"{"error":"invalid package name"}"#,
+        )
+            .into_response();
     }
 
     let entry = PackageEntry {
@@ -213,7 +228,10 @@ pub async fn publish(
     };
     if let Err(e) = update_index(&state, &body.arch, &body.pkg, entry).await {
         tracing::error!("index update failed: {e}");
-        return (StatusCode::INTERNAL_SERVER_ERROR, r#"{"error":"index update failed"}"#)
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            r#"{"error":"index update failed"}"#,
+        )
             .into_response();
     }
 
@@ -260,13 +278,10 @@ fn header_str(headers: &HeaderMap, name: &str) -> String {
 
 mod hex {
     pub fn encode(bytes: impl AsRef<[u8]>) -> String {
-        bytes
-            .as_ref()
-            .iter()
-            .fold(String::new(), |mut s, b| {
-                use std::fmt::Write;
-                write!(s, "{b:02x}").unwrap();
-                s
-            })
+        bytes.as_ref().iter().fold(String::new(), |mut s, b| {
+            use std::fmt::Write;
+            write!(s, "{b:02x}").unwrap();
+            s
+        })
     }
 }

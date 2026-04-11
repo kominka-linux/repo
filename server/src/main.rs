@@ -95,10 +95,7 @@ async fn main() {
     let app = Router::new()
         .route("/health", get(health))
         .route("/{arch}/packages.json", get(packages::get_index))
-        .route(
-            "/{arch}/{pkg}/{file}",
-            get(packages::get_tarball),
-        )
+        .route("/{arch}/{pkg}/{file}", get(packages::get_tarball))
         .route("/api/upload", axum::routing::post(packages::upload))
         .route("/api/publish", axum::routing::post(packages::publish))
         .with_state(state);
