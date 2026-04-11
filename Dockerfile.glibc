@@ -13,23 +13,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     make patch python3 gawk bison flex texinfo m4 libelf-dev \
     gettext libexpat1-dev bc \
     cmake ninja-build \
-    libcurl4-openssl-dev \
     libevent-dev \
+    libpam0g-dev \
     pkg-config \
     golang-go && \
     rm -rf /var/lib/apt/lists/* && \
     # ninja as drop-in for samu
     ln -s /usr/bin/ninja /usr/local/bin/samu
 
-# Build muon (meson-compatible build tool) from its amalgamated bootstrap.
+# Build the full muon (meson-compatible build tool) from source.
 # linux-pam uses muon as its build system; it's not in Debian bookworm.
+# muon-bootstrap alone hits an assertion (workspace_init_startup_files):
+# the full binary is required.
 RUN curl -fsSLo /tmp/muon.tar.gz \
         https://github.com/annacrombie/muon/archive/refs/tags/0.5.0.tar.gz && \
     mkdir /tmp/muon-src && \
     tar xzf /tmp/muon.tar.gz -C /tmp/muon-src --strip-components=1 && \
     cd /tmp/muon-src && \
     CC=gcc sh bootstrap.sh build && \
-    install -m755 build/muon-bootstrap /usr/local/bin/muon && \
+    build/muon-bootstrap setup \
+        -Dprefix=/usr/local \
+        -Dlibcurl=disabled \
+        -Dlibarchive=disabled \
+        -Dlibpkgconf=disabled \
+        -Dman-pages=disabled \
+        -Dmeson-docs=disabled \
+        -Dmeson-tests=disabled \
+        -Dwebsite=disabled \
+        build-final && \
+    ninja -C build-final && \
+    install -m755 build-final/muon /usr/local/bin/muon && \
     rm -rf /tmp/muon*
 
 # Install Rust via rustup. Debian bookworm ships cargo 0.64 which does not
