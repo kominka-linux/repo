@@ -40,7 +40,7 @@ var checksums = [
     'd70c4cd6381baeb3836c0387f53553021b48bdc851de49f1c86d836f7d0355fc',
     'b030d6ac2b3284cf3cc0a2eec886d26b7e09ea59feb460a6a09165da62a582b4',
     'c8a6fc95a75fa355d570c14e214d68a618e060a486b824b83b5140b9c6a894a7',
-    '1534169085d810abac1ece4ca44c5cd1f8f6cbbbf0832efbf6bec7df969ce43b',
+    '541aa2a74f4919f13bb182dc8d1952a601200a7757d4ddadd3d2fe0437dc7b4d',
     '0c6c739c8fde77029c5d27a4af216ab07563b59462f5f71cc039110059ad9ab2',
     'f31e8c7552af2bb45a62f50c19524c2086f8f749f2ddc660de76d840c93a1f9f',
     '2b22b878442f8a31b9b98601db68a71923ca05c6fc2f4f681060f38f3bf71f3f',
@@ -108,6 +108,16 @@ proc build(dest) {
     # libcrypt is no longer bundled in glibc 2.43+; busybox uses its own
     # crypt (USE_BB_CRYPT=y) so strip the -lcrypt link flag everywhere.
     try { grep -rl -- -lcrypt . 2>/dev/null | xargs sed -i 's/-lcrypt//g' }
+    # Settle any new config symbols before the main build. Run oldconfig
+    # in a shell loop until no NEW symbols remain; silentoldconfig aborts
+    # otherwise.
+    sh -c "
+        hcc='$HOSTCC'
+        while true; do
+            out=\$(yes '' | make HOSTCC=\$hcc oldconfig 2>&1)
+            echo \"\$out\" | grep -q '(NEW)' || break
+        done
+    "
     make HOSTCC=$HOSTCC SKIP_STRIP=y
     make CONFIG_PREFIX="${dest}/usr" install
 
@@ -116,6 +126,13 @@ proc build(dest) {
 
     # Build and install suid busybox.
     cp -f .config-suid .config
+    sh -c "
+        hcc='$HOSTCC'
+        while true; do
+            out=\$(yes '' | make HOSTCC=\$hcc oldconfig 2>&1)
+            echo \"\$out\" | grep -q '(NEW)' || break
+        done
+    "
     make HOSTCC=$HOSTCC SKIP_STRIP=y
     make CONFIG_PREFIX="${dest}/usr" install
 
