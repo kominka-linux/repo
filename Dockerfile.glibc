@@ -11,16 +11,19 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl ca-certificates tar gzip bzip2 xz-utils \
     make patch python3 gawk bison flex texinfo m4 libelf-dev \
-    gettext libexpat1-dev libssl-dev libssl-dev bc \
+    gettext libexpat1-dev libssl-dev bc \
     cmake ninja-build \
     libcurl4-openssl-dev \
     libevent-dev \
-    rustup \
     pkg-config && \
     rm -rf /var/lib/apt/lists/* && \
-    rustup default stable && \
-    # samu is our build tool; ninja serves as a drop-in replacement
-    ln -s /usr/bin/ninja /usr/local/bin/samu
+    # Install Rust via rustup (rustup package not in Debian bookworm)
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && \
+    # ninja as drop-in for samu
+    ln -s /usr/bin/ninja /usr/local/bin/samu && \
+    # Make cargo available system-wide
+    ln -s /root/.cargo/bin/cargo /usr/local/bin/cargo && \
+    ln -s /root/.cargo/bin/rustc /usr/local/bin/rustc
 
 # Install ysh (static musl binary — runs on any Linux).
 ARG R2_BASE=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
