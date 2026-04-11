@@ -62,9 +62,11 @@ jobs:
       - name: Build ${{ inputs.package }} (zig cc)
         if: ${{ !matrix.debian && !inputs.debian }}
         run: |
+          mkdir -p out
           docker run --rm \
             -v "$PWD/packages:/packages:ro" \
             -v "$PWD/pm/pm.ysh:/usr/bin/pm:ro" \
+            -v "$PWD/out:/out" \
             -e KOMINKA_REPO="${{ secrets.KOMINKA_REPO }}" \
             -e KOMINKA_TOKEN="${{ secrets.KOMINKA_TOKEN }}" \
             -e KOMINKA_PATH=/packages \
@@ -80,7 +82,10 @@ jobs:
             kominka:core sh -c '
               pm b "${{ inputs.package }}"
               ldconfig 2>/dev/null
-              pm p "${{ inputs.package }}"'
+              for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
+                [ -f "$f" ] && cp "$f" /out/
+              done
+              pm p "${{ inputs.package }}" || true'
 
       # ── Debian builder path (amd64 always, arm64 if debian=true) ────────
 
@@ -95,9 +100,11 @@ jobs:
       - name: Build ${{ inputs.package }} (Debian GCC)
         if: ${{ matrix.debian || inputs.debian }}
         run: |
+          mkdir -p out
           docker run --rm \
             -v "$PWD/packages:/packages:ro" \
             -v "$PWD/pm/pm.ysh:/usr/bin/pm:ro" \
+            -v "$PWD/out:/out" \
             -e KOMINKA_REPO="${{ secrets.KOMINKA_REPO }}" \
             -e KOMINKA_TOKEN="${{ secrets.KOMINKA_TOKEN }}" \
             -e KOMINKA_PATH=/packages \
@@ -120,4 +127,14 @@ jobs:
                 touch "${DB}/${tool}/manifest"
               done
               pm b "${{ inputs.package }}"
-              pm p "${{ inputs.package }}"'
+              for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
+                [ -f "$f" ] && cp "$f" /out/
+              done
+              pm p "${{ inputs.package }}" || true'
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.package }}-${{ matrix.arch }}
+          path: out/*.tar.*
+          if-no-files-found: warn
