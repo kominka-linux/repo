@@ -1,0 +1,17 @@
+#!/usr/local/bin/ysh
+
+var name    = 'pm'
+var ver     = '5.5.28'
+var rel     = '1'
+var deps    = ['ysh', 'curl']
+var mkdeps  = []
+
+# pm.ysh is provided as a local source from the repo checkout.
+var sources   = ['pm.ysh']
+var checksums = []
+
+proc build(dest) {
+    mkdir -p "${dest}/usr/bin"
+    cp -f pm.ysh "${dest}/usr/bin/pm"
+    chmod +x "${dest}/usr/bin/pm"
+}
