@@ -11,7 +11,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl ca-certificates tar gzip bzip2 xz-utils \
     make patch python3 gawk bison flex texinfo m4 libelf-dev \
-    gettext libexpat1-dev libssl-dev bc \
+    gettext libexpat1-dev bc \
     cmake ninja-build \
     libcurl4-openssl-dev \
     libevent-dev \

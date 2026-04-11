@@ -13,20 +13,10 @@ jobs:
       fail-fast: false
       matrix:
         pkg:
-          # Missing x86_64 builds
-          - boringssl
           - curl
           - git
-          - go
           - linux-pam
-          - muon
           - sudo-rs
-          - tmux
-          - zlib
-          # Rebuild with strip enabled
-          - cargo
-          - zig
-          - tailscale
 
     steps:
       - uses: actions/checkout@v4
@@ -56,7 +46,7 @@ jobs:
             -e HOME=/root \
             kominka-debian-builder bash -ec '
               DB=/kominka-root/var/db/kominka/installed
-              for tool in make bison m4 flex bc perl cmake ninja python3 glibc go cargo; do
+              for tool in make bison m4 flex bc perl cmake ninja python3 glibc; do
                 mkdir -p "${DB}/${tool}"
                 printf "system 1\n" > "${DB}/${tool}/version"
                 printf "#!/bin/sh\n:\n" > "${DB}/${tool}/build"
