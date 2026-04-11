@@ -4,7 +4,7 @@ var name    = 'busybox'
 var ver     = '1.36.1'
 var rel     = '4'
 var deps    = []
-var mkdeps  = ['zig', 'make', 'linux-headers']
+var mkdeps  = ['zig', 'make', 'linux']
 
 var sources = [
     'https://busybox.net/downloads/busybox-VERSION.tar.bz2',

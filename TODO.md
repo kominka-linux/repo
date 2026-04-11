@@ -10,7 +10,6 @@
 - `kominka`/`pm` package: needs proper PKGBUILD pointing at pm.ysh
 - `cargo` and `go`: large binaries, consider whether they belong in build-essential
 - Source mirror: fetch and rehost all sources to avoid upstream dependency
-- Kernel headers: consolidate linux-headers versioning
 
 ## Infrastructure
 - Rate limiting on upload endpoint

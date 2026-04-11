@@ -217,7 +217,7 @@ fn upload_download_body_is_intact() {
 #[test]
 fn valid_package_names_accepted() {
     let state = test_state();
-    for name in ["curl", "ca-certificates", "linux-headers", "e2fsprogs", "sudo-rs", "zlib1g"] {
+    for name in ["curl", "ca-certificates", "linux", "e2fsprogs", "sudo-rs", "zlib1g"] {
         let resp = upload_pkg(&state, "aarch64-linux-gnu", name, "1.0", "1", "", b"data");
         assert_eq!(resp.status, 201, "expected 201 for pkg name '{name}'");
     }
