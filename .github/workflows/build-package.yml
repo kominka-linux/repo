@@ -1,0 +1,106 @@
+name: Build package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package name
+        required: true
+        type: string
+      debian:
+        description: Use Debian GCC (for glibc, linux, git, strace, perl, busybox)
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-latest    }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache kominka:core
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/kominka-core.tar.gz
+          key: kominka-core-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'pm.ysh', 'packages/**/PKGBUILD.ysh') }}
+
+      - name: Build kominka:core
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          docker build \
+            --build-context packages=packages \
+            --build-arg R2_MIRROR=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev \
+            -t kominka:core .
+          docker save kominka:core | gzip > /tmp/kominka-core.tar.gz
+
+      - name: Load kominka:core
+        if: steps.cache.outputs.cache-hit == 'true'
+        run: docker load < /tmp/kominka-core.tar.gz
+
+      - name: Build ${{ inputs.package }} (zig cc)
+        if: ${{ !inputs.debian }}
+        run: |
+          docker run --rm \
+            -v "$PWD/packages:/packages:ro" \
+            -v "$PWD/pm.ysh:/usr/bin/pm:ro" \
+            -e KOMINKA_REPO="${{ secrets.KOMINKA_REPO }}" \
+            -e KOMINKA_TOKEN="${{ secrets.KOMINKA_TOKEN }}" \
+            -e KOMINKA_PATH=/packages \
+            -e KOMINKA_COMPRESS=gz \
+            -e KOMINKA_COLOR=0 \
+            -e KOMINKA_PROMPT=0 \
+            -e KOMINKA_FORCE=1 \
+            -e KOMINKA_GET=/usr/bin/curl \
+            -e KOMINKA_INSECURE=1 \
+            -e LD_LIBRARY_PATH=/usr/lib \
+            -e LOGNAME=root \
+            -e HOME=/root \
+            kominka:core sh -c '
+              pm b "${{ inputs.package }}"
+              ldconfig 2>/dev/null
+              pm p "${{ inputs.package }}" || true'
+
+      - name: Build Debian builder image
+        if: ${{ inputs.debian }}
+        run: |
+          docker build \
+            --build-context packages=packages \
+            -t kominka-debian-builder -f Dockerfile.glibc .
+
+      - name: Build ${{ inputs.package }} (Debian GCC)
+        if: ${{ inputs.debian }}
+        run: |
+          docker run --rm \
+            -v "$PWD/packages:/packages:ro" \
+            -v "$PWD/pm.ysh:/usr/bin/pm:ro" \
+            -e KOMINKA_REPO="${{ secrets.KOMINKA_REPO }}" \
+            -e KOMINKA_TOKEN="${{ secrets.KOMINKA_TOKEN }}" \
+            -e KOMINKA_PATH=/packages \
+            -e KOMINKA_ROOT=/kominka-root \
+            -e KOMINKA_COMPRESS=gz \
+            -e KOMINKA_COLOR=0 \
+            -e KOMINKA_PROMPT=0 \
+            -e KOMINKA_FORCE=1 \
+            -e KOMINKA_GET=/usr/bin/curl \
+            -e KOMINKA_INSECURE=1 \
+            -e LOGNAME=root \
+            -e HOME=/root \
+            kominka-debian-builder sh -c '
+              db=/kominka-root/var/db/kominka/installed
+              for tool in make bison m4; do
+                mkdir -p "$db/$tool"
+                printf "system 1\n" > "$db/$tool/version"
+                printf "#!/bin/sh\n:\n" > "$db/$tool/build"
+                chmod +x "$db/$tool/build"
+                touch "$db/$tool/manifest"
+              done
+              pm b "${{ inputs.package }}" && pm p "${{ inputs.package }}" || true'
