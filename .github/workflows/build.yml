@@ -2,11 +2,6 @@ name: Build package
 
 on:
   workflow_dispatch:
-    inputs:
-      package:
-        description: Package name to build (leave empty to build all)
-        required: false
-        type: string
 
 jobs:
   build:
@@ -53,9 +48,6 @@ jobs:
           - { pkg: linux,   debian: true }
           - { pkg: perl,    debian: true }
           - { pkg: strace,  debian: true }
-
-    # Skip if a specific package was requested and this isn't it
-    if: ${{ !inputs.package || inputs.package == matrix.pkg }}
 
     steps:
       - uses: actions/checkout@v4
