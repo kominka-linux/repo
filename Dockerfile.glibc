@@ -62,7 +62,7 @@ RUN case "$(uname -m)" in \
         tar xzf - -C / ./usr/local/bin/ && \
     chmod +x /usr/local/bin/ysh
 
-COPY pm.ysh /usr/bin/pm
+COPY --from=pm pm.ysh /usr/bin/pm
 RUN chmod +x /usr/bin/pm
 
 COPY --from=packages / /packages

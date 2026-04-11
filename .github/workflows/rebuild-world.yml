@@ -18,10 +18,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout pm
+        uses: actions/checkout@v4
+        with:
+          repository: kominka-linux/pm
+          path: pm
+
       - name: Build Debian builder image
         run: |
           docker build \
             --build-context packages=packages \
+            --build-context pm=pm \
             -t kominka-debian-builder -f Dockerfile.glibc .
 
       - name: Build ${{ matrix.pkg }}
@@ -29,7 +36,7 @@ jobs:
           mkdir -p out
           docker run --rm \
             -v "$PWD/packages:/packages:ro" \
-            -v "$PWD/pm.ysh:/usr/bin/pm:ro" \
+            -v "$PWD/pm/pm.ysh:/usr/bin/pm:ro" \
             -v "$PWD/out:/out" \
             -e KOMINKA_PATH=/packages \
             -e KOMINKA_ROOT=/kominka-root \

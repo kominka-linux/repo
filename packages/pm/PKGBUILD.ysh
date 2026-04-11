@@ -2,16 +2,16 @@
 
 var name    = 'pm'
 var ver     = '5.5.28'
-var rel     = '1'
+var rel     = '2'
 var deps    = ['ysh', 'curl']
 var mkdeps  = []
 
-# pm.ysh is provided as a local source from the repo checkout.
-var sources   = ['pm.ysh']
-var checksums = ['611af41c72390e125a4818c036051ba54633591b22007a8d2f55e2f9dab2c60d']
+var sources   = ['https://github.com/kominka-linux/pm/archive/refs/heads/main.zip']
+var checksums = ['SKIP']
 
 proc build(dest) {
     mkdir -p "${dest}/usr/bin"
-    cp -f pm.ysh "${dest}/usr/bin/pm"
+    # Archive extracts as pm-main/pm.ysh
+    cp -f pm-main/pm.ysh "${dest}/usr/bin/pm"
     chmod +x "${dest}/usr/bin/pm"
 }
