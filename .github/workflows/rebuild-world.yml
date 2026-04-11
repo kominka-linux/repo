@@ -54,20 +54,17 @@ jobs:
             -e KOMINKA_INSECURE=1 \
             -e LOGNAME=root \
             -e HOME=/root \
-            kominka-debian-builder sh -c '
-              db=/kominka-root/var/db/kominka/installed
-              # Register tools that Debian provides so pm doesn't try to build them.
-              # glibc: Debian's 2.36 is ABI-compatible with Kominka's 2.43 targets.
-              # go/cargo: Debian ships these; building them from source would add hours.
-              # Kominka packages (zig, zlib, boringssl, curl) must still be built by
-              # pm so their outputs land in KOMINKA_ROOT for dependents to find.
+            kominka-debian-builder bash -ec '
+              DB=/kominka-root/var/db/kominka/installed
               for tool in make bison m4 flex bc perl cmake ninja python3 glibc go cargo; do
-                mkdir -p "$db/$tool" && printf "system 1\n" > "$db/$tool/version" && printf "#!/bin/sh\n:\n" > "$db/$tool/build" && chmod +x "$db/$tool/build" && touch "$db/$tool/manifest"
+                mkdir -p "${DB}/${tool}"
+                printf "system 1\n" > "${DB}/${tool}/version"
+                printf "#!/bin/sh\n:\n" > "${DB}/${tool}/build"
+                chmod +x "${DB}/${tool}/build"
+                touch "${DB}/${tool}/manifest"
               done
               pm b "${{ matrix.pkg }}"
-              # Only copy the target package tarball, not deps
-              pkg="${{ matrix.pkg }}"
-              for f in /root/.cache/kominka/bin/${pkg}@*.tar.*; do
+              for f in /root/.cache/kominka/bin/${{ matrix.pkg }}@*.tar.*; do
                 [ -f "$f" ] && cp "$f" /out/
               done'
 
