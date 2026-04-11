@@ -2,7 +2,7 @@
 
 var name    = 'linux'
 var ver     = '6.19.12'
-var rel     = '1'
+var rel     = '2'
 var deps    = []
 var mkdeps  = ['make', 'bison', 'perl']
 
@@ -13,8 +13,8 @@ var sources = [
 ]
 var checksums = [
     'ce5c4f1205f9729286b569b037649591555f31ca1e03cc504bd3b70b8e58a8d5',
-    'da2120ab4dd52ef2f86be7b9ff4ee1e7df8bc6eb2d8e7304494f63c727ceb835',
-    '6f328f7cd16b5de2e2e6b19874a3eab549895e93ebee813878ea9e46897c78b7',
+    '0125c9ae402accd9fa5c2d05aec3ede0d919d10c0aba513292ab6ae813967da1',
+    '04e885aaa2deff3bdeaf72f1ff18aec5daece7ec74a7cfee0a957c3dcb92fc2d',
 ]
 
 proc build(dest) {
