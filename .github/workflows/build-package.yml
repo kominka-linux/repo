@@ -80,7 +80,7 @@ jobs:
             kominka:core sh -c '
               pm b "${{ inputs.package }}"
               ldconfig 2>/dev/null
-              pm u "${{ inputs.package }}"'
+              pm p "${{ inputs.package }}"'
 
       # ── Debian builder path (amd64 always, arm64 if debian=true) ────────
 
@@ -120,4 +120,4 @@ jobs:
                 touch "${DB}/${tool}/manifest"
               done
               pm b "${{ inputs.package }}"
-              pm u "${{ inputs.package }}"'
+              pm p "${{ inputs.package }}"'
