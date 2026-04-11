@@ -2,7 +2,7 @@
 
 var name    = 'glibc'
 var ver     = '2.43'
-var rel     = '5'
+var rel     = '4'
 var deps    = []
 var mkdeps  = ['zig', 'make']
 
@@ -37,7 +37,7 @@ proc build(dest) {
         --libdir=/usr/lib \
         --libexecdir=/usr/lib \
         --enable-bind-now \
-        --enable-kernel=6.19 \
+        --enable-kernel=5.10 \
         --enable-stack-protector=strong \
         --enable-crypt \
         --disable-nscd \
