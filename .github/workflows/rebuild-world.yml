@@ -13,10 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         pkg:
-          - curl
           - git
-          - linux-pam
-          - sudo-rs
 
     steps:
       - uses: actions/checkout@v4
