@@ -26,18 +26,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout pm
+        uses: actions/checkout@v4
+        with:
+          repository: kominka-linux/pm
+          path: pm
+
       - name: Cache kominka:core
         id: cache
         uses: actions/cache@v4
         with:
           path: /tmp/kominka-core.tar.gz
-          key: kominka-core-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'pm.ysh', 'packages/**/PKGBUILD.ysh') }}
+          key: kominka-core-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'pm/pm.ysh', 'packages/**/PKGBUILD.ysh') }}
 
       - name: Build kominka:core
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           docker build \
             --build-context packages=packages \
+            --build-context pm=pm \
             --build-arg R2_MIRROR=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev \
             -t kominka:core .
           docker save kominka:core | gzip > /tmp/kominka-core.tar.gz
@@ -51,7 +58,7 @@ jobs:
         run: |
           docker run --rm \
             -v "$PWD/packages:/packages:ro" \
-            -v "$PWD/pm.ysh:/usr/bin/pm:ro" \
+            -v "$PWD/pm/pm.ysh:/usr/bin/pm:ro" \
             -e KOMINKA_REPO="${{ secrets.KOMINKA_REPO }}" \
             -e KOMINKA_TOKEN="${{ secrets.KOMINKA_TOKEN }}" \
             -e KOMINKA_PATH=/packages \
@@ -67,13 +74,14 @@ jobs:
             kominka:core sh -c '
               pm b "${{ inputs.package }}"
               ldconfig 2>/dev/null
-              pm p "${{ inputs.package }}" || true'
+              pm u "${{ inputs.package }}" || true'
 
       - name: Build Debian builder image
         if: ${{ inputs.debian }}
         run: |
           docker build \
             --build-context packages=packages \
+            --build-context pm=pm \
             -t kominka-debian-builder -f Dockerfile.glibc .
 
       - name: Build ${{ inputs.package }} (Debian GCC)
@@ -81,7 +89,7 @@ jobs:
         run: |
           docker run --rm \
             -v "$PWD/packages:/packages:ro" \
-            -v "$PWD/pm.ysh:/usr/bin/pm:ro" \
+            -v "$PWD/pm/pm.ysh:/usr/bin/pm:ro" \
             -e KOMINKA_REPO="${{ secrets.KOMINKA_REPO }}" \
             -e KOMINKA_TOKEN="${{ secrets.KOMINKA_TOKEN }}" \
             -e KOMINKA_PATH=/packages \
@@ -94,13 +102,14 @@ jobs:
             -e KOMINKA_INSECURE=1 \
             -e LOGNAME=root \
             -e HOME=/root \
-            kominka-debian-builder sh -c '
-              db=/kominka-root/var/db/kominka/installed
-              for tool in make bison m4; do
-                mkdir -p "$db/$tool"
-                printf "system 1\n" > "$db/$tool/version"
-                printf "#!/bin/sh\n:\n" > "$db/$tool/build"
-                chmod +x "$db/$tool/build"
-                touch "$db/$tool/manifest"
+            kominka-debian-builder bash -ec '
+              DB=/kominka-root/var/db/kominka/installed
+              for tool in make bison m4 flex bc perl cmake ninja python3 glibc go cargo muon samurai zig; do
+                mkdir -p "${DB}/${tool}"
+                printf "system 1\n" > "${DB}/${tool}/version"
+                printf "#!/bin/sh\n:\n" > "${DB}/${tool}/build"
+                chmod +x "${DB}/${tool}/build"
+                touch "${DB}/${tool}/manifest"
               done
-              pm b "${{ inputs.package }}" && pm p "${{ inputs.package }}" || true'
+              pm b "${{ inputs.package }}"
+              pm u "${{ inputs.package }}" || true'

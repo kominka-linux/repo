@@ -6,12 +6,13 @@ var rel     = '2'
 var deps    = ['ysh', 'curl']
 var mkdeps  = []
 
-var sources   = ['https://github.com/kominka-linux/pm/archive/refs/heads/main.zip']
-var checksums = ['SKIP']
+var _commit = '2bf4fbbb4981822675374c3dd7e647b8aa8f50b2'
+var sources   = ["https://github.com/kominka-linux/pm/archive/${_commit}.zip"]
+var checksums = ['ea51d456b47e7e600bf2f931e9fdc6c214671b3cc26d7a27447b38feec83a162']
 
 proc build(dest) {
     mkdir -p "${dest}/usr/bin"
-    # Archive extracts as pm-main/pm.ysh
-    cp -f pm-main/pm.ysh "${dest}/usr/bin/pm"
+    # Archive extracts as pm-<commit>/pm.ysh
+    cp -f "pm-${_commit}/pm.ysh" "${dest}/usr/bin/pm"
     chmod +x "${dest}/usr/bin/pm"
 }

@@ -10,23 +10,18 @@ var sources   = ['https://ftp.gnu.org/gnu/binutils/binutils-VERSION.tar.xz']
 var checksums = ['ce2017e059d63e67ddb9240e9d4ec49c2893605035cd60e92ad53177f4377237']
 
 proc build(dest) {
-
     ./configure \
         --prefix=/usr \
         --disable-nls \
         --disable-shared \
         --disable-werror \
         --enable-deterministic-archives \
-        --enable-64-bit-bfd \
-        --without-gold \
-        --without-gas \
-        --without-ld \
-        --without-gprof \
-        --without-as
+        --enable-64-bit-bfd
 
-    # Build only the strip binary, not the full suite.
-    make -C binutils strip
+    # Build only what strip needs — skip the full suite.
+    make -C libiberty
+    make -C bfd all-lib
+    make -C binutils strip-new
 
-    mkdir -p "${dest}/usr/bin"
-    cp binutils/strip-new "${dest}/usr/bin/strip"
+    install -Dm755 binutils/strip-new "${dest}/usr/bin/strip"
 }
