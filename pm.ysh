@@ -1550,6 +1550,11 @@ proc pkg_build (; p Dict) {
         setglobal ENV.GOFLAGS     = "-trimpath -modcacherw ${GOFLAGS:-}"
         setglobal ENV.GOPATH      = "${PWD}/go"
         setglobal ENV.KOMINKA_ROOT = KOMINKA_ROOT
+        # When KOMINKA_ROOT is not /, installed mkdeps land in a separate tree.
+        # Append its bin dirs to PATH so the build() proc can find them.
+        if (KOMINKA_ROOT !== '' and KOMINKA_ROOT !== '/') {
+            setglobal ENV.PATH = "${PATH}:${KOMINKA_ROOT}/usr/bin:${KOMINKA_ROOT}/usr/sbin"
+        }
 
         build "${pkg_dir}/$[p.name]" 2>&1
         write -- $? > "${log_dir}/$[p.name]-${time_str}-${KOMINKA_PID}.exit"

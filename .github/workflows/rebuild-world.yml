@@ -46,7 +46,7 @@ jobs:
             -e HOME=/root \
             kominka-debian-builder bash -ec '
               DB=/kominka-root/var/db/kominka/installed
-              for tool in make bison m4 flex bc perl cmake ninja python3 glibc; do
+              for tool in make bison m4 flex bc perl cmake ninja python3 glibc go cargo muon samurai zig; do
                 mkdir -p "${DB}/${tool}"
                 printf "system 1\n" > "${DB}/${tool}/version"
                 printf "#!/bin/sh\n:\n" > "${DB}/${tool}/build"
