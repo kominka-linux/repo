@@ -1,4 +1,0 @@
-  3. make iso — test the full build
-
-  good, everything works. now we need to rebuild everything for x86 - i say we port .github/workflows/build.yml
-  to ~/d/repo.

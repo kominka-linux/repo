@@ -36,8 +36,11 @@ RUN busybox find /packages -name build -exec busybox chmod +x {} + && \
 RUN busybox mkdir -p /kominka-root/var/db/kominka/installed \
                      /kominka-root/var/db/kominka/choices
 
-# Install core from the repo server.
+# Install core. REPO_URL (local server) takes priority; R2_MIRROR is the
+# public CDN fallback for CI where no server is running.
+ARG R2_MIRROR=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
 RUN KOMINKA_REPO=${REPO_URL} \
+    KOMINKA_BIN_MIRROR=${R2_MIRROR} \
     KOMINKA_PATH=/packages \
     KOMINKA_ROOT=/kominka-root \
     KOMINKA_COMPRESS=gz \

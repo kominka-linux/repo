@@ -39,8 +39,7 @@ jobs:
         run: |
           docker build \
             --build-context packages=packages \
-            --build-arg REPO_URL="${{ secrets.KOMINKA_REPO }}" \
-            --network=host \
+            --build-arg R2_MIRROR=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev \
             -t kominka:core .
           docker save kominka:core | gzip > /tmp/kominka-core.tar.gz
 
@@ -52,11 +51,11 @@ jobs:
       - name: Build ${{ inputs.package }} (zig cc)
         if: ${{ !inputs.use_debian }}
         run: |
+          mkdir -p out
           docker run --rm \
             -v "$PWD/packages:/packages:ro" \
             -v "$PWD/pm.ysh:/usr/bin/pm:ro" \
-            -e KOMINKA_REPO="${{ secrets.KOMINKA_REPO }}" \
-            -e KOMINKA_TOKEN="${{ secrets.KOMINKA_TOKEN }}" \
+            -v "$PWD/out:/out" \
             -e KOMINKA_PATH=/packages \
             -e KOMINKA_COMPRESS=gz \
             -e KOMINKA_COLOR=0 \
@@ -67,8 +66,12 @@ jobs:
             -e LD_LIBRARY_PATH=/usr/lib \
             -e LOGNAME=root \
             -e HOME=/root \
-            kominka:core sh -c \
-              'pm b "${{ inputs.package }}"; ldconfig 2>/dev/null; pm p "${{ inputs.package }}" || true'
+            kominka:core sh -c '
+              pm b "${{ inputs.package }}"
+              ldconfig 2>/dev/null
+              for f in /root/.cache/kominka/bin/*@*.tar.*; do
+                [ -f "$f" ] && cp "$f" /out/
+              done'
 
       # ── Build (Debian GCC) ────────────────────────────────────────────────
       - name: Build Debian builder image
@@ -81,11 +84,11 @@ jobs:
       - name: Build ${{ inputs.package }} (Debian GCC)
         if: ${{ inputs.use_debian }}
         run: |
+          mkdir -p out
           docker run --rm \
             -v "$PWD/packages:/packages:ro" \
             -v "$PWD/pm.ysh:/usr/bin/pm:ro" \
-            -e KOMINKA_REPO="${{ secrets.KOMINKA_REPO }}" \
-            -e KOMINKA_TOKEN="${{ secrets.KOMINKA_TOKEN }}" \
+            -v "$PWD/out:/out" \
             -e KOMINKA_PATH=/packages \
             -e KOMINKA_ROOT=/kominka-root \
             -e KOMINKA_COMPRESS=gz \
@@ -105,4 +108,14 @@ jobs:
                 chmod +x "$db/$tool/build"
                 touch "$db/$tool/manifest"
               done
-              pm b "${{ inputs.package }}" && pm p "${{ inputs.package }}" || true'
+              pm b "${{ inputs.package }}"
+              for f in /root/.cache/kominka/bin/*@*.tar.*; do
+                [ -f "$f" ] && cp "$f" /out/
+              done'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.package }}-${{ matrix.arch }}
+          path: out/*.tar.*
+          if-no-files-found: error
