@@ -27,7 +27,7 @@ RUN busybox mkdir -p /usr/local/bin && \
     busybox tar xzf - -C / ./usr/local/bin/
 
 # Install pm and package definitions.
-COPY pm.ysh /usr/bin/pm
+COPY --from=pm pm.ysh /usr/bin/pm
 RUN busybox chmod +x /usr/bin/pm
 COPY --from=packages / /packages
 RUN busybox find /packages -name build -exec busybox chmod +x {} + && \
