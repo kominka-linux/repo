@@ -1,0 +1,21 @@
+#!/usr/local/bin/ysh
+
+var name    = 'samurai'
+var ver     = '1.2'
+var rel     = '1'
+var deps    = ['glibc']
+var mkdeps  = ['zig', 'make']
+
+var sources = ['https://github.com/michaelforney/samurai/releases/download/VERSION/samurai-VERSION.tar.gz']
+var checksums = ['3b8cf51548dfc49b7efe035e191ff5e1963ebc4fe8f6064a5eefc5343eaf78a5']
+
+proc build(dest) {
+
+    var CC = ENV => get("CC", "cc")
+
+    make CC=$CC PREFIX=/usr
+    make PREFIX=/usr DESTDIR=$dest install
+
+    # Provide a 'ninja' symlink so cmake -GNinja works.
+    ln -sf samu "${dest}/usr/bin/ninja"
+}

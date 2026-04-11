@@ -1,0 +1,26 @@
+#!/usr/local/bin/ysh
+
+var name    = 'dosfstools'
+var ver     = '4.2'
+var rel     = '1'
+var deps    = ['glibc']
+var mkdeps  = ['zig', 'make']
+
+var sources = ['https://github.com/dosfstools/dosfstools/releases/download/vVERSION/dosfstools-VERSION.tar.gz']
+var checksums = ['64926eebf90092dca21b14259a5301b7b98e7b1943e8a201c7d726084809b527']
+
+proc build(dest) {
+
+    # Disable documentation (READMEs and such).
+    sed 's/^\(dist_doc_DATA\)/\1_null/' Makefile.in > _
+    mv -f _ Makefile.in
+
+    ./configure \
+        --prefix=/usr \
+        --sbindir=/usr/bin \
+        --mandir=/usr/share/man \
+        --enable-compat-symlinks
+
+    make
+    make DESTDIR=$dest install
+}

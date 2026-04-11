@@ -1,0 +1,15 @@
+#!/usr/local/bin/ysh
+
+var name    = 'core'
+var ver     = '1.0.0'
+var rel     = '1'
+var deps    = ['baselayout', 'glibc', 'busybox', 'baseinit', 'runit', 'boringssl', 'curl', 'ca-certificates', 'ysh']
+var mkdeps  = []
+
+var sources = []
+var checksums = []
+
+proc build(dest) {
+    # Metapackage — no build step. Dependencies are pulled in via 'depends'.
+    true
+}

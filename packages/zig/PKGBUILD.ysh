@@ -1,0 +1,55 @@
+#!/usr/local/bin/ysh
+
+var name    = 'zig'
+var ver     = '0.15.2'
+var rel     = '8'
+var deps    = []
+var mkdeps  = []
+var nostrip = true
+
+var sources = [
+    'https://ziglang.org/download/VERSION/zig-ARCH-linux-VERSION.tar.xz',
+    'files/nm.c',
+    'files/strip.c',
+]
+var checksums_aarch64 = [
+    '958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f',
+    'b6996de45013dd73f9ca1a83d1d3511a6a5d6e85586ff1b6a8fea578c6a99c3c',
+    'f7aae9f1f744765a563ef96a93d752a6c9765ce005e88c94b25841cffa54dffc',
+]
+var checksums_x86_64  = [
+    '02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239',
+    'b6996de45013dd73f9ca1a83d1d3511a6a5d6e85586ff1b6a8fea578c6a99c3c',
+    'f7aae9f1f744765a563ef96a93d752a6c9765ce005e88c94b25841cffa54dffc',
+]
+
+proc build(dest) {
+
+    mkdir -p "${dest}/usr/bin" "${dest}/usr/lib"
+    cp -a zig "${dest}/usr/bin/"
+    cp -a lib "${dest}/usr/lib/zig"
+
+    # cc/c++ wrappers using native target (system glibc).
+    # cc detects c++ flags (-std=c++*) and upgrades to zig c++ automatically.
+    # Some build systems (oils) pass -std=c++11 to CC instead of CXX.
+    write -- '#!/bin/sh
+    mode=cc
+    for a in "$@"; do case "$a" in -std=c++*) mode="c++";; esac; done
+    exec zig $mode "$@"' > "${dest}/usr/bin/cc"
+    write -- '#!/bin/sh' 'exec zig c++ "$@"' > "${dest}/usr/bin/c++"
+    # ld — zig's bundled lld, exposed directly.
+    write -- '#!/bin/sh' 'exec zig ld.lld "$@"' > "${dest}/usr/bin/ld"
+    # ar wrapper — autotools and make need it.
+    write -- '#!/bin/sh' 'exec zig ar "$@"' > "${dest}/usr/bin/ar"
+    # ranlib is a no-op with zig's ar.
+    write -- '#!/bin/sh' 'exec zig ranlib "$@"' > "${dest}/usr/bin/ranlib"
+    # objcopy wrapper.
+    write -- '#!/bin/sh' 'exec zig objcopy "$@"' > "${dest}/usr/bin/objcopy"
+    # strip — minimal ELF section zeroing (zeros .symtab, .strtab, .debug_*, etc.).
+    # nm — minimal ELF symbol lister (needed by libtool).
+    "${dest}/usr/bin/zig" cc -o "${dest}/usr/bin/strip" strip.c
+    "${dest}/usr/bin/zig" cc -o "${dest}/usr/bin/nm" nm.c
+    chmod +x "${dest}/usr/bin/cc" "${dest}/usr/bin/c++" "${dest}/usr/bin/ld" \
+             "${dest}/usr/bin/ar" "${dest}/usr/bin/ranlib" "${dest}/usr/bin/objcopy" \
+             "${dest}/usr/bin/strip"
+}

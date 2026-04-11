@@ -1,0 +1,53 @@
+#!/usr/local/bin/ysh
+
+var name    = 'cargo'
+var ver     = '1.94.1'
+var rel     = '1'
+var deps    = ['glibc']
+var mkdeps  = []
+var nostrip = true
+
+var sources = [
+    'https://static.rust-lang.org/dist/rust-VERSION-ARCH-unknown-linux-gnu.tar.gz',
+    'files/libgcc_s-aarch64.so.1',
+    'files/libgcc_s-x86_64.so.1',
+]
+var checksums_aarch64 = [
+    '99dba6decb780158b2b94f0054ec15c8cd4a04a497c84349fb86fb7a70722c78',
+    '046856f95f4636f1fc7c3a12bf4f3cd5634c2fc5145c3fdf7395d4f349fa69c7',
+    '2bd1552c47799ef67e701e81d4383061fd76059868e446e63560f0dd0d5ec14e',
+]
+var checksums_x86_64  = [
+    'ea7866c5cab0d8c99e7416bcc5f9ecf0e122d396b85c7e7dee5669f10ee80194',
+    '046856f95f4636f1fc7c3a12bf4f3cd5634c2fc5145c3fdf7395d4f349fa69c7',
+    '2bd1552c47799ef67e701e81d4383061fd76059868e446e63560f0dd0d5ec14e',
+]
+
+proc build(dest) {
+    # cargo — precompiled Rust toolchain (rustc, cargo, std) from rust-lang.org.
+
+    var arch = $(uname -m)
+
+    # Install libgcc_s.so.1 — the prebuilt rustc needs GCC's unwinding runtime.
+    # Bundled from Debian bookworm's libgcc-s1 package (GCC 12).
+    install -Dm755 "libgcc_s-${arch}.so.1" "${dest}/usr/lib/libgcc_s.so.1"
+
+    # Compat symlinks: libdl, libpthread, librt merged into libc in glibc 2.34+
+    # but the prebuilt rustc still links against them.
+    for lib in (:| libdl.so.2 libpthread.so.0 librt.so.1 |) {
+        ln -sf libc.so.6 "${dest}/usr/lib/${lib}"
+    }
+
+    # Binaries
+    mkdir -p "${dest}/usr/bin"
+    cp rustc/bin/rustc "${dest}/usr/bin/"
+    cp rustc/bin/rustdoc "${dest}/usr/bin/"
+    cp cargo/bin/cargo "${dest}/usr/bin/"
+
+    # Libraries (rustc libs + std)
+    mkdir -p "${dest}/usr/lib"
+    cp -a rustc/lib/* "${dest}/usr/lib/"
+    for d in @[glob("rust-std-*/lib/*")] {
+        cp -a $d "${dest}/usr/lib/" 2>/dev/null || true
+    }
+}

@@ -1,0 +1,31 @@
+#!/usr/local/bin/ysh
+
+var name    = 'muon'
+var ver     = '0.5.0'
+var rel     = '1'
+var deps    = ['glibc']
+var mkdeps  = ['zig']
+
+var sources = ['https://github.com/annacrombie/muon/archive/refs/tags/VERSION.tar.gz']
+var checksums = ['565c1b6e1e58f7e90d8813fda0e2102df69fb493ddab4cf6a84ce3647466bee5']
+
+proc build(dest) {
+
+    # Bootstrap muon from the amalgamated source.
+    CC=cc sh bootstrap.sh build
+
+    # Use the bootstrapped muon to build itself properly.
+    build/muon-bootstrap setup \
+        -Dprefix=/usr \
+        -Dlibcurl=disabled \
+        -Dlibarchive=disabled \
+        -Dlibpkgconf=disabled \
+        -Dman-pages=disabled \
+        -Dmeson-docs=disabled \
+        -Dmeson-tests=disabled \
+        -Dwebsite=disabled \
+        build-final
+
+    samu -C build-final
+    DESTDIR=$dest build/muon-bootstrap -C build-final install
+}

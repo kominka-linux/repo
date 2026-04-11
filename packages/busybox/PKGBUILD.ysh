@@ -1,0 +1,140 @@
+#!/usr/local/bin/ysh
+
+var name    = 'busybox'
+var ver     = '1.36.1'
+var rel     = '4'
+var deps    = []
+var mkdeps  = ['zig', 'make', 'linux-headers']
+
+var sources = [
+    'https://busybox.net/downloads/busybox-VERSION.tar.bz2',
+    'patches/adduser-no-setgid.patch patch',
+    'patches/fsck-resolve-uuid.patch patch',
+    'patches/modprobe-kernel-version.patch patch',
+    'patches/print-unicode.patch patch',
+    'patches/install-fix-chown.patch patch',
+    'patches/lsusb-vendor-product.patch patch',
+    'patches/unzip-usage-no-error.patch patch',
+    'patches/init-use-baseinit.patch patch',
+    'patches/fix-UB.patch patch-clang',
+    'files/.config',
+    'files/.config-suid',
+    'files/acpid.run',
+    'files/syslogd.run',
+    'files/mdev.run',
+    'files/ntpd.run',
+    'files/mdev.conf',
+    'files/getty-hvc0.run',
+    'files/getty-tty1.run',
+    'files/udhcpc.run',
+    'files/udhcpc.sh',
+]
+var checksums = [
+    'b8cc24c9574d809e7279c3be349795c5d5ceb6fdf19ca709f80cde50e47de314',
+    '09c2f601fec4e5c10664c22f787dafb9424efe219bf826727c356da90dfd60d5',
+    '8d84b1719dca2a751c09072c20cd782a3c47f119a68d35316f89d851daf67b88',
+    '0f54301a73af461e8066bc805b48d991cfed513d08a2f036e015b19f97cb424a',
+    '68e0c7d5e96902d3b890e89d9b018ae11d53ed3104bfedd624a1485df58b11cb',
+    'f0e17fefc0af6b10205d72b242b6ef7481a58ff07726c62890ebc5893b96a396',
+    '73be7b16dcff44e88eb48696522794f529beddf9d5a139b8a76cc8685a9f6fc8',
+    'd70c4cd6381baeb3836c0387f53553021b48bdc851de49f1c86d836f7d0355fc',
+    'b030d6ac2b3284cf3cc0a2eec886d26b7e09ea59feb460a6a09165da62a582b4',
+    'c8a6fc95a75fa355d570c14e214d68a618e060a486b824b83b5140b9c6a894a7',
+    'c62b29438a55e37d0a384a147841ff42e9259f05c973ca40d7881e6136aa175e',
+    '1e2967d3a29a685ea6ea1a3d71057efdbfef66bc7e6082d89dec35230b168f2e',
+    'f31e8c7552af2bb45a62f50c19524c2086f8f749f2ddc660de76d840c93a1f9f',
+    '2b22b878442f8a31b9b98601db68a71923ca05c6fc2f4f681060f38f3bf71f3f',
+    '943eb7a8f8f717021781775a82fd3c940e0b2995dc2bba1fa98e56daedc2ea2c',
+    'fd8311537ea6d61f14092594e53fbea07d9fb2a0d9fd409fe2e511186b9725a8',
+    '5ea98cc467b258c8c75e2a4e440bea509640954fe80e832cfa5e83d25a1bf3a8',
+    '7bab61d38a70e20e68663c50902e6f512e95f7982712882f7ea7cc5677759e3c',
+    '7df19606d978b3452cd2def5133d667d6754a0f235b0c32755d3294141c23468',
+    '02fde6e432a3e0ccd90d1239f3b0b1d62a4b76c4a686307cffd76b25d0377c50',
+    '9d1a4fc0b4dbccf4844483f9b02e6d0d93fa30fe3e08829b5a3e960c00c8dd40',
+]
+
+proc build(dest) {
+    var CC = ENV => get("CC", "cc")
+    # HOSTCC builds host tools (fixdep, etc.) that run during the build.
+    # Use system gcc when available — zig-compiled host tools crash under QEMU.
+    var HOSTCC = CC
+    try { command -v gcc >/dev/null 2>&1 }
+    if ! failed { setvar HOSTCC = 'gcc' }
+
+    for patch in @[glob('patch/*.patch')] {
+        patch -p1 < $patch
+    }
+
+    # Remove forced gcc/g++ usage so builds work on gcc-less systems.
+    var sed1 = "s#= g[c+][c+]#= ${CC}#g"
+    var _pre2 = r's#\(\$(CROSS_COMPILE)\)gcc#\1'
+    var sed2 = "${_pre2}${CC}#g"
+    sed -e $sed1 -e $sed2 Makefile > _
+    mv -f _ Makefile
+
+    var cc_ver = $($CC --version)
+    if (cc_ver => contains('clang')) {
+        # Disable UB based optimizations which are optimized out by
+        # clang and become null pointer dereferences.
+        patch -p1 < patch-clang/fix-UB.patch
+
+        var _pre3 = r's&\(\$(CC),\)clang&\1'
+        var sed3 = "${_pre3}${CC}&g"
+        sed $sed3 Makefile.flags > _
+        mv -f _ Makefile.flags
+
+        # Strip linker flags unsupported by lld (zig's linker).
+        sed -e 's/-Wl,--warn-common//g' \
+            -e 's/-Wl,-Map,[^ ]*//g' \
+            -e 's/-Wl,--verbose//g' \
+            scripts/trylink > _
+        mv -f _ scripts/trylink
+        chmod +x scripts/trylink
+    }
+
+    # SKIP_STRIP=y: busybox Makefile uses strip -o (output to new file),
+    # which our strip doesn't support. pm's pkg_strip runs after build.
+    make HOSTCC=$HOSTCC SKIP_STRIP=y
+    make CONFIG_PREFIX="${dest}/usr" install
+
+    # Rename the binary temporarily.
+    mv "${dest}/usr/bin/busybox" "${dest}/usr/bin/busybox-nosuid"
+
+    # Build and install suid busybox.
+    cp -f .config-suid .config
+    make HOSTCC=$HOSTCC SKIP_STRIP=y
+    make CONFIG_PREFIX="${dest}/usr" install
+
+    # Aptly name the busybox binaries.
+    mv -f "${dest}/usr/bin/busybox"        "${dest}/usr/bin/busybox-suid"
+    mv -f "${dest}/usr/bin/busybox-nosuid" "${dest}/usr/bin/busybox"
+
+    # Install the non-suid symlinks.
+    "${dest}/usr/bin/busybox" --list | while read -r bin {
+        ln -s busybox "${dest}/usr/bin/${bin}"
+    }
+
+    # Install the suid symlinks.
+    "${dest}/usr/bin/busybox-suid" --list | while read -r bin {
+        ln -s busybox-suid "${dest}/usr/bin/${bin}"
+    }
+
+    chmod u+s "${dest}/usr/bin/busybox-suid"
+
+    mkdir -p "${dest}/etc/acpi"
+
+    # Install runit services.
+    for s in (:| acpid syslogd mdev ntpd udhcpc getty-hvc0 getty-tty1 |) {
+        mkdir -p "${dest}/etc/sv/${s}"
+        cp -f "${s}.run" "${dest}/etc/sv/${s}/run"
+        chmod +x "${dest}/etc/sv/${s}/run"
+        ln -sf "/run/runit/supervise.${s}" "${dest}/etc/sv/${s}/supervise"
+    }
+
+    cp -f mdev.conf "${dest}/etc/mdev.conf"
+
+    # udhcpc lease script.
+    mkdir -p "${dest}/etc"
+    cp -f udhcpc.sh "${dest}/etc/udhcpc.sh"
+    chmod +x "${dest}/etc/udhcpc.sh"
+}

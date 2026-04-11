@@ -1,0 +1,56 @@
+#!/usr/local/bin/ysh
+
+var name    = 'linux-pam'
+var ver     = '1.7.0'
+var rel     = '1'
+var deps    = ['glibc']
+var mkdeps  = ['zig', 'muon', 'samurai']
+
+var sources = [
+    'https://github.com/linux-pam/linux-pam/releases/download/vVERSION/Linux-PAM-VERSION.tar.xz',
+    'files/modules.map',
+]
+var checksums = [
+    '57dcd7a6b966ecd5bbd95e1d11173734691e16b68692fa59661cdae9b13b1697',
+    'd9605ae234864b091918927f81ec4af989f291d5f57c1cc282a2addb17aab9ab',
+]
+
+proc build(dest) {
+
+    # Patch the version script before configure: lld requires all symbols listed
+    # in version scripts to be defined. The original lists all 6 pam_sm_* symbols
+    # but PAM modules only implement the subset they need. Replace with a wildcard.
+    cp modules.map modules/modules.map
+
+    # glibc's libcrypt.so uses GLIBC_PRIVATE symbols internally.
+    # lld rejects this by default; --allow-shlib-undefined permits it.
+    setglobal ENV.LDFLAGS = "-Wl,--allow-shlib-undefined"
+
+    muon setup \
+        -Dprefix=/usr \
+        -Dlibdir=lib \
+        -Dsysconfdir=/etc \
+        -Ddocs=auto \
+        -Di18n=auto \
+        -Daudit=disabled \
+        -Dselinux=disabled \
+        -Deconf=disabled \
+        -Dnis=disabled \
+        -Dlogind=disabled \
+        -Dopenssl=disabled \
+        -Dpam_userdb=disabled \
+        -Dexamples=false \
+        -Dpam_lastlog=disabled \
+        -Dxtests=false \
+        -Dlckpwdf=false \
+        build
+
+    # Patch the version script: lld requires all symbols in version scripts to
+    # exist. GNU ld silently ignores missing ones. The patched file uses a
+    # wildcard so lld doesn't fail on modules that implement only a subset.
+    # -k0: keep going even if some targets (test binaries) fail.
+    # The pam_warn tst-* binary fails due to an empty lib arg from muon,
+    # but the actual PAM libraries and modules build fine.
+    samu -k0 -C build || true
+    DESTDIR=$dest muon -C build install
+}

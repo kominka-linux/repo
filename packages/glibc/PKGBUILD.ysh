@@ -1,0 +1,77 @@
+#!/usr/local/bin/ysh
+
+var name    = 'glibc'
+var ver     = '2.43'
+var rel     = '4'
+var deps    = []
+var mkdeps  = ['zig', 'make']
+
+var sources = [
+    'https://ftp.gnu.org/gnu/glibc/glibc-VERSION.tar.xz',
+    'files/cdefs.h',
+    'files/queue.h',
+    'files/tree.h',
+    'files/getconf.c',
+    'files/getent.c',
+]
+var checksums = [
+    'd9c86c6b5dbddb43a3e08270c5844fc5177d19442cf5b8df4be7c07cd5fa3831',
+    'a83818007069c222d24d283a99348c2376f35bac3282d8142004c47d3dc5ecac',
+    'c13407edd0e33be73cae72514cb234f8612e1c0e54401c9448daffd3a240158b',
+    'e1e498a79bf160a5766fa560f2b07b206fe89fe21a62600c77d72e00a6992f92',
+    '36680bd687848f5fa7a28a02d3a0d2f6d435a2ce797f39c3d0d1b205532ff058',
+    'a0cd48081df3442d3f2bee232d5539eca274949f72a38776db661512dc8809db',
+]
+
+proc build(dest) {
+    var ARCH = $(uname -m)
+    var CC = ENV => get("CC", "cc")
+    var srcdir = $(pwd)
+
+    # glibc must be built outside of its source tree.
+    mkdir -p glibc-build
+    cd glibc-build
+
+    ../configure \
+        --prefix=/usr \
+        --libdir=/usr/lib \
+        --libexecdir=/usr/lib \
+        --enable-bind-now \
+        --enable-kernel=5.10 \
+        --enable-stack-protector=strong \
+        --enable-crypt \
+        --disable-nscd \
+        --disable-profile \
+        --disable-werror \
+        libc_cv_slibdir=/usr/lib
+
+    make
+    make DESTDIR=$dest install
+
+    # Dynamic linker: glibc installs it to /usr/lib but the kernel expects
+    # it at /lib/ld-linux-*.  Our baselayout has /lib -> /usr/lib so the
+    # symlink chain works.  Create /usr/bin/ldd pointing at the linker.
+    var ldso = ''
+    case (ARCH) {
+        aarch64 { setvar ldso = 'ld-linux-aarch64.so.1' }
+        x86_64  { setvar ldso = 'ld-linux-x86-64.so.2' }
+    }
+
+    mkdir -p "${dest}/usr/bin"
+    ln -sf "/usr/lib/${ldso}" "${dest}/usr/bin/ldd"
+
+    # Compat symlinks: libdl, libpthread, librt were merged into libc in
+    # glibc 2.34+ but pre-built binaries still link against them.
+    for lib in (:| dl pthread rt |) {
+        ln -sf libc.so.6 "${dest}/usr/lib/lib${lib}.so.2"
+        ln -sf libc.so.6 "${dest}/usr/lib/lib${lib}.so"
+    }
+
+    # Install BSD compatibility headers (from source directory).
+    cp -f "${srcdir}/cdefs.h" "${srcdir}/queue.h" "${srcdir}/tree.h" \
+        "${dest}/usr/include/sys"
+
+    # Install getconf and getent.
+    $CC "${srcdir}/getconf.c" -o "${dest}/usr/bin/getconf"
+    $CC "${srcdir}/getent.c"  -o "${dest}/usr/bin/getent"
+}

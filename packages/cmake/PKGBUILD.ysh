@@ -1,0 +1,28 @@
+#!/usr/local/bin/ysh
+
+var name    = 'cmake'
+var ver     = '4.3.1'
+var rel     = '2'
+var deps    = ['glibc']
+var mkdeps  = ['zig', 'make']
+
+var sources = [
+    'https://cmake.org/files/vMAJOR.MINOR/cmake-VERSION.tar.gz',
+    'patches/cmake-no-execinfo.patch',
+]
+var checksums = [
+    '0798f4be7a1a406a419ac32db90c2956936fecbf50db3057d7af47d69a2d7edb',
+    '93f5582efd076673f9bcb3e639bd594e378954a5a3130e5921027ede23c3325c',
+]
+
+proc build(dest) {
+
+    var nproc = $(nproc)
+
+    # Bootstrap build using bundled dependencies.
+    # No --system-* flags: uses bundled curl, expat, zlib, bzip2, etc.
+    # This avoids needing those as separate Kominka packages for the initial bootstrap.
+    ./configure --prefix=/usr --parallel=$nproc -- -DCMAKE_USE_OPENSSL=OFF
+    make -j$nproc
+    make DESTDIR=$dest install
+}

@@ -1,0 +1,34 @@
+#!/usr/local/bin/ysh
+
+var name    = 'go'
+var ver     = '1.26.2'
+var rel     = '1'
+var deps    = ['glibc']
+var mkdeps  = []
+
+var sources = [
+    'https://go.dev/dl/goVERSION.linux-GOARCH.tar.gz',
+    'files/go.sh',
+]
+var checksums_aarch64 = [
+    'c958a1fe1b361391db163a485e21f5f228142d6f8b584f6bef89b26f66dc5b23',
+    'b6209904c88bde96efcac846c267e308e4dc39c8a45f2690204c2175de4b9b0a',
+]
+var checksums_x86_64  = [
+    '990e6b4bbba816dc3ee129eaeaf4b42f17c2800b88a2166c265ac1a200262282',
+    'b6209904c88bde96efcac846c267e308e4dc39c8a45f2690204c2175de4b9b0a',
+]
+
+proc build(dest) {
+
+    # pm strips the top-level directory, so bin/, src/, pkg/ are in $PWD.
+    mkdir -p "${dest}/usr/lib/go"
+    cp -a . "${dest}/usr/lib/go"
+
+    mkdir -p "${dest}/usr/bin"
+    ln -s ../lib/go/bin/go "${dest}/usr/bin/go"
+    ln -s ../lib/go/bin/gofmt "${dest}/usr/bin/gofmt"
+
+    mkdir -p "${dest}/etc/profile.d"
+    cp -f go.sh "${dest}/etc/profile.d/"
+}

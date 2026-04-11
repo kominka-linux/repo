@@ -1,0 +1,10 @@
+#!/bin/busybox sh
+
+# Wait for network device to appear.
+while ! ip link show eth0 >/dev/null 2>&1; do
+    sleep 1
+done
+
+ip link set eth0 up
+
+exec udhcpc -f -i eth0 -s /etc/udhcpc.sh

@@ -1,0 +1,27 @@
+#!/usr/local/bin/ysh
+
+var name    = 'tmux'
+var ver     = '3.7next'
+var rel     = '1'
+var deps    = ['libevent']
+var mkdeps  = ['zig', 'samurai', 'pkgconf', 'bison']
+
+# joshuarli/tmux master: hand-written configure (no autotools, no ncurses).
+# ncurses dependency replaced with hardcoded tmux-256color terminfo table.
+var sources = ['https://github.com/joshuarli/tmux/archive/16a9e6091c8c4c83a53c5086ca6cdb03fb835861.tar.gz']
+var checksums = ['f39bed044e8059e0e983ef3327f83aa28f6d28ad9c734df62bb3ae671925f16d']
+
+proc build(dest) {
+    var _kr = ENV => get("KOMINKA_ROOT", "")
+    if (_kr === '/') { setvar _kr = '' }
+
+    YACC='bison -y' \
+    PKG_CONFIG_PATH="${_kr}/usr/lib/pkgconfig" \
+    LDFLAGS="-L${_kr}/usr/lib" \
+    ./configure --prefix=/usr --sysconfdir=/etc
+
+    samu
+
+    mkdir -p "${dest}/usr/bin"
+    cp tmux "${dest}/usr/bin/tmux"
+}

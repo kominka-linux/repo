@@ -1,0 +1,26 @@
+#!/usr/local/bin/ysh
+
+var name    = 'ca-certificates'
+var ver     = '2025.04.08'
+var rel     = '1'
+var deps    = []
+var mkdeps  = []
+
+var sources = [
+    'files/cacert.pem',
+    'files/update-certdata.sh',
+]
+var checksums = [
+    'b6e66569cc3d438dd5abe514d0df50005d570bfc96c14dca8f768d020cb96171',
+    'ba606f695fe55175e2d521cbefdb80edcb226d4ae6905ca9f4fb5f5b17ad11ff',
+]
+
+proc build(dest) {
+
+    mkdir -p "${dest}/etc/ssl/certs"
+    cp cacert.pem "${dest}/etc/ssl/certs/ca-certificates.crt"
+
+    mkdir -p "${dest}/usr/bin"
+    cp update-certdata.sh "${dest}/usr/bin/update-certdata"
+    chmod +x "${dest}/usr/bin/update-certdata"
+}

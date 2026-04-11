@@ -1,0 +1,65 @@
+#!/usr/local/bin/ysh
+
+var name    = 'perl'
+var ver     = '5.42.2'
+var rel     = '2'
+var deps    = ['bzip2', 'zlib']
+var mkdeps  = ['zig', 'make']
+
+var sources = ['https://www.cpan.org/src/5.0/perl-VERSION.tar.xz']
+var checksums = ['0a585eeb9e363c0f80482ddb3571625250c2c86aeb408853e8ea50805cfb14bb']
+
+proc build(dest) {
+    var CC = ENV => get("CC", "cc")
+    var AR = ENV => get("AR", "ar")
+    var NM = ENV => get("NM", "nm")
+    var RANLIB = ENV => get("RANLIB", "ranlib")
+    var CFLAGS = ENV => get("CFLAGS", "")
+    var LDFLAGS = ENV => get("LDFLAGS", "")
+
+    setvar CFLAGS = "${CFLAGS} -DNO_POSIX_2008_LOCALE -D_GNU_SOURCE"
+    setvar LDFLAGS = "${LDFLAGS} -pthread"
+
+    env BUILD_ZLIB=0 BUILD_BZIP2=0 \
+    ./Configure \
+        -des \
+        -Dprefix=/usr \
+        -Dvendorprefix=/usr \
+        -Dusevendorprefix \
+        -Duseshrplib \
+        -Dusesoname \
+        -Dusethreads \
+        -Dinc_version_list=none \
+        -Dd_sockaddr_in6=define \
+        -Dcccdlflags=-fPIC \
+        -Dccflags="${CFLAGS}" \
+        -Dlddlflags="-shared ${LDFLAGS}" \
+        -Dldflags="${LDFLAGS}" \
+        -Doptimize="-Wall ${CFLAGS}" \
+        -Dcc="${CC}" \
+        -Dar="${AR}" \
+        -Dnm="${NM}" \
+        -Dranlib="${RANLIB}" \
+        -Dman1dir=/usr/share/man/man1 \
+        -Dman3dir=/usr/share/man/man3 \
+        -Dinstallman1dir=/usr/share/man/man1 \
+        -Dinstallman3dir=/usr/share/man/man3 \
+        -Dman1ext=1 \
+        -Dman3ext=3pm \
+        -Dperl_static_inline="static __inline__" \
+        -Dd_static_inline
+
+    make
+    make install
+
+    # Remove unneeded files.
+    find "${dest}" -name '*.pod'       -exec rm -f {} +
+    find "${dest}" -name .packlist     -exec rm -f {} +
+    find "${dest}" -name 'README*'     -exec rm -f {} +
+    find "${dest}" -name 'TODO*'       -exec rm -f {} +
+    find "${dest}" -name 'Change*'     -exec rm -f {} +
+    find "${dest}" -name '*.bs'        -exec rm -f {} +
+    find "${dest}" -name '*.0' -type f -exec rm -f {} +
+
+    find "${dest}/usr/lib" -type f -exec chmod 644 {} \;
+}

@@ -1,0 +1,34 @@
+#!/usr/local/bin/ysh
+
+var name    = 'runit'
+var ver     = '2.1.2'
+var rel     = '1'
+var deps    = ['glibc']
+var mkdeps  = ['zig', 'make']
+
+var sources = ['http://smarden.org/runit/runit-VERSION.tar.gz']
+var checksums = ['6fd0160cb0cf1207de4e66754b6d39750cff14bb0aa66ab49490992c0c47ba18']
+
+proc build(dest) {
+    var CC = ENV => get("CC", "cc")
+
+    cd runit-2.1.2
+
+    # Override compiler and linker.
+    # -D_GNU_SOURCE exposes setgroups() in glibc headers.
+    # -Wno-implicit-function-declaration tolerates runit's old C style.
+    write -- "${CC} -O2 -Wall -D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types" > src/conf-cc
+    write -- "${CC} -s"        > src/conf-ld
+
+    # runit defaults to -static; remove it for dynamic linking.
+    sed -i 's/ -static//g' src/Makefile
+
+    # Build using runit's own build system.
+    package/compile
+
+    # Install supervision binaries.
+    mkdir -p "${dest}/usr/bin"
+    for bin in (:| chpst runsv runsvdir sv svlogd |) {
+        cp -f "command/${bin}" "${dest}/usr/bin/"
+    }
+}

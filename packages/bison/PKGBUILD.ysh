@@ -1,0 +1,30 @@
+#!/usr/local/bin/ysh
+
+var name    = 'bison'
+var ver     = '3.8.2'
+var rel     = '1'
+var deps    = ['glibc']
+var mkdeps  = ['zig', 'make', 'm4']
+
+var sources = ['https://ftp.gnu.org/gnu/bison/bison-VERSION.tar.xz']
+var checksums = ['9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2']
+
+proc build(dest) {
+
+    ./configure \
+        --prefix=/usr \
+        --disable-nls \
+        --without-libtextstyle-prefix
+
+    make
+
+    make DESTDIR=$dest \
+        install-libLIBRARIES \
+        install-binPROGRAMS \
+        install-nodist_binSCRIPTS \
+        install-dist_m4sugarDATA \
+        install-dist_skeletonsDATA \
+        install-dist_pkgdataDATA \
+        install-aclocalDATA \
+        install-man1
+}

@@ -1,0 +1,104 @@
+#!/usr/local/bin/ysh
+
+var name    = 'baselayout'
+var ver     = '1'
+var rel     = '8'
+var deps    = []
+var mkdeps  = []
+
+var sources = [
+    'files/crypttab',
+    'files/fstab',
+    'files/group',
+    'files/host.conf',
+    'files/hosts',
+    'files/issue',
+    'files/mime.types',
+    'files/os-release',
+    'files/passwd',
+    'files/profile',
+    'files/securetty',
+    'files/shadow',
+    'files/shells',
+]
+var checksums = [
+    '3698c87cc3af757f0302f6d7f034350b1b22a7f25b2f71944292d0fb3de67cd7',
+    '9cd015d9d28db93412cbb33a24f11c1b4a2655a1c45874d12666674e68cf872a',
+    '38c9f4047ba597248ef199a77afbd36f873cfa4aeb70de90bac7f237faf2ecba',
+    'a0fa9cd303cf7f1718f51e5624a671a418946718b790508b8988bccd542c6451',
+    '8b50cce4d3bebf2c75b555a3a972ab62d6a96386108e1c0537f9f96797dfa7b2',
+    'adbe12f95bb1fe13f9e1a2f181da0fe6887e8f737e1f5b3511d7dc21edbc6bc6',
+    '0bde8ace73d58897e85c82eb96690bbfd1a4231949d3523d5950ba1910b08892',
+    '71fd3f2fbf0f86ea7384edc1c71a8424cd01dfa5ca37ac9ed7e888c63f42cf72',
+    '7762b65442cd3e930d9b4ec470e01bc53938bc5ed3d7aedeed47977b78f54843',
+    '496fa33f747c059dad8f3acfbcfb1ff7e150ba04e58cbaef638fe5f6060362f9',
+    '570c91b8f001f322d91fe4dcf73952d7c72179f01ae3776ff1a4b8317d65ca64',
+    '8ce994663d7588143ad7ed4441b07f468f4f7d3590164dd73ddfa3ea307ece8e',
+    '8782af2bf81ca1e81b59d1be531565882d4e0c9a89d189706ed358375f67ca04',
+]
+
+proc build(dest) {
+
+    mkdir -m 755 \
+        "${dest}/boot" \
+        "${dest}/dev" \
+        "${dest}/etc" \
+        "${dest}/home" \
+        "${dest}/mnt" \
+        "${dest}/opt" \
+        "${dest}/run" \
+        "${dest}/usr" \
+        "${dest}/usr/bin" \
+        "${dest}/usr/include" \
+        "${dest}/usr/lib" \
+        "${dest}/usr/share" \
+        "${dest}/usr/share/man" \
+        "${dest}/usr/share/man/man1" \
+        "${dest}/usr/share/man/man2" \
+        "${dest}/usr/share/man/man3" \
+        "${dest}/usr/share/man/man4" \
+        "${dest}/usr/share/man/man5" \
+        "${dest}/usr/share/man/man6" \
+        "${dest}/usr/share/man/man7" \
+        "${dest}/usr/share/man/man8" \
+        "${dest}/var/cache" \
+        "${dest}/var/local" \
+        "${dest}/var/opt" \
+        "${dest}/var/log" \
+        "${dest}/var/log/old" \
+        "${dest}/var/lib" \
+        "${dest}/var/lib/misc" \
+        "${dest}/var/empty" \
+        "${dest}/var/service" \
+        "${dest}/var/spool"
+
+    mkdir -m 555 \
+        "${dest}/proc" \
+        "${dest}/sys"
+
+    mkdir -m 0750 \
+        "${dest}/root"
+
+    mkdir -m 1777 \
+        "${dest}/tmp" \
+        "${dest}/var/tmp" \
+        "${dest}/var/spool/mail"
+
+    ln -sf usr/bin "${dest}/bin"
+    ln -sf usr/bin "${dest}/sbin"
+    ln -sf bin     "${dest}/usr/sbin"
+    ln -sf usr/lib "${dest}/lib"
+    ln -sf usr/lib "${dest}/lib64"
+
+    ln -sf lib               "${dest}/usr/lib64"
+    ln -sf spool/mail        "${dest}/var/mail"
+    ln -sf ../run            "${dest}/var/run"
+    ln -sf ../run/lock       "${dest}/var/lock"
+    ln -sf /proc/self/mounts "${dest}/etc/mtab"
+
+    cp -f ./* "${dest}/etc"
+
+    chmod 600 \
+        "${dest}/etc/crypttab" \
+        "${dest}/etc/shadow"
+}

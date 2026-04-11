@@ -1,0 +1,61 @@
+#!/usr/local/bin/ysh
+
+var name    = 'curl'
+var ver     = '8.19.0'
+var rel     = '6'
+var deps    = ['boringssl', 'zlib']
+var mkdeps  = ['zig', 'make']
+
+var sources = ['https://curl.se/download/curl-VERSION.tar.xz']
+var checksums = ['4eb41489790d19e190d7ac7e18e82857cdd68af8f4e66b292ced562d333f11df']
+
+proc build(dest) {
+    var _kr = ENV => get("KOMINKA_ROOT", "")
+    if (_kr === '/') { setvar _kr = '' }
+    var ssl_prefix = "${_kr}/usr"
+
+    # BoringSSL ships openssl/time.h (a compat shim).  curl's configure adds
+    # -isystem .../openssl which makes that file shadow the real <time.h>.
+    # Move it aside so struct tm / time() are found in glibc's header.
+    if test -f "${_kr}/usr/include/openssl/time.h" {
+        mv "${_kr}/usr/include/openssl/time.h" "${_kr}/usr/include/openssl/time.h.aside"
+    }
+
+    var _cflags = ENV => get("CFLAGS", "-O2 -DNDEBUG") ++ " -Wno-error"
+    var _ldflags = ENV => get("LDFLAGS", "") ++ " -L${_kr}/usr/lib"
+
+    # On Debian bootstrap: configure runs test binaries that load libcrypto.so.
+    # Without LD_LIBRARY_PATH the dynamic linker can't find it at runtime.
+    var _ld_lib = ENV => get("LD_LIBRARY_PATH", "")
+    if (_kr !== '') {
+        if (_ld_lib !== '') {
+            setvar _ld_lib = "${_kr}/usr/lib:${_ld_lib}"
+        } else {
+            setvar _ld_lib = "${_kr}/usr/lib"
+        }
+    }
+
+    CFLAGS=$_cflags LDFLAGS=$_ldflags LD_LIBRARY_PATH=$_ld_lib \
+        PKG_CONFIG_PATH="${_kr}/usr/lib/pkgconfig" \
+        ./configure \
+        --prefix=/usr \
+        --enable-ipv6 \
+        --enable-unix-sockets \
+        --enable-hidden-symbols \
+        --disable-manual \
+        --disable-ldap \
+        --disable-ares \
+        --with-openssl=$ssl_prefix \
+        --with-pic \
+        --with-ca-fallback \
+        --without-librtmp \
+        --without-icu \
+        --without-libpsl \
+        --without-libidn \
+        --without-libidn2 \
+        --without-brotli \
+        --without-zstd
+
+    make
+    make DESTDIR=$dest install
+}

@@ -1,0 +1,14 @@
+[Unit]
+Description=Kominka Package Repository
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/kominka-repo
+EnvironmentFile=/etc/kominka-repo/env
+StateDirectory=kominka-repo
+User=kominka-repo
+Group=kominka-repo
+
+[Install]
+WantedBy=multi-user.target

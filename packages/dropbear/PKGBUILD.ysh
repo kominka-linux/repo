@@ -1,0 +1,34 @@
+#!/usr/local/bin/ysh
+
+var name    = 'dropbear'
+var ver     = '2025.89'
+var rel     = '1'
+var deps    = ['zlib']
+var mkdeps  = ['zig', 'make']
+
+var sources    = ['https://matt.ucc.asn.au/dropbear/releases/dropbear-VERSION.tar.bz2']
+var checksums  = ['0d1f7ca711cfc336dc8a85e672cab9cfd8223a02fe2da0a4a7aeb58c9e113634']
+
+proc build(dest) {
+    # Disable password auth — Kominka's glibc has no libcrypt.
+    # Key-based auth is sufficient and more secure anyway.
+    printf '#define DROPBEAR_SVR_PASSWORD_AUTH 0\n' > localoptions.h
+
+    ./configure \
+        --prefix=/usr \
+        --sbindir=/usr/bin \
+        --sysconfdir=/etc \
+        --disable-wtmp \
+        --disable-lastlog \
+        --disable-pam
+
+    make
+    make DESTDIR=$dest install
+
+    mkdir -p "${dest}/etc/dropbear"
+
+    # runit service: -F foreground, -E log to stderr, -R auto-generate host keys
+    mkdir -p "${dest}/etc/sv/dropbear"
+    printf '#!/bin/sh\nexec dropbear -F -E -R\n' > "${dest}/etc/sv/dropbear/run"
+    chmod 0755 "${dest}/etc/sv/dropbear/run"
+}

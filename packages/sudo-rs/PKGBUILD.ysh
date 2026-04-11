@@ -1,0 +1,29 @@
+#!/usr/local/bin/ysh
+
+var name    = 'sudo-rs'
+var ver     = '0.2.13'
+var rel     = '1'
+var deps    = ['glibc']
+var mkdeps  = ['cargo']
+
+var sources = ['https://github.com/trifectatechfoundation/sudo-rs/archive/refs/tags/vVERSION.tar.gz']
+var checksums = ['79becefc504d14ffccc7cab18d42f8d892e78b2d13d9c5bb887c5f02a2721eaf']
+
+proc build(dest) {
+
+    # --no-default-features disables the PAM feature; authentication is
+    # handled entirely via sudoers (NOPASSWD), so libpam is not needed.
+    cargo build --release --no-default-features
+
+    install -Dm4755 target/release/sudo "${dest}/usr/bin/sudo"
+    install -Dm4755 target/release/su "${dest}/usr/bin/su"
+    install -Dm755 target/release/visudo "${dest}/usr/bin/visudo"
+
+    mkdir -p "${dest}/etc"
+
+    cat > "${dest}/etc/sudoers" << 'EOF'
+root ALL=(ALL:ALL) ALL
+%wheel ALL=(ALL:ALL) NOPASSWD: ALL
+EOF
+    chmod 440 "${dest}/etc/sudoers"
+}

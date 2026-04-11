@@ -1,0 +1,29 @@
+#!/usr/local/bin/ysh
+
+var name    = 'tailscale'
+var ver     = '1.96.4'
+var rel     = '1'
+var deps    = []
+var mkdeps  = []
+var nostrip = true
+
+var sources = ['https://pkgs.tailscale.com/stable/tailscale_VERSION_GOARCH.tgz']
+var checksums_aarch64 = ['a27249bc70d7b37a68f8be7f5c4507ea5f354e592dce43cb5d4f3e742b313c3c']
+var checksums_x86_64  = ['a1cba18826b1f91cb25ef7f5b8259b5258339b42db7867af9269e21829ea78cc']
+
+proc build(dest) {
+    # Pre-built static Go binaries — no compilation needed.
+    mkdir -p "${dest}/usr/bin"
+    cp tailscale  "${dest}/usr/bin/tailscale"
+    cp tailscaled "${dest}/usr/bin/tailscaled"
+
+    # runit service: tailscaled runs in foreground.
+    # mkdir /run/tailscale here so the socket path exists from the start.
+    mkdir -p "${dest}/etc/sv/tailscale"
+    printf '#!/bin/sh\nmkdir -p /run/tailscale\nexec tailscaled --state=/var/lib/tailscale/tailscaled.state\n' \
+        > "${dest}/etc/sv/tailscale/run"
+    chmod 0755 "${dest}/etc/sv/tailscale/run"
+
+    # Persistent state directory — survives reboots (on ext4 root).
+    mkdir -p "${dest}/var/lib/tailscale"
+}

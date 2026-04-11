@@ -1,0 +1,15 @@
+#!/usr/local/bin/ysh
+
+var name    = 'liveiso'
+var ver     = '1'
+var rel     = '1'
+var deps    = ['core', 'e2fsprogs', 'dosfstools']
+var mkdeps  = []
+
+var sources = []
+var checksums = []
+
+proc build(dest) {
+    # metapackage — no build step
+    true
+}

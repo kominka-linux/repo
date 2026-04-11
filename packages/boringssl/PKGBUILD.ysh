@@ -1,0 +1,72 @@
+#!/usr/local/bin/ysh
+
+var name    = 'boringssl'
+var ver     = '0.20260327.0'
+var rel     = '6'
+var deps    = ['glibc']
+var mkdeps  = ['zig', 'cmake', 'go', 'samurai']
+
+var sources = [
+    'https://github.com/google/boringssl/releases/download/VERSION/boringssl-VERSION.tar.gz',
+    'files/update-certdata.sh',
+]
+var checksums = [
+    '6af7037a8891d0e3d097dd61de6d195f6c2b532ed69d138a16da47c06a6cd022',
+    'd4bfcd9ee16eff65bdf6de1e0a3ccac667fdf52d98d0eda5c3e3f638aad13b89',
+]
+
+proc build(dest) {
+
+    var CC      = ENV => get("CC", "cc")
+    var CXX     = ENV => get("CXX", "c++")
+    var _cflags  = ENV => get("CFLAGS", "")
+    var _ldflags = ENV => get("LDFLAGS", "")
+
+    cmake -GNinja -B build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=ON \
+        -DBUILD_TESTING=OFF \
+        -DCMAKE_C_COMPILER=$CC \
+        -DCMAKE_CXX_COMPILER=$CXX \
+        -DCMAKE_C_FLAGS=$_cflags \
+        -DCMAKE_CXX_FLAGS=$_cflags \
+        -DCMAKE_ASM_FLAGS=$_cflags \
+        -DCMAKE_SHARED_LINKER_FLAGS=$_ldflags
+    ninja -C build
+
+    mkdir -p "${dest}/usr/lib/pkgconfig" "${dest}/usr/include" "${dest}/etc/ssl"
+
+    cp -r include/openssl "${dest}/usr/include/"
+    cp build/libssl.so "${dest}/usr/lib/"
+    cp build/libcrypto.so "${dest}/usr/lib/"
+
+    cp -f update-certdata.sh "${dest}/etc/ssl"
+
+    # pkg-config files for curl and other consumers.
+    write -- '''prefix=/usr
+    libdir=${prefix}/lib
+    includedir=${prefix}/include
+
+    Name: libssl
+    Description: BoringSSL
+    Version: 0.0.0
+    Libs: -L${libdir} -lssl -lcrypto
+    Cflags: -I${includedir}''' > "${dest}/usr/lib/pkgconfig/libssl.pc"
+
+    write -- '''prefix=/usr
+    libdir=${prefix}/lib
+    includedir=${prefix}/include
+
+    Name: libcrypto
+    Description: BoringSSL
+    Version: 0.0.0
+    Libs: -L${libdir} -lcrypto
+    Cflags: -I${includedir}''' > "${dest}/usr/lib/pkgconfig/libcrypto.pc"
+
+    write -- '''prefix=/usr
+
+    Name: openssl
+    Description: BoringSSL (OpenSSL-compatible)
+    Version: 0.0.0
+    Requires: libssl libcrypto''' > "${dest}/usr/lib/pkgconfig/openssl.pc"
+}

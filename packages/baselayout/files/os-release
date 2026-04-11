@@ -1,0 +1,8 @@
+NAME="Kominka Linux"
+PRETTY_NAME="Kominka Linux"
+ID=kominka
+BUILD_ID=rolling
+HOME_URL="https://github.com/joshli0/davinci"
+DOCUMENTATION_URL="https://github.com/joshli0/davinci"
+SUPPORT_URL="https://github.com/joshli0/davinci"
+BUG_REPORT_URL="https://github.com/joshli0/davinci"

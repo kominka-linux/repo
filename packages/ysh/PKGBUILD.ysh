@@ -1,0 +1,39 @@
+#!/usr/local/bin/ysh
+
+var name    = 'ysh'
+var ver     = '0.37.0'
+var rel     = '2'
+var deps    = []
+var mkdeps  = ['zig', 'make']
+
+var sources = ['https://oils.pub/download/oils-for-unix-VERSION.tar.gz']
+var checksums = ['f4d41d20a0523dbcfbd4ba231f82edf25b08d4965d65bc71fcb56666d6743000']
+
+proc build(dest) {
+
+    # Detect musl target triple from architecture.
+    var MUSL_TARGET = "$(uname -m)-linux-musl"
+
+    # Static build targeting musl — no glibc/libstdc++ runtime deps.
+    # oils passes -std=c++11 to CC on .c files. The wrapper adds -xc++
+    # only when compiling (-c flag present), not when linking.
+    var CC_PATH = $(command -v cc)
+    cat > $CC_PATH << EOF
+#!/bin/sh
+for a in "\$@"; do
+    case "\$a" in -c) exec zig c++ -target $MUSL_TARGET -xc++ "\$@";; esac
+done
+exec zig c++ -target $MUSL_TARGET "\$@"
+EOF
+    cp $CC_PATH "$(command -v c++)" 2>/dev/null || true
+    chmod +x $CC_PATH
+    chmod +x "$(command -v c++)" 2>/dev/null || true
+
+    LDFLAGS='' ./configure --without-readline
+    LDFLAGS='' _build/oils.sh
+
+    mkdir -p "${dest}/usr/local/bin"
+    cp _bin/cxx-opt-sh/oils-for-unix "${dest}/usr/local/bin/oils-for-unix"
+    ln -s oils-for-unix "${dest}/usr/local/bin/osh"
+    ln -s oils-for-unix "${dest}/usr/local/bin/ysh"
+}

@@ -1,0 +1,27 @@
+#!/usr/local/bin/ysh
+
+var name    = 'linux-headers'
+var ver     = '5.10.54'
+var rel     = '1'
+var deps    = []
+var mkdeps  = ['make']
+
+var sources = ['https://mirrors.edge.kernel.org/pub/linux/kernel/vMAJOR.x/linux-VERSION.tar.xz']
+var checksums = ['bf50c63261847187eca4a1793e5df5c1355b21697409589f6ca03e32b629be44']
+
+proc build(dest) {
+    var CC = ENV => get("CC", "cc")
+    # Use system gcc for host tools when available (zig-compiled tools crash under QEMU).
+    var HOSTCC = CC
+    try { command -v gcc >/dev/null 2>&1 }
+    if ! failed { setvar HOSTCC = 'gcc' }
+
+    make HOSTCC=$HOSTCC headers
+
+    # The headers require rsync for installation. This does the equivalent
+    # using find, mkdir and cp.
+    find usr/include -name '*.h' -type f | while read -r file {
+        mkdir -p "${dest}/${file%/*}"
+        cp -f $file "${dest}/${file}"
+    }
+}

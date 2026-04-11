@@ -1,0 +1,25 @@
+#!/usr/local/bin/ysh
+
+var name    = 'pkgconf'
+var ver     = '2.5.1'
+var rel     = '2'
+var deps    = ['glibc']
+var mkdeps  = ['zig', 'make']
+
+var sources = ['https://distfiles.ariadne.space/pkgconf/pkgconf-VERSION.tar.xz']
+var checksums = ['cd05c9589b9f86ecf044c10a2269822bc9eb001eced2582cfffd658b0a50c243']
+
+proc build(dest) {
+
+    ./configure \
+        --prefix=/usr \
+        --sysconfdir=/etc
+
+    make
+    make DESTDIR=$dest install
+
+    ln -s pkgconf "${dest}/usr/bin/pkg-config"
+
+    # Remove documentation.
+    rm -rf "${dest}/usr/share/doc"
+}

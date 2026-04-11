@@ -1,0 +1,23 @@
+#!/bin/sh
+cat <<'EOF'
+
+  tailscale installed.
+
+  Enable the service:
+    ln -s /etc/sv/tailscale /var/service/tailscale
+
+  First boot — authenticate and join your tailnet:
+    tailscale up
+
+  For unattended/headless auth use an auth key:
+    tailscale up --authkey=<key>
+
+  Once connected, find your IP:
+    tailscale ip
+
+  SSH in from any device on your tailnet:
+    ssh root@<tailscale-ip>      # uses dropbear on port 22
+
+  State is persisted across reboots in /var/lib/tailscale.
+
+EOF
