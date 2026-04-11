@@ -117,6 +117,7 @@ pub fn route(
             "/api/upload" => upload(headers, body, state),
             "/api/publish" => publish(headers, body, state),
             "/api/reindex" => reindex(headers, body, state),
+            "/api/delete" => delete_pkg(headers, body, state),
             _ => Response::not_found(),
         },
         _ => Response::not_found(),
@@ -389,6 +390,33 @@ fn reindex(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> 
 
     tracing::info!("reindexed {}/{}", req.arch, req.pkg);
     Response::json(200, r#"{"ok":true}"#)
+}
+
+/// POST /api/delete — remove a package from the index (does not delete R2 object).
+fn delete_pkg(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> Response {
+    if !auth::check_auth(&state.api_key_hash, headers) {
+        return Response::unauthorized();
+    }
+    #[derive(serde::Deserialize)]
+    struct DeleteRequest { arch: String, pkg: String }
+    let req: DeleteRequest = match serde_json::from_slice(body) {
+        Ok(r) => r,
+        Err(_) => return Response::bad_request("invalid json"),
+    };
+    if !KNOWN_ARCHES.contains(&req.arch.as_str()) {
+        return Response::bad_request("unknown arch");
+    }
+    let mut indexes = state.indexes.write().unwrap();
+    let removed = indexes.get_mut(&req.arch).map(|idx| idx.packages.remove(&req.pkg)).flatten().is_some();
+    if removed {
+        if let Some(idx) = indexes.get(&req.arch) {
+            let _ = save_index(&state.s3, &req.arch, idx);
+        }
+        tracing::info!("deleted {}/{} from index", req.arch, req.pkg);
+        Response::json(200, r#"{"ok":true}"#)
+    } else {
+        Response::not_found()
+    }
 }
 
 fn update_index(state: &AppState, arch: &str, pkg: &str, entry: PackageEntry) -> Result<(), String> {
