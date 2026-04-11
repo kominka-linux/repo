@@ -36,7 +36,9 @@ EOF
     var _ldflags = ''
     if (_kr !== '') {
         setvar _cppflags = "-I${_kr}/usr/include"
-        setvar _ldflags = "-L${_kr}/usr/lib"
+        # Explicitly include BoringSSL: libcurl.so links against it as a shared
+        # library, but GNU ld doesn't follow transitive DT_NEEDED entries.
+        setvar _ldflags = "-L${_kr}/usr/lib -lssl -lcrypto"
     }
 
     CPPFLAGS=$_cppflags LDFLAGS=$_ldflags \
