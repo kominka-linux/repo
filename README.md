@@ -53,11 +53,11 @@ API_KEY=<from step 2>
 
 ### 4. Run
 
-Development:
+Development (source secrets from .env):
 
 ```sh
 cd server
-source /etc/kominka-repo/env  # or export vars inline
+source ~/d/repo/.env
 cargo run
 ```
 
@@ -82,10 +82,14 @@ regular packages (uploads the tarball) and metapackages (registers metadata
 only):
 
 ```sh
-export KOMINKA_REPO=http://localhost:3000
-export KOMINKA_TOKEN=<your API_KEY>
+# Source credentials from .env, then build+upload each package
+source ~/d/repo/.env
 
-# Publish all packages
+# From ~/d/davinci — make targets source .env automatically:
+make rebuild-curl
+make rebuild-glibc-debian   # packages needing gcc
+
+# Or publish all at once (from ~/d/davinci with KOMINKA_PATH set):
 for pkg in packages/*/; do pm p "$(basename "$pkg")"; done
 ```
 
@@ -133,26 +137,25 @@ pm p core
 ```
 GET /health                           → {"status":"ok"}
 GET /{arch}/packages.json             → package index (JSON)
-GET /{arch}/{pkg}/{hash}.tar.gz       → tarball
+GET /{arch}/{pkg}/{ver}-{rel}.tar.gz  → tarball
 ```
 
 ### Authenticated (Authorization: Bearer <API_KEY>)
 
 ```
 POST /api/upload                      → upload tarball
-  Headers: X-Arch, X-Pkg, X-Ver, X-Rel, X-Hash, X-Deps
+  Headers: X-Arch, X-Pkg, X-Ver, X-Rel, X-Deps, X-Mkdeps
   Body: tarball bytes
   Returns: {"ok":true,"sha256":"..."}
 
 POST /api/publish                     → register metapackage
-  Body: {"arch","pkg","ver","rel","hash","deps"}
+  Body: {"arch","pkg","ver","rel","deps","mkdeps"}
   Returns: {"ok":true}
 ```
 
-## Content-Addressed Storage
+## Storage Layout
 
-Tarballs are keyed by `sha256(PKGBUILD.ysh)`, not by version. If the package
-definition changes, the hash changes, the tarball gets a new key. Old tarballs
-remain in R2 unreferenced.
+Tarballs are stored at `{arch}/{pkg}/{ver}-{rel}.tar.gz` in R2. The index
+tracks the sha256 of each tarball for integrity verification on download.
 
-See `REPOSITORY.md` in the davinci repo for the full design.
+See `REPOSITORY.md` for the V2 auth design (passkeys + JWT/OIDC, not yet implemented).

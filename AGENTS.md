@@ -35,8 +35,11 @@ The main loop writes it back via tiny_http.
 
 `s3::Storage` is an enum:
 - `S3 { endpoint, bucket, access_key, secret_key, region }` — real R2, uses
-  ureq for HTTP and manual AWS SigV4 signing (~80 lines)
+  ureq for HTTP and manual AWS SigV4 signing (~80 lines in s3.rs)
 - `Memory(RwLock<HashMap<String, Vec<u8>>>)` — in-memory, for tests
+
+S3 requests include an explicit `Content-Length` header and use `read_to_end`
+(not ureq's `read_to_vec` which has a 10MB default limit).
 
 ### Package Index
 
@@ -52,18 +55,15 @@ Format:
     "curl": {
       "ver": "8.19.0", "rel": "6",
       "deps": ["boringssl", "zlib"],
-      "hash": "<sha256 of PKGBUILD.ysh>",
+      "mkdeps": ["zig", "make"],
       "sha256": "<sha256 of tarball>"
     }
   }
 }
 ```
 
-### Content-Addressed Tarballs
-
-R2 key: `{arch}/{pkg}/{hash}.tar.gz` where `hash = sha256(PKGBUILD.ysh)`.
-Any change to the package definition produces a new hash. Version strings are
-metadata in the index, not part of the storage key.
+Tarballs are stored at `{arch}/{pkg}/{ver}-{rel}.tar.gz` — version-addressed,
+not content-addressed. The sha256 field is for integrity verification on download.
 
 ### Auth
 
@@ -71,42 +71,58 @@ V1: static API key. Server stores `sha256(API_KEY)`, compares against
 `sha256(bearer_token)` on each authenticated request. No database.
 
 V2 (designed, not yet implemented): browser passkeys + JWT/OIDC for CI.
-See `REPOSITORY.md` in davinci for the full v2 design including SQLite schema,
-WebAuthn flow, and GitHub Actions OIDC integration.
+See `REPOSITORY.md` for the full design.
 
 ## pm Integration
 
-The `davinci` repo's `pm.ysh` uses `KOMINKA_REPO` to talk to this server:
+`pm.ysh` uses `KOMINKA_REPO` to talk to this server:
 
 - `pm i curl` — fetches `packages.json`, resolves deps, downloads tarballs
-  by hash from the server. No git checkout of package definitions needed.
+  from the server. No local checkout of package definitions needed.
 - `pm p curl` — POSTs the built tarball to `/api/upload` with metadata headers.
 - `pm u` — downloads fresh `packages.json` before doing git pull.
 - `pm auth` — prompts for the API key and stores it in keychain or file.
 
-Key pm procs: `index_load`, `index_refresh`, `_download`, `pkg_hash`,
-`pkg_cache`, `pkg_upload`, `auth_token_load`, `auth_token_store`.
+Key pm procs: `index_load`, `index_refresh`, `_download`, `pkg_cache`,
+`pkg_upload`, `auth_token_load`, `auth_token_store`.
 
-To populate the index from scratch: `for pkg in packages/*/; do pm p "$(basename "$pkg")"; done`.
-This handles both regular packages (uploads tarball) and metapackages (publishes metadata).
+To populate the index: `for pkg in packages/*/; do pm p "$(basename "$pkg")"; done`.
 
-## Dependencies
+## Scripts
 
-8 direct, ~63 total (including transitive). No async runtime.
+| Script | Purpose |
+|--------|---------|
+| `scripts/repology-latest.py` | Check package versions vs upstream (repology.org) |
+| `scripts/build-deb.sh` | Build a .deb for the server binary |
 
-| Crate | Role |
-|-------|------|
-| tiny_http | HTTP server |
-| ureq | HTTP client (S3 calls) |
-| sha2 | SHA-256 (content hashing, auth) |
-| hmac | HMAC-SHA256 (SigV4 signing) |
-| serde + serde_json | JSON serialization |
-| tracing + tracing-subscriber | Logging |
+Run repology check: `python3 scripts/repology-latest.py --scan packages/`
+
+## Building Packages
+
+```sh
+# In ~/d/davinci (the pm.ysh repo):
+make rebuild-<pkg>           # build with zig cc in kominka:core
+make rebuild-<pkg>-debian    # build with Debian GCC (glibc, git, strace...)
+```
+
+Both source credentials from `~/d/repo/.env` automatically.
+
+## Server Development
+
+```sh
+cd server
+source ~/d/repo/.env
+cargo run          # start server at LISTEN_ADDR (default 127.0.0.1:3000)
+cargo test         # run 15 unit tests (use Storage::Memory, no S3 needed)
+```
+
+Dependencies: tiny_http, ureq, sha2, hmac, serde/serde_json, tracing — all
+blocking/sync. No tokio.
 
 ## Testing
 
-`cargo test` runs 14 integration tests in `tests/api.rs`. Tests call
+`cargo test` runs 15 integration tests in `tests/api.rs`. Tests call
 `packages::route()` directly with `Storage::Memory` — no HTTP, no S3, no
 threads. Covers: upload + index round-trip, auth rejection, input validation,
 arch isolation, metapackage publishing, SHA-256 correctness, index
-accumulation and overwrite behavior.
+accumulation and overwrite behavior, large body integrity.
