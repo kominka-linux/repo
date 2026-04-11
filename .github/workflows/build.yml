@@ -4,24 +4,58 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: Package name to build
-        required: true
-        type: string
-      use_debian:
-        description: Use Debian GCC builder (for glibc, linux, git, strace)
+        description: Package name to build (leave empty to build all)
         required: false
-        type: boolean
-        default: false
+        type: string
 
 jobs:
   build:
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { arch: amd64, runner: ubuntu-latest    }
-          - { arch: arm64, runner: ubuntu-24.04-arm }
-    runs-on: ${{ matrix.runner }}
+          # zig cc
+          - { pkg: baseinit       }
+          - { pkg: baselayout     }
+          - { pkg: bison          }
+          - { pkg: boringssl      }
+          - { pkg: bzip2          }
+          - { pkg: ca-certificates }
+          - { pkg: cargo          }
+          - { pkg: cmake          }
+          - { pkg: curl           }
+          - { pkg: dosfstools     }
+          - { pkg: dropbear       }
+          - { pkg: e2fsprogs      }
+          - { pkg: go             }
+          - { pkg: libevent       }
+          - { pkg: libudev-zero   }
+          - { pkg: linux-pam      }
+          - { pkg: m4             }
+          - { pkg: make           }
+          - { pkg: muon           }
+          - { pkg: pkgconf        }
+          - { pkg: runit          }
+          - { pkg: samurai        }
+          - { pkg: sqlite         }
+          - { pkg: sudo-rs        }
+          - { pkg: tailscale      }
+          - { pkg: tmux           }
+          - { pkg: xz             }
+          - { pkg: ysh            }
+          - { pkg: zig            }
+          - { pkg: zlib           }
+          # Debian GCC
+          - { pkg: busybox, debian: true }
+          - { pkg: git,     debian: true }
+          - { pkg: glibc,   debian: true }
+          - { pkg: linux,   debian: true }
+          - { pkg: perl,    debian: true }
+          - { pkg: strace,  debian: true }
+
+    # Skip if a specific package was requested and this isn't it
+    if: ${{ !inputs.package || inputs.package == matrix.pkg }}
 
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +66,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /tmp/kominka-core.tar.gz
-          key: kominka-core-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'pm.ysh', 'packages/**/PKGBUILD.ysh') }}
+          key: kominka-core-amd64-${{ hashFiles('Dockerfile', 'pm.ysh', 'packages/**/PKGBUILD.ysh') }}
 
       - name: Build kominka:core
         if: steps.cache.outputs.cache-hit != 'true'
@@ -48,8 +82,8 @@ jobs:
         run: docker load < /tmp/kominka-core.tar.gz
 
       # ── Build (zig cc) ────────────────────────────────────────────────────
-      - name: Build ${{ inputs.package }} (zig cc)
-        if: ${{ !inputs.use_debian }}
+      - name: Build ${{ matrix.pkg }}
+        if: ${{ !matrix.debian }}
         run: |
           mkdir -p out
           docker run --rm \
@@ -67,7 +101,7 @@ jobs:
             -e LOGNAME=root \
             -e HOME=/root \
             kominka:core sh -c '
-              pm b "${{ inputs.package }}"
+              pm b "${{ matrix.pkg }}"
               ldconfig 2>/dev/null
               for f in /root/.cache/kominka/bin/*@*.tar.*; do
                 [ -f "$f" ] && cp "$f" /out/
@@ -75,14 +109,14 @@ jobs:
 
       # ── Build (Debian GCC) ────────────────────────────────────────────────
       - name: Build Debian builder image
-        if: ${{ inputs.use_debian }}
+        if: ${{ matrix.debian }}
         run: |
           docker build \
             --build-context packages=packages \
             -t kominka-debian-builder -f Dockerfile.glibc .
 
-      - name: Build ${{ inputs.package }} (Debian GCC)
-        if: ${{ inputs.use_debian }}
+      - name: Build ${{ matrix.pkg }} (Debian GCC)
+        if: ${{ matrix.debian }}
         run: |
           mkdir -p out
           docker run --rm \
@@ -108,14 +142,14 @@ jobs:
                 chmod +x "$db/$tool/build"
                 touch "$db/$tool/manifest"
               done
-              pm b "${{ inputs.package }}"
+              pm b "${{ matrix.pkg }}"
               for f in /root/.cache/kominka/bin/*@*.tar.*; do
                 [ -f "$f" ] && cp "$f" /out/
               done'
 
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.package }}-${{ matrix.arch }}
+          name: ${{ matrix.pkg }}-amd64
           path: out/*.tar.*
           if-no-files-found: error
