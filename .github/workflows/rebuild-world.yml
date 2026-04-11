@@ -78,16 +78,8 @@ jobs:
             -e HOME=/root \
             kominka-debian-builder sh -c '
               db=/kominka-root/var/db/kominka/installed
-              # Register all Debian-provided build tools as "system installed"
-              # so pm doesn't try to build them from source.
-              for tool in make bison m4 flex bc perl cmake ninja samurai pkgconf \
-                          glibc linux zig zlib boringssl curl ca-certificates \
-                          xz bzip2 go cargo ysh; do
-                mkdir -p "$db/$tool"
-                printf "system 1\n" > "$db/$tool/version"
-                printf "#!/bin/sh\n:\n" > "$db/$tool/build"
-                chmod +x "$db/$tool/build"
-                touch "$db/$tool/manifest"
+              for tool in make bison m4 flex bc perl cmake ninja samurai pkgconf glibc linux zig zlib boringssl curl ca-certificates xz bzip2 go cargo ysh; do
+                mkdir -p "$db/$tool" && printf "system 1\n" > "$db/$tool/version" && printf "#!/bin/sh\n:\n" > "$db/$tool/build" && chmod +x "$db/$tool/build" && touch "$db/$tool/manifest"
               done
               pm b "${{ matrix.pkg }}"
               # Only copy the target package tarball, not deps
