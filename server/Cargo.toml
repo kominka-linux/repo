@@ -11,7 +11,7 @@ sha2 = "0.10"
 tiny_http = "0.12"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-ureq = { version = "3.3.0", default-features = false, features = ["rustls-no-provider", "platform-verifier"] }
+ureq = { version = "3.3.0", default-features = false, features = ["rustls", "platform-verifier"] }
 
 [profile.dev]
 debug = "line-tables-only"

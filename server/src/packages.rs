@@ -11,6 +11,8 @@ pub struct PackageEntry {
     pub ver: String,
     pub rel: String,
     pub deps: Vec<String>,
+    #[serde(default)]
+    pub mkdeps: Vec<String>,
     pub hash: String,
     pub sha256: String,
 }
@@ -96,6 +98,9 @@ pub fn route(
 ) -> Response {
     match method {
         "GET" => {
+            if path == "/" {
+                return root_index(state);
+            }
             if path == "/health" {
                 return Response::json(200, r#"{"status":"ok"}"#);
             }
@@ -116,6 +121,93 @@ pub fn route(
         },
         _ => Response::not_found(),
     }
+}
+
+fn root_index(state: &AppState) -> Response {
+    let indexes = state.indexes.read().unwrap();
+    let mut html = String::from(
+        "<!doctype html>\
+        <html><head><meta charset=utf-8><meta name=viewport content=\"width=device-width\">\
+        <title>Kominka Packages</title><style>\
+        *{margin:0;padding:0;box-sizing:border-box}\
+        body{font-family:system-ui,sans-serif;max-width:960px;margin:0 auto;padding:2rem 1rem;\
+        color:#e0e0e0;background:#1a1a1a}\
+        h1{font-size:1.4rem;margin-bottom:1.5rem;color:#fff}\
+        h2{font-size:1.1rem;margin:1.5rem 0 .5rem;color:#ccc}\
+        table{width:100%;border-collapse:collapse;font-size:.85rem}\
+        th{text-align:left;padding:.3rem .5rem;border-bottom:1px solid #333;color:#888;font-weight:normal}\
+        td{padding:.3rem .5rem;border-bottom:1px solid #222}\
+        a{color:#6ba3f7;text-decoration:none}a:hover{text-decoration:underline}\
+        .dep{color:#888}.mkdep{color:#666}\
+        .hash{font-family:monospace;font-size:.75rem;color:#555}\
+        .empty{color:#666;padding:2rem 0}\
+        @media(prefers-color-scheme:light){body{color:#222;background:#fff}\
+        h1{color:#000}h2{color:#333}th{color:#666;border-color:#ddd}\
+        td{border-color:#eee}a{color:#1a6be0}.dep{color:#555}.mkdep{color:#888}.hash{color:#999}}\
+        </style></head><body><h1>Kominka Packages</h1>",
+    );
+
+    let mut has_packages = false;
+    for arch in KNOWN_ARCHES {
+        let Some(idx) = indexes.get(*arch) else { continue };
+        if idx.packages.is_empty() { continue; }
+        has_packages = true;
+
+        let mut names: Vec<&String> = idx.packages.keys().collect();
+        names.sort();
+
+        html.push_str(&format!(
+            "<h2>{arch} <span class=dep>({} packages)</span></h2>\
+            <table><tr><th>Package</th><th>Version</th><th>Dependencies</th><th>Build deps</th></tr>",
+            names.len()
+        ));
+
+        for name in &names {
+            let e = &idx.packages[*name];
+            let tarball_url = format!("/{arch}/{name}/{}.tar.gz", e.hash);
+
+            let dep_links: Vec<String> = e.deps.iter().map(|d| {
+                if names.iter().any(|n| *n == d) {
+                    format!("<a href=\"#\">{d}</a>")
+                } else {
+                    d.clone()
+                }
+            }).collect();
+            let deps_html = if dep_links.is_empty() {
+                "<span class=dep>\u{2014}</span>".to_string()
+            } else {
+                format!("<span class=dep>{}</span>", dep_links.join(", "))
+            };
+
+            let mkdep_links: Vec<String> = e.mkdeps.iter().map(|d| {
+                if names.iter().any(|n| *n == d) {
+                    format!("<a href=\"#\">{d}</a>")
+                } else {
+                    d.clone()
+                }
+            }).collect();
+            let mkdeps_html = if mkdep_links.is_empty() {
+                "<span class=mkdep>\u{2014}</span>".to_string()
+            } else {
+                format!("<span class=mkdep>{}</span>", mkdep_links.join(", "))
+            };
+
+            html.push_str(&format!(
+                "<tr><td><a href=\"{tarball_url}\">{name}</a> \
+                <span class=hash>{}</span></td>\
+                <td>{}-{}</td><td>{deps_html}</td><td>{mkdeps_html}</td></tr>",
+                &e.hash[..12.min(e.hash.len())], e.ver, e.rel
+            ));
+        }
+        html.push_str("</table>");
+    }
+
+    if !has_packages {
+        html.push_str("<p class=empty>No packages indexed yet.</p>");
+    }
+
+    html.push_str("</body></html>");
+    Response { status: 200, content_type: "text/html", body: html.into_bytes() }
 }
 
 fn get_index(arch: &str, state: &AppState) -> Response {
@@ -158,6 +250,7 @@ fn upload(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> R
     let rel = headers.get("x-rel").map(|s| s.as_str()).unwrap_or("");
     let hash = headers.get("x-hash").map(|s| s.as_str()).unwrap_or("");
     let deps_raw = headers.get("x-deps").map(|s| s.as_str()).unwrap_or("");
+    let mkdeps_raw = headers.get("x-mkdeps").map(|s| s.as_str()).unwrap_or("");
 
     if arch.is_empty() || pkg.is_empty() || ver.is_empty() || rel.is_empty() || hash.is_empty() {
         return Response::bad_request("missing headers");
@@ -169,11 +262,15 @@ fn upload(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> R
         return Response::bad_request("invalid package name");
     }
 
-    let deps: Vec<String> = if deps_raw.is_empty() {
-        vec![]
-    } else {
-        deps_raw.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+    let parse_list = |raw: &str| -> Vec<String> {
+        if raw.is_empty() {
+            vec![]
+        } else {
+            raw.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+        }
     };
+    let deps = parse_list(deps_raw);
+    let mkdeps = parse_list(mkdeps_raw);
 
     let sha256_hex = s3::sha256_hex(body);
 
@@ -187,6 +284,7 @@ fn upload(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> R
         ver: ver.to_string(),
         rel: rel.to_string(),
         deps,
+        mkdeps,
         hash: hash.to_string(),
         sha256: sha256_hex.clone(),
     };
@@ -220,6 +318,7 @@ fn publish(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> 
         ver: req.ver,
         rel: req.rel,
         deps: req.deps,
+        mkdeps: req.mkdeps,
         hash: req.hash.clone(),
         sha256: String::new(),
     };
@@ -240,6 +339,8 @@ struct PublishRequest {
     rel: String,
     hash: String,
     deps: Vec<String>,
+    #[serde(default)]
+    mkdeps: Vec<String>,
 }
 
 fn update_index(state: &AppState, arch: &str, pkg: &str, entry: PackageEntry) -> Result<(), String> {
