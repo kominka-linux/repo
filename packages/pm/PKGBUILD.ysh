@@ -8,7 +8,7 @@ var mkdeps  = []
 
 # pm.ysh is provided as a local source from the repo checkout.
 var sources   = ['pm.ysh']
-var checksums = []
+var checksums = ['611af41c72390e125a4818c036051ba54633591b22007a8d2f55e2f9dab2c60d']
 
 proc build(dest) {
     mkdir -p "${dest}/usr/bin"

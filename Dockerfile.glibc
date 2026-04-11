@@ -1,0 +1,35 @@
+# Build environment using Debian GCC.
+# Required for packages that can't be built with zig cc/clang:
+# glibc (alias attribute semantics), git (lld incompatibilities), etc.
+#
+# Usage via Makefile:
+#   make rebuild-glibc-debian
+#   make rebuild-git-debian
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential curl ca-certificates tar gzip bzip2 xz-utils \
+    make patch python3 gawk bison flex texinfo m4 libelf-dev \
+    gettext libexpat1-dev libssl-dev bc && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install ysh (static musl binary — runs on any Linux).
+ARG R2_BASE=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
+RUN case "$(uname -m)" in \
+        x86_64)  ARCH=x86_64-linux-gnu ;; \
+        aarch64) ARCH=aarch64-linux-gnu ;; \
+    esac && \
+    curl -fsSLo- "$R2_BASE/$ARCH/ysh/0.37.0-2.tar.gz" | \
+        tar xzf - -C / ./usr/local/bin/ && \
+    chmod +x /usr/local/bin/ysh
+
+COPY pm.ysh /usr/bin/pm
+RUN chmod +x /usr/bin/pm
+
+COPY --from=packages / /packages
+RUN find /packages -name build -exec chmod +x {} + && \
+    find /packages -name post-install -exec chmod +x {} +
+
+RUN mkdir -p /kominka-root/var/db/kominka/installed \
+             /kominka-root/var/db/kominka/choices
