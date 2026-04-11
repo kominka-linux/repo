@@ -15,9 +15,12 @@ proc build(dest) {
     try { command -v gcc >/dev/null 2>&1 }
     if ! failed { setvar HOSTCC = 'gcc' }
 
-    make HOSTCC=$HOSTCC headers
+    var MACH = $(uname -m)
+    var ARCH = if (MACH === 'aarch64') { 'arm64' } else { MACH }
 
-    find usr/include -name '*.h' -type f | while read -r file {
+    make HOSTCC=$HOSTCC ARCH=$ARCH headers
+
+    find usr/include -name '*.h' -type f 2>/dev/null | while read -r file {
         mkdir -p "${dest}/${file%/*}"
         cp -f $file "${dest}/${file}"
     }

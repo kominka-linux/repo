@@ -18,33 +18,38 @@ var checksums = [
 ]
 
 proc build(dest) {
-    var ARCH = $(uname -m)
+    # uname -m returns aarch64/x86_64; kernel ARCH uses arm64/x86_64.
+    var MACH = $(uname -m)
+    var ARCH = MACH
+    if (MACH === 'aarch64') { setvar ARCH = 'arm64' }
 
     # Merge tinyconfig with our arch-specific fragment.
     make ARCH=$ARCH tinyconfig
 
-    case (ARCH) {
+    case (MACH) {
         x86_64  { scripts/kconfig/merge_config.sh -m .config kernel-x86_64.config }
         *       { scripts/kconfig/merge_config.sh -m .config kernel.config }
     }
 
     make ARCH=$ARCH olddefconfig
 
+    var _nproc = $(nproc 2>/dev/null || echo 4)
+
     # Build the kernel image.
-    case (ARCH) {
+    case (MACH) {
         x86_64 {
-            make -j$[ENV => get("MAKEFLAGS", "") => split() => join("")] ARCH=$ARCH bzImage
+            make -j$_nproc ARCH=$ARCH bzImage
             mkdir -p "${dest}/usr/share/kominka"
             cp arch/x86/boot/bzImage "${dest}/usr/share/kominka/Image"
         }
         * {
-            make -j$[ENV => get("MAKEFLAGS", "") => split() => join("")] ARCH=$ARCH Image
+            make -j$_nproc ARCH=$ARCH Image
             mkdir -p "${dest}/usr/share/kominka"
             cp arch/arm64/boot/Image "${dest}/usr/share/kominka/Image"
         }
     }
 
-    # Install kernel headers (replaces linux-headers package).
+    # Install kernel headers.
     make ARCH=$ARCH headers
 
     find usr/include -name '*.h' -type f | while read -r file {
