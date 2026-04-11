@@ -5,6 +5,7 @@ var ver     = '1.26.2'
 var rel     = '1'
 var deps    = ['glibc']
 var mkdeps  = []
+var nostrip = true  # ships race/*.syso files for foreign arches that strip can't handle
 
 var sources = [
     'https://go.dev/dl/goVERSION.linux-GOARCH.tar.gz',

@@ -15,15 +15,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake ninja-build \
     libcurl4-openssl-dev \
     libevent-dev \
-    pkg-config && \
+    pkg-config \
+    golang-go \
+    cargo && \
     rm -rf /var/lib/apt/lists/* && \
-    # Install Rust via rustup (rustup package not in Debian bookworm)
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && \
     # ninja as drop-in for samu
-    ln -s /usr/bin/ninja /usr/local/bin/samu && \
-    # Make cargo available system-wide
-    ln -s /root/.cargo/bin/cargo /usr/local/bin/cargo && \
-    ln -s /root/.cargo/bin/rustc /usr/local/bin/rustc
+    ln -s /usr/bin/ninja /usr/local/bin/samu
 
 # Install ysh (static musl binary — runs on any Linux).
 ARG R2_BASE=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
