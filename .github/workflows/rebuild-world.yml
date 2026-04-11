@@ -1,4 +1,7 @@
-name: Build package
+name: Rebuild world (x86_64, one-shot)
+# Builds all packages for x86_64 using the Debian builder.
+# No kominka:core bootstrap needed — Debian is the native build environment.
+# Outputs: GitHub artifacts named <pkg>-amd64
 
 on:
   workflow_dispatch:
@@ -9,106 +12,54 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # zig cc
-          - { pkg: baseinit       }
-          - { pkg: baselayout     }
-          - { pkg: bison          }
-          - { pkg: boringssl      }
-          - { pkg: bzip2          }
-          - { pkg: ca-certificates }
-          - { pkg: cargo          }
-          - { pkg: cmake          }
-          - { pkg: curl           }
-          - { pkg: dosfstools     }
-          - { pkg: dropbear       }
-          - { pkg: e2fsprogs      }
-          - { pkg: go             }
-          - { pkg: libevent       }
-          - { pkg: libudev-zero   }
-          - { pkg: linux-pam      }
-          - { pkg: m4             }
-          - { pkg: make           }
-          - { pkg: muon           }
-          - { pkg: pkgconf        }
-          - { pkg: runit          }
-          - { pkg: samurai        }
-          - { pkg: sqlite         }
-          - { pkg: sudo-rs        }
-          - { pkg: tailscale      }
-          - { pkg: tmux           }
-          - { pkg: xz             }
-          - { pkg: ysh            }
-          - { pkg: zig            }
-          - { pkg: zlib           }
-          # Debian GCC
-          - { pkg: busybox, debian: true }
-          - { pkg: git,     debian: true }
-          - { pkg: glibc,   debian: true }
-          - { pkg: linux,   debian: true }
-          - { pkg: perl,    debian: true }
-          - { pkg: strace,  debian: true }
+        pkg:
+          - baseinit
+          - baselayout
+          - bison
+          - boringssl
+          - bzip2
+          - ca-certificates
+          - cargo
+          - cmake
+          - curl
+          - dosfstools
+          - dropbear
+          - e2fsprogs
+          - git
+          - glibc
+          - go
+          - libevent
+          - libudev-zero
+          - linux
+          - linux-pam
+          - m4
+          - make
+          - muon
+          - perl
+          - pkgconf
+          - runit
+          - samurai
+          - sqlite
+          - strace
+          - sudo-rs
+          - tailscale
+          - tmux
+          - xz
+          - ysh
+          - zig
+          - zlib
+          - busybox
 
     steps:
       - uses: actions/checkout@v4
 
-      # ── kominka:core cache ────────────────────────────────────────────────
-      - name: Cache kominka:core
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: /tmp/kominka-core.tar.gz
-          key: kominka-core-amd64-${{ hashFiles('Dockerfile', 'pm.ysh', 'packages/**/PKGBUILD.ysh') }}
-
-      - name: Build kominka:core
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: |
-          docker build \
-            --build-context packages=packages \
-            --build-arg R2_MIRROR=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev \
-            -t kominka:core .
-          docker save kominka:core | gzip > /tmp/kominka-core.tar.gz
-
-      - name: Load kominka:core
-        if: steps.cache.outputs.cache-hit == 'true'
-        run: docker load < /tmp/kominka-core.tar.gz
-
-      # ── Build (zig cc) ────────────────────────────────────────────────────
-      - name: Build ${{ matrix.pkg }}
-        if: ${{ !matrix.debian }}
-        run: |
-          mkdir -p out
-          docker run --rm \
-            -v "$PWD/packages:/packages:ro" \
-            -v "$PWD/pm.ysh:/usr/bin/pm:ro" \
-            -v "$PWD/out:/out" \
-            -e KOMINKA_PATH=/packages \
-            -e KOMINKA_COMPRESS=gz \
-            -e KOMINKA_COLOR=0 \
-            -e KOMINKA_PROMPT=0 \
-            -e KOMINKA_FORCE=1 \
-            -e KOMINKA_GET=/usr/bin/curl \
-            -e KOMINKA_INSECURE=1 \
-            -e LD_LIBRARY_PATH=/usr/lib \
-            -e LOGNAME=root \
-            -e HOME=/root \
-            kominka:core sh -c '
-              pm b "${{ matrix.pkg }}"
-              ldconfig 2>/dev/null
-              for f in /root/.cache/kominka/bin/*@*.tar.*; do
-                [ -f "$f" ] && cp "$f" /out/
-              done'
-
-      # ── Build (Debian GCC) ────────────────────────────────────────────────
       - name: Build Debian builder image
-        if: ${{ matrix.debian }}
         run: |
           docker build \
             --build-context packages=packages \
             -t kominka-debian-builder -f Dockerfile.glibc .
 
-      - name: Build ${{ matrix.pkg }} (Debian GCC)
-        if: ${{ matrix.debian }}
+      - name: Build ${{ matrix.pkg }}
         run: |
           mkdir -p out
           docker run --rm \
@@ -127,7 +78,7 @@ jobs:
             -e HOME=/root \
             kominka-debian-builder sh -c '
               db=/kominka-root/var/db/kominka/installed
-              for tool in make bison m4; do
+              for tool in make bison m4 flex bc; do
                 mkdir -p "$db/$tool"
                 printf "system 1\n" > "$db/$tool/version"
                 printf "#!/bin/sh\n:\n" > "$db/$tool/build"
