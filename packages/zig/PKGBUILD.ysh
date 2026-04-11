@@ -5,7 +5,6 @@ var ver     = '0.15.2'
 var rel     = '8'
 var deps    = []
 var mkdeps  = []
-var nostrip = true
 
 var sources = [
     'https://ziglang.org/download/VERSION/zig-ARCH-linux-VERSION.tar.xz',

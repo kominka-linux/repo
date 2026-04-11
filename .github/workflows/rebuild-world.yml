@@ -78,7 +78,10 @@ jobs:
             -e HOME=/root \
             kominka-debian-builder sh -c '
               db=/kominka-root/var/db/kominka/installed
-              for tool in make bison m4 flex bc perl cmake ninja samurai pkgconf glibc linux zig zlib boringssl curl ca-certificates xz bzip2 go cargo ysh; do
+              # Only register tools that Debian actually provides.
+              # Kominka packages (zig, zlib, boringssl, etc.) must be built by pm
+              # so their outputs land in KOMINKA_ROOT for dependent packages to find.
+              for tool in make bison m4 flex bc perl cmake ninja python3; do
                 mkdir -p "$db/$tool" && printf "system 1\n" > "$db/$tool/version" && printf "#!/bin/sh\n:\n" > "$db/$tool/build" && chmod +x "$db/$tool/build" && touch "$db/$tool/manifest"
               done
               pm b "${{ matrix.pkg }}"

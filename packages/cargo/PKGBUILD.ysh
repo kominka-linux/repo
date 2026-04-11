@@ -5,7 +5,6 @@ var ver     = '1.94.1'
 var rel     = '1'
 var deps    = ['glibc']
 var mkdeps  = []
-var nostrip = true
 
 var sources = [
     'https://static.rust-lang.org/dist/rust-VERSION-ARCH-unknown-linux-gnu.tar.gz',

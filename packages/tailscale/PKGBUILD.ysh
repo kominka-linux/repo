@@ -5,7 +5,6 @@ var ver     = '1.96.4'
 var rel     = '1'
 var deps    = []
 var mkdeps  = []
-var nostrip = true
 
 var sources = ['https://pkgs.tailscale.com/stable/tailscale_VERSION_GOARCH.tgz']
 var checksums_aarch64 = ['a27249bc70d7b37a68f8be7f5c4507ea5f354e592dce43cb5d4f3e742b313c3c']
