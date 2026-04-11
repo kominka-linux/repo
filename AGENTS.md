@@ -97,6 +97,48 @@ To populate the index: `for pkg in packages/*/; do pm p "$(basename "$pkg")"; do
 
 Run repology check: `python3 scripts/repology-latest.py --scan packages/`
 
+## Package Philosophy
+
+Kominka is a **minimal, self-hosting Linux**. Every byte counts. Apply these
+rules without exception when writing or reviewing a PKGBUILD:
+
+**Disable everything you don't explicitly need.**
+Configure scripts offer hundreds of optional features; the default answer is
+`--disable-X` or `--without-X`. Only enable a feature if there is a concrete
+use case for it in Kominka. Leaving defaults in place is a mistake.
+
+**Concrete rules:**
+- Pass `--disable-nls` always (no i18n unless the package is an i18n tool)
+- Pass `--disable-static` or `--disable-shared` as appropriate — prefer
+  shared for runtime deps, static only for standalone tools
+- Pass `--disable-docs`, `--disable-manual`, `--disable-examples`,
+  `--disable-tests` (CI runs tests separately if at all)
+- Strip every optional subsystem: LDAP, Kerberos, PAM (unless that IS the
+  point), Python bindings, Perl bindings, TCL, D-Bus, systemd, selinux,
+  audit, gettext, iconv unless strictly required
+- No `--enable-debug` or `-g` flags in release builds
+- For autotools: `ac_cv_*=yes/no` overrides are fine to skip configure tests
+  that would fail or pull in wrong deps
+
+**busybox specifically** was audited against Alpine Linux's main vs extras
+split. Anything Alpine puts in `busybox-extras` is optional. Our config has
+been through multiple aggressive trim passes to reach ~217 applets. When
+adding new applets, justify each one. When in doubt, leave it out.
+
+**Verify your assumptions with `--help` output.** Before writing a PKGBUILD,
+run `./configure --help` in a build container and read what's available.
+Do not guess; do not cargo-cult flags from other distros without understanding
+what they do.
+
+**PKGBUILD structure rules:**
+- `deps` = runtime libs the binary links against (verified with `ldd` output)
+- `mkdeps` = tools needed to compile (zig, make, cmake, etc.) — not installed
+  on target systems
+- `nostrip = true` only for packages that ship pre-compiled foreign-arch
+  objects (e.g., Go ships riscv64 `.syso` files that x86_64 strip rejects)
+- Bump `rel` (not `ver`) for config-only changes that don't change upstream
+  source
+
 ## Building Packages
 
 ```sh
