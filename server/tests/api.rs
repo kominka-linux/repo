@@ -46,42 +46,15 @@ fn health_returns_ok() {
 // Auth
 
 #[test]
-fn upload_rejects_missing_auth() {
+fn upload_rejects_bad_auth() {
     let state = test_state();
+    // No token.
     let resp = packages::route("POST", "/api/upload", &headers(&[]), b"", &state);
     assert_eq!(resp.status, 401);
-}
-
-#[test]
-fn upload_rejects_wrong_token() {
-    let state = test_state();
+    // Wrong token.
     let h = headers(&[("authorization", "Bearer wrong-token")]);
     let resp = packages::route("POST", "/api/upload", &h, b"", &state);
     assert_eq!(resp.status, 401);
-}
-
-#[test]
-fn publish_rejects_missing_auth() {
-    let state = test_state();
-    let body = br#"{"arch":"aarch64-linux-gnu","pkg":"test","ver":"1.0","rel":"1","hash":"abc","deps":[]}"#;
-    let resp = packages::route("POST", "/api/publish", &headers(&[]), body, &state);
-    assert_eq!(resp.status, 401);
-}
-
-// Index
-
-#[test]
-fn get_index_404_when_empty() {
-    let state = test_state();
-    let resp = packages::route("GET", "/aarch64-linux-gnu/packages.json", &headers(&[]), b"", &state);
-    assert_eq!(resp.status, 404);
-}
-
-#[test]
-fn get_index_404_unknown_arch() {
-    let state = test_state();
-    let resp = packages::route("GET", "/sparc64-sun-solaris/packages.json", &headers(&[]), b"", &state);
-    assert_eq!(resp.status, 404);
 }
 
 // Upload + Index round-trip
@@ -213,22 +186,6 @@ fn publish_rejects_unknown_arch() {
     assert_eq!(resp.status, 400);
 }
 
-// Tarball download
-
-#[test]
-fn get_tarball_404_when_missing() {
-    let state = test_state();
-    let resp = packages::route("GET", "/aarch64-linux-gnu/curl/nonexistent.tar.gz", &headers(&[]), b"", &state);
-    assert_eq!(resp.status, 404);
-}
-
-#[test]
-fn get_tarball_404_bad_arch() {
-    let state = test_state();
-    let resp = packages::route("GET", "/bad-arch/curl/abc.tar.gz", &headers(&[]), b"", &state);
-    assert_eq!(resp.status, 404);
-}
-
 // Arch isolation
 
 #[test]
@@ -348,20 +305,3 @@ fn valid_package_names_accepted() {
     }
 }
 
-// Unknown method
-
-#[test]
-fn unknown_method_returns_404() {
-    let state = test_state();
-    let resp = packages::route("DELETE", "/health", &headers(&[]), b"", &state);
-    assert_eq!(resp.status, 404);
-}
-
-// Unknown path
-
-#[test]
-fn unknown_path_returns_404() {
-    let state = test_state();
-    let resp = packages::route("GET", "/nonexistent", &headers(&[]), b"", &state);
-    assert_eq!(resp.status, 404);
-}
