@@ -161,14 +161,20 @@ impl Storage {
 
         let body_hash = sha256_hex(body);
         let (date, datetime) = utc_now();
+        let content_length = body.len().to_string();
+        let is_put = method == "PUT";
 
         let ct = if content_type.is_empty() { "application/octet-stream" } else { content_type };
         let mut hdr = vec![
-            ("content-type", ct),
             ("host", host),
             ("x-amz-content-sha256", &body_hash),
             ("x-amz-date", &datetime),
         ];
+        // Only include content-type and content-length in signed headers for PUT.
+        if is_put {
+            hdr.push(("content-length", content_length.as_str()));
+            hdr.push(("content-type", ct));
+        }
         hdr.sort_by_key(|(k, _)| *k);
 
         let auth = sigv4_auth(method, &path, "", &hdr, &body_hash, access_key, secret_key, region, &date, &datetime);
@@ -190,6 +196,7 @@ impl Storage {
                 .call(),
             "PUT" => agent.put(&url)
                 .header("Authorization", &auth)
+                .header("Content-Length", &content_length)
                 .header("Content-Type", ct)
                 .header("X-Amz-Content-Sha256", &body_hash)
                 .header("X-Amz-Date", &datetime)
@@ -200,7 +207,8 @@ impl Storage {
         match result {
             Ok(mut resp) => {
                 let status = resp.status();
-                let bytes = resp.body_mut().read_to_vec().unwrap_or_default();
+                let mut bytes = Vec::new();
+                std::io::Read::read_to_end(&mut resp.body_mut().as_reader(), &mut bytes).unwrap_or_default();
                 Ok((status.into(), bytes))
             }
             Err(ureq::Error::StatusCode(status)) => Ok((status, vec![])),

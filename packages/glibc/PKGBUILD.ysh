@@ -32,7 +32,7 @@ proc build(dest) {
     mkdir -p glibc-build
     cd glibc-build
 
-    ../configure \
+    CC=$CC ../configure \
         --prefix=/usr \
         --libdir=/usr/lib \
         --libexecdir=/usr/lib \

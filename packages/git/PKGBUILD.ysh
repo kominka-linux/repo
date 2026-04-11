@@ -47,6 +47,7 @@ EOF
         ac_cv_snprintf_returns_bogus=no \
         ac_cv_fread_reads_directories=yes
 
+    make LDFLAGS=$_ldflags xdiff/lib.a libgit.a
     make LDFLAGS=$_ldflags LIBS="-lcurl -lssl -lcrypto libgit.a xdiff/lib.a -lz"
     make DESTDIR=$dest install
 

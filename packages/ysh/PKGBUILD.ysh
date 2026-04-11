@@ -25,9 +25,12 @@ for a in "\$@"; do
 done
 exec zig c++ -target $MUSL_TARGET "\$@"
 EOF
-    cp $CC_PATH "$(command -v c++)" 2>/dev/null || true
+    var CXX_PATH = $(command -v c++ 2>/dev/null)
+    if (CXX_PATH !== '') {
+        cp $CC_PATH $CXX_PATH
+        chmod +x $CXX_PATH
+    }
     chmod +x $CC_PATH
-    chmod +x "$(command -v c++)" 2>/dev/null || true
 
     LDFLAGS='' ./configure --without-readline
     LDFLAGS='' _build/oils.sh

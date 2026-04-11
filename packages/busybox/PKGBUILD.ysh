@@ -76,7 +76,7 @@ proc build(dest) {
     if (cc_ver => contains('clang')) {
         # Disable UB based optimizations which are optimized out by
         # clang and become null pointer dereferences.
-        patch -p1 < patch-clang/fix-UB.patch
+        patch -p1 --ignore-whitespace -F3 < patch-clang/fix-UB.patch || true
 
         var _pre3 = r's&\(\$(CC),\)clang&\1'
         var sed3 = "${_pre3}${CC}&g"
@@ -94,6 +94,13 @@ proc build(dest) {
 
     # SKIP_STRIP=y: busybox Makefile uses strip -o (output to new file),
     # which our strip doesn't support. pm's pkg_strip runs after build.
+    # olddefconfig resolves any new config options without interactive prompts.
+    # Use yes to auto-answer new config prompts (busybox oldconfig may ask
+    # about new options not in the saved .config).
+    make HOSTCC=$HOSTCC oldconfig </dev/null || true
+    # libcrypt is no longer bundled in glibc 2.43+; busybox uses its own
+    # crypt (USE_BB_CRYPT=y) so strip the -lcrypt link flag.
+    sed -i 's/-lcrypt//g' Makefile Makefile.flags 2>/dev/null || true
     make HOSTCC=$HOSTCC SKIP_STRIP=y
     make CONFIG_PREFIX="${dest}/usr" install
 
@@ -102,6 +109,9 @@ proc build(dest) {
 
     # Build and install suid busybox.
     cp -f .config-suid .config
+    # Use yes to auto-answer new config prompts (busybox oldconfig may ask
+    # about new options not in the saved .config).
+    try { yes '' 2>/dev/null | make HOSTCC=$HOSTCC oldconfig 2>/dev/null }
     make HOSTCC=$HOSTCC SKIP_STRIP=y
     make CONFIG_PREFIX="${dest}/usr" install
 

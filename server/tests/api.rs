@@ -191,6 +191,29 @@ fn upload_sha256_is_correct() {
     assert_eq!(body_json(&resp)["sha256"], expected);
 }
 
+// Regression: upload body must survive the round-trip intact.
+// The S3 GET layer had a 10MB silent limit (read_to_vec) that truncated
+// large tarballs to 0 bytes without error.
+#[test]
+fn upload_download_body_is_intact() {
+    use sha2::{Digest, Sha256};
+
+    let state = test_state();
+    // Use a body large enough to exercise any size-related paths (1MB).
+    let data: Vec<u8> = (0u8..=255).cycle().take(1024 * 1024).collect();
+    let expected_sha = format!("{:x}", Sha256::digest(&data));
+
+    let resp = upload_pkg(&state, "aarch64-linux-gnu", "bigpkg", "1.0", "1", "", &data);
+    assert_eq!(resp.status, 201);
+    assert_eq!(body_json(&resp)["sha256"], expected_sha);
+
+    // Download and verify body is exactly what was uploaded.
+    let resp = packages::route("GET", "/aarch64-linux-gnu/bigpkg/1.0-1.tar.gz", &headers(&[]), b"", &state);
+    assert_eq!(resp.status, 200);
+    assert_eq!(resp.body.len(), data.len());
+    assert_eq!(format!("{:x}", Sha256::digest(&resp.body)), expected_sha);
+}
+
 #[test]
 fn valid_package_names_accepted() {
     let state = test_state();

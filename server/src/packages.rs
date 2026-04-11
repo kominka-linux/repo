@@ -116,6 +116,7 @@ pub fn route(
         "POST" => match path {
             "/api/upload" => upload(headers, body, state),
             "/api/publish" => publish(headers, body, state),
+            "/api/reindex" => reindex(headers, body, state),
             _ => Response::not_found(),
         },
         _ => Response::not_found(),
@@ -334,6 +335,60 @@ struct PublishRequest {
     deps: Vec<String>,
     #[serde(default)]
     mkdeps: Vec<String>,
+}
+
+/// POST /api/reindex — register an already-uploaded tarball in the index
+/// without re-uploading. Useful for rebuilding the index from existing R2 objects.
+fn reindex(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> Response {
+    if !auth::check_auth(&state.api_key_hash, headers) {
+        return Response::unauthorized();
+    }
+
+    #[derive(serde::Deserialize)]
+    struct ReindexRequest {
+        arch: String,
+        pkg: String,
+        ver: String,
+        rel: String,
+        deps: Vec<String>,
+        #[serde(default)]
+        mkdeps: Vec<String>,
+    }
+
+    let req: ReindexRequest = match serde_json::from_slice(body) {
+        Ok(r) => r,
+        Err(_) => return Response::bad_request("invalid json"),
+    };
+
+    if !KNOWN_ARCHES.contains(&req.arch.as_str()) {
+        return Response::bad_request("unknown arch");
+    }
+    if !valid_pkg_name(&req.pkg) {
+        return Response::bad_request("invalid package name");
+    }
+
+    // Fetch tarball from S3 to compute sha256.
+    let key = format!("{}/{}/{}-{}.tar.gz", req.arch, req.pkg, req.ver, req.rel);
+    let tarball = state.s3.get(&key);
+    let sha256 = match tarball {
+        Some(bytes) => s3::sha256_hex(&bytes),
+        None => return Response::bad_request("tarball not found in R2"),
+    };
+
+    let entry = PackageEntry {
+        ver: req.ver,
+        rel: req.rel,
+        deps: req.deps,
+        mkdeps: req.mkdeps,
+        sha256,
+    };
+    if let Err(e) = update_index(state, &req.arch, &req.pkg, entry) {
+        tracing::error!("reindex failed: {e}");
+        return Response::error("reindex failed");
+    }
+
+    tracing::info!("reindexed {}/{}", req.arch, req.pkg);
+    Response::json(200, r#"{"ok":true}"#)
 }
 
 fn update_index(state: &AppState, arch: &str, pkg: &str, entry: PackageEntry) -> Result<(), String> {
