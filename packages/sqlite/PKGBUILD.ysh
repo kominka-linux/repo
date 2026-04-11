@@ -16,7 +16,7 @@ proc build(dest) {
     ./configure \
         --prefix=/usr \
         --enable-threadsafe \
-        --enable-dynamic-extensions \
+        --enable-load-extension \
         --enable-fts5 \
         ac_cv_search_readline=no
 

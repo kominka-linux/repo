@@ -40,8 +40,8 @@ var checksums = [
     'd70c4cd6381baeb3836c0387f53553021b48bdc851de49f1c86d836f7d0355fc',
     'b030d6ac2b3284cf3cc0a2eec886d26b7e09ea59feb460a6a09165da62a582b4',
     'c8a6fc95a75fa355d570c14e214d68a618e060a486b824b83b5140b9c6a894a7',
-    'c62b29438a55e37d0a384a147841ff42e9259f05c973ca40d7881e6136aa175e',
-    '1e2967d3a29a685ea6ea1a3d71057efdbfef66bc7e6082d89dec35230b168f2e',
+    '0f04e074e7cc87b96b6901a953faf448730d84364fed53718d616125eed0821d',
+    '89dc8b894af013f8fc36f507857142f443dfafb27ac616048b97ad4dbef51c28',
     'f31e8c7552af2bb45a62f50c19524c2086f8f749f2ddc660de76d840c93a1f9f',
     '2b22b878442f8a31b9b98601db68a71923ca05c6fc2f4f681060f38f3bf71f3f',
     '943eb7a8f8f717021781775a82fd3c940e0b2995dc2bba1fa98e56daedc2ea2c',
@@ -84,12 +84,20 @@ proc build(dest) {
         mv -f _ Makefile.flags
 
         # Strip linker flags unsupported by lld (zig's linker).
+        # Also strip -lcrypt: not bundled in glibc 2.43+, and USE_BB_CRYPT=y
+        # means busybox has its own crypt implementation.
         sed -e 's/-Wl,--warn-common//g' \
             -e 's/-Wl,-Map,[^ ]*//g' \
             -e 's/-Wl,--verbose//g' \
+            -e 's/-lcrypt//g' \
             scripts/trylink > _
         mv -f _ scripts/trylink
         chmod +x scripts/trylink
+    }
+
+    # For non-clang builds, also strip -lcrypt from trylink.
+    try {
+        sed -i 's/-lcrypt//g' scripts/trylink
     }
 
     # SKIP_STRIP=y: busybox Makefile uses strip -o (output to new file),
@@ -97,10 +105,9 @@ proc build(dest) {
     # olddefconfig resolves any new config options without interactive prompts.
     # Use yes to auto-answer new config prompts (busybox oldconfig may ask
     # about new options not in the saved .config).
-    make HOSTCC=$HOSTCC oldconfig </dev/null || true
     # libcrypt is no longer bundled in glibc 2.43+; busybox uses its own
-    # crypt (USE_BB_CRYPT=y) so strip the -lcrypt link flag.
-    sed -i 's/-lcrypt//g' Makefile Makefile.flags 2>/dev/null || true
+    # crypt (USE_BB_CRYPT=y) so strip the -lcrypt link flag everywhere.
+    try { grep -rl -- -lcrypt . 2>/dev/null | xargs sed -i 's/-lcrypt//g' }
     make HOSTCC=$HOSTCC SKIP_STRIP=y
     make CONFIG_PREFIX="${dest}/usr" install
 
@@ -109,9 +116,6 @@ proc build(dest) {
 
     # Build and install suid busybox.
     cp -f .config-suid .config
-    # Use yes to auto-answer new config prompts (busybox oldconfig may ask
-    # about new options not in the saved .config).
-    try { yes '' 2>/dev/null | make HOSTCC=$HOSTCC oldconfig 2>/dev/null }
     make HOSTCC=$HOSTCC SKIP_STRIP=y
     make CONFIG_PREFIX="${dest}/usr" install
 
@@ -120,13 +124,17 @@ proc build(dest) {
     mv -f "${dest}/usr/bin/busybox-nosuid" "${dest}/usr/bin/busybox"
 
     # Install the non-suid symlinks.
-    "${dest}/usr/bin/busybox" --list | while read -r bin {
-        ln -s busybox "${dest}/usr/bin/${bin}"
+    try {
+        "${dest}/usr/bin/busybox" --list | while read -r bin {
+            ln -s busybox "${dest}/usr/bin/${bin}" 2>/dev/null
+        }
     }
 
     # Install the suid symlinks.
-    "${dest}/usr/bin/busybox-suid" --list | while read -r bin {
-        ln -s busybox-suid "${dest}/usr/bin/${bin}"
+    try {
+        "${dest}/usr/bin/busybox-suid" --list | while read -r bin {
+            ln -s busybox-suid "${dest}/usr/bin/${bin}" 2>/dev/null
+        }
     }
 
     chmod u+s "${dest}/usr/bin/busybox-suid"

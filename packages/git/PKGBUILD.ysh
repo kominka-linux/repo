@@ -47,11 +47,19 @@ EOF
         ac_cv_snprintf_returns_bogus=no \
         ac_cv_fread_reads_directories=yes
 
-    make LDFLAGS=$_ldflags xdiff/lib.a libgit.a
-    make LDFLAGS=$_ldflags LIBS="-lcurl -lssl -lcrypto libgit.a xdiff/lib.a -lz"
+    # Strip lld-incompatible linker flags: handle both -Wl,--allow-multiple-definition
+    # and standalone --allow-multiple-definition forms.
+    try {
+        sed -i \
+            -e 's/-Wl,--allow-multiple-definition//g' \
+            -e 's/--allow-multiple-definition//g' \
+            config.mak.autogen Makefile
+    }
+
+    make LDFLAGS=$_ldflags FUZZ_PROGRAMS=
     make DESTDIR=$dest install
 
-    # Install manpages if downloaded.
+    # Install manpages.
     if test -d man {
         mkdir -p "${dest}/usr/share/man"
         cp -Rf man "${dest}/usr/share/"

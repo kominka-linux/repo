@@ -14,7 +14,8 @@ proc build(dest) {
     setglobal ENV.CFLAGS = "${CFLAGS} -fPIC"
 
     ./configure \
-        --prefix=/usr
+        --prefix=/usr \
+        --shared
 
     make
     make DESTDIR=$dest install

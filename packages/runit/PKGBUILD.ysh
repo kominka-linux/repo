@@ -1,18 +1,18 @@
 #!/usr/local/bin/ysh
 
 var name    = 'runit'
-var ver     = '2.1.2'
+var ver     = '2.3.1'
 var rel     = '1'
 var deps    = ['glibc']
 var mkdeps  = ['zig', 'make']
 
 var sources = ['http://smarden.org/runit/runit-VERSION.tar.gz']
-var checksums = ['6fd0160cb0cf1207de4e66754b6d39750cff14bb0aa66ab49490992c0c47ba18']
+var checksums = ['634f23c8c4d1d440043be0fe928ddf904626289e97bfe7c5826e93aaf2cc6fe9']
 
 proc build(dest) {
     var CC = ENV => get("CC", "cc")
 
-    cd runit-2.1.2
+    cd runit-2.3.1
 
     # Override compiler and linker.
     # -D_GNU_SOURCE exposes setgroups() in glibc headers.

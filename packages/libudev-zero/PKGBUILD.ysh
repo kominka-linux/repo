@@ -20,6 +20,5 @@ proc build(dest) {
 
     mkdir -p "${dest}/usr/bin"
 
-    $CC $LDFLAGS $CFLAGS $CPPFLAGS \
-        -o "${dest}/usr/bin/libudev-zero-helper" contrib/helper.c
+    $CC -o "${dest}/usr/bin/libudev-zero-helper" contrib/helper.c
 }
