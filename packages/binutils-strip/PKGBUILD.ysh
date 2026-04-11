@@ -16,12 +16,13 @@ proc build(dest) {
         --disable-shared \
         --disable-werror \
         --enable-deterministic-archives \
-        --enable-64-bit-bfd
+        --enable-64-bit-bfd \
+        --disable-ld \
+        --disable-gold \
+        --disable-gprof
 
-    # Build only what strip needs — skip the full suite.
-    make -C libiberty
-    make -C bfd all-lib
-    make -C binutils strip-new
+    # Full make (skipping ld/gold/gprof); libiberty/bfd are built as deps.
+    make -j$(nproc)
 
     install -Dm755 binutils/strip-new "${dest}/usr/bin/strip"
 }
