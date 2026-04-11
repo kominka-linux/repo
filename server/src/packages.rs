@@ -13,7 +13,6 @@ pub struct PackageEntry {
     pub deps: Vec<String>,
     #[serde(default)]
     pub mkdeps: Vec<String>,
-    pub hash: String,
     pub sha256: String,
 }
 
@@ -139,11 +138,10 @@ fn root_index(state: &AppState) -> Response {
         td{padding:.3rem .5rem;border-bottom:1px solid #222}\
         a{color:#6ba3f7;text-decoration:none}a:hover{text-decoration:underline}\
         .dep{color:#888}.mkdep{color:#666}\
-        .hash{font-family:monospace;font-size:.75rem;color:#555}\
         .empty{color:#666;padding:2rem 0}\
         @media(prefers-color-scheme:light){body{color:#222;background:#fff}\
         h1{color:#000}h2{color:#333}th{color:#666;border-color:#ddd}\
-        td{border-color:#eee}a{color:#1a6be0}.dep{color:#555}.mkdep{color:#888}.hash{color:#999}}\
+        td{border-color:#eee}a{color:#1a6be0}.dep{color:#555}.mkdep{color:#888}}\
         </style></head><body><h1>Kominka Packages</h1>",
     );
 
@@ -164,7 +162,7 @@ fn root_index(state: &AppState) -> Response {
 
         for name in &names {
             let e = &idx.packages[*name];
-            let tarball_url = format!("/{arch}/{name}/{}.tar.gz", e.hash);
+            let tarball_url = format!("/{arch}/{name}/{}-{}.tar.gz", e.ver, e.rel);
 
             let dep_links: Vec<String> = e.deps.iter().map(|d| {
                 if names.iter().any(|n| *n == d) {
@@ -193,10 +191,9 @@ fn root_index(state: &AppState) -> Response {
             };
 
             html.push_str(&format!(
-                "<tr><td><a href=\"{tarball_url}\">{name}</a> \
-                <span class=hash>{}</span></td>\
+                "<tr><td><a href=\"{tarball_url}\">{name}</a></td>\
                 <td>{}-{}</td><td>{deps_html}</td><td>{mkdeps_html}</td></tr>",
-                &e.hash[..12.min(e.hash.len())], e.ver, e.rel
+                e.ver, e.rel
             ));
         }
         html.push_str("</table>");
@@ -248,11 +245,10 @@ fn upload(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> R
     let pkg = headers.get("x-pkg").map(|s| s.as_str()).unwrap_or("");
     let ver = headers.get("x-ver").map(|s| s.as_str()).unwrap_or("");
     let rel = headers.get("x-rel").map(|s| s.as_str()).unwrap_or("");
-    let hash = headers.get("x-hash").map(|s| s.as_str()).unwrap_or("");
     let deps_raw = headers.get("x-deps").map(|s| s.as_str()).unwrap_or("");
     let mkdeps_raw = headers.get("x-mkdeps").map(|s| s.as_str()).unwrap_or("");
 
-    if arch.is_empty() || pkg.is_empty() || ver.is_empty() || rel.is_empty() || hash.is_empty() {
+    if arch.is_empty() || pkg.is_empty() || ver.is_empty() || rel.is_empty() {
         return Response::bad_request("missing headers");
     }
     if !KNOWN_ARCHES.contains(&arch) {
@@ -274,7 +270,7 @@ fn upload(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> R
 
     let sha256_hex = s3::sha256_hex(body);
 
-    let key = format!("{arch}/{pkg}/{hash}.tar.gz");
+    let key = format!("{arch}/{pkg}/{ver}-{rel}.tar.gz");
     if let Err(e) = state.s3.put(&key, body.to_vec(), "application/octet-stream") {
         tracing::error!("upload failed: {e}");
         return Response::error("upload failed");
@@ -285,7 +281,6 @@ fn upload(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> R
         rel: rel.to_string(),
         deps,
         mkdeps,
-        hash: hash.to_string(),
         sha256: sha256_hex.clone(),
     };
     if let Err(e) = update_index(state, arch, pkg, entry) {
@@ -293,7 +288,7 @@ fn upload(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> R
         return Response::error("index update failed");
     }
 
-    tracing::info!("uploaded {arch}/{pkg}/{hash}.tar.gz");
+    tracing::info!("uploaded {key}");
     Response::json_bytes(201, format!(r#"{{"ok":true,"sha256":"{sha256_hex}"}}"#).into_bytes())
 }
 
@@ -319,7 +314,6 @@ fn publish(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> 
         rel: req.rel,
         deps: req.deps,
         mkdeps: req.mkdeps,
-        hash: req.hash.clone(),
         sha256: String::new(),
     };
     if let Err(e) = update_index(state, &req.arch, &req.pkg, entry) {
@@ -337,7 +331,6 @@ struct PublishRequest {
     pkg: String,
     ver: String,
     rel: String,
-    hash: String,
     deps: Vec<String>,
     #[serde(default)]
     mkdeps: Vec<String>,

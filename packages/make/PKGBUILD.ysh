@@ -15,7 +15,8 @@ proc build(dest) {
 
     ./configure \
         --prefix=/usr \
-        --disable-nls
+        --disable-nls \
+        --disable-dependency-tracking
 
     # Fix gnulib compat: replace all K&R-style zero-arg prototypes that
     # conflict with strict POSIX declarations in modern libc headers.
@@ -24,6 +25,12 @@ proc build(dest) {
         -e 's/^extern int getopt ();/\/* getopt *\//' \
         {} +
 
-    make
-    make DESTDIR=$dest install
+    # Bootstrap: use build.sh if make isn't installed yet.
+    if command -v make >/dev/null 2>&1 {
+        make
+        make DESTDIR=$dest install
+    } else {
+        sh build.sh
+        ./make DESTDIR=$dest install
+    }
 }
