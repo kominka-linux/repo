@@ -62,7 +62,8 @@ jobs:
             --build-context pm=pm \
             --build-arg REPO_URL=https://kominka.17166969.xyz \
             -t kominka:core .
-          docker build -t kominka:build-essential -f Dockerfile.buildessential .
+          docker build --build-arg REPO_URL=https://kominka.17166969.xyz \
+            -t kominka:build-essential -f Dockerfile.buildessential .
           docker save kominka:build-essential | gzip > /tmp/kominka-build-essential.tar.gz
 
       - name: Load kominka:build-essential
