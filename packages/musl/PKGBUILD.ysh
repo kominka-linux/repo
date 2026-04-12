@@ -1,13 +1,13 @@
 #!/usr/local/bin/ysh
 
 var name    = 'musl'
-var ver     = '1.2.5'
+var ver     = '1.2.6'
 var rel     = '1'
 var deps    = []
 var mkdeps  = ['zig']
 
 var sources   = ['https://musl.libc.org/releases/musl-VERSION.tar.gz']
-var checksums = ['a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4']
+var checksums = ['d585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a']
 
 proc build(dest) {
     # Build musl with plain zig cc — no -target musl (that would be circular).
