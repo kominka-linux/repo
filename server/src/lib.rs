@@ -17,4 +17,6 @@ pub struct AppState {
     pub indexes: RwLock<HashMap<String, packages::PackageIndex>>,
     /// Set when RP_ORIGIN is https:// so Set-Cookie includes the Secure flag.
     pub secure_cookies: bool,
+    /// If set, tarball GETs redirect here instead of proxying through the server.
+    pub r2_public_url: Option<String>,
 }

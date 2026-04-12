@@ -53,6 +53,9 @@ fn main() {
         &env_or("S3_REGION", "auto"),
     );
 
+    let r2_public_url = std::env::var("R2_PUBLIC_URL").ok()
+        .map(|u| u.trim_end_matches('/').to_string());
+
     let state = Arc::new(AppState {
         s3,
         db: std::sync::Mutex::new(db),
@@ -61,6 +64,7 @@ fn main() {
         allowed_users,
         indexes: std::sync::RwLock::new(HashMap::new()),
         secure_cookies: rp_origin.starts_with("https://"),
+        r2_public_url,
     });
 
     for arch in packages::KNOWN_ARCHES {

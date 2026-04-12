@@ -46,6 +46,16 @@ The main loop writes it back via tiny_http.
 S3 requests include an explicit `Content-Length` header and use `read_to_end`
 (not ureq's `read_to_vec` which has a 10MB default limit).
 
+**Tarball downloads redirect to R2's public URL** (`R2_PUBLIC_URL` env var)
+rather than proxying bytes through the server. Proxying would require buffering
+the entire tarball in RAM (one `Vec<u8>` per concurrent download) and paying
+double bandwidth (R2→server→client). Presigned URLs were considered but
+rejected: they require computing AWS SigV4 over a future-dated canonical
+request, add code complexity, and — critically — each URL has a unique
+signature so R2's CDN cannot cache them. The public URL is permanent and
+cacheable. `packages.json` is still proxied since it's small and benefits from
+the in-memory index cache.
+
 ### Package Index
 
 One `packages.json` per architecture, stored in R2 and cached in-memory
@@ -190,7 +200,7 @@ blocking/sync. No tokio.
 
 ## Testing
 
-`cargo test` (via `make test`) runs 15 integration tests in `tests/api.rs`.
+`cargo test` (via `make test`) runs 31 tests across `tests/api.rs` and `src/db.rs`.
 Tests call `packages::route()` directly with `Storage::Memory` and an
 in-memory SQLite DB — no HTTP, no S3, no threads, no real passkeys. Covers:
 upload + index round-trip, auth rejection, input validation, arch isolation,

@@ -290,6 +290,14 @@ fn get_tarball(arch: &str, pkg: &str, file: &str, state: &AppState) -> Response 
     if !KNOWN_ARCHES.contains(&arch) || !valid_pkg_name(pkg) {
         return Response::not_found();
     }
+    if !file.ends_with(".tar.gz") || file.contains("..") || file.contains('/') {
+        return Response::not_found();
+    }
+    // Redirect to R2's public URL when configured — avoids proxying bytes through
+    // the server (double bandwidth + full-file RAM buffer per download).
+    if let Some(base) = &state.r2_public_url {
+        return Response::redirect(&format!("{base}/{arch}/{pkg}/{file}"));
+    }
     let key = format!("{arch}/{pkg}/{file}");
     match state.s3.get(&key) {
         Some(bytes) => Response::octet(bytes),

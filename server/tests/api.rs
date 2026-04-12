@@ -27,6 +27,7 @@ fn make_state() -> AppState {
         allowed_users: vec![TEST_USER.to_string()],
         indexes: RwLock::new(HashMap::new()),
         secure_cookies: false,
+        r2_public_url: None,
     }
 }
 
@@ -238,6 +239,32 @@ fn valid_package_names_accepted() {
     for name in ["curl", "ca-certificates", "linux", "e2fsprogs", "sudo-rs", "zlib1g"] {
         let resp = upload_pkg(&state, "aarch64-linux-gnu", name, "1.0", "1", "", b"data");
         assert_eq!(resp.status, 201, "expected 201 for pkg name '{name}'");
+    }
+}
+
+// ── R2 redirect tests ─────────────────────────────────────────────────────
+
+#[test]
+fn tarball_redirects_to_r2_when_configured() {
+    let mut state = make_state();
+    state.r2_public_url = Some("https://pub-abc.r2.dev".to_string());
+    upload_pkg(&state, "aarch64-linux-gnu", "curl", "8.0.0", "1", "", b"data");
+
+    let resp = packages::route("GET", "/aarch64-linux-gnu/curl/8.0.0-1.tar.gz", &headers(&[]), b"", &state);
+    assert_eq!(resp.status, 302);
+    let loc = resp.extra_headers.iter().find(|(k, _)| *k == "Location").map(|(_, v)| v.as_str());
+    assert_eq!(loc, Some("https://pub-abc.r2.dev/aarch64-linux-gnu/curl/8.0.0-1.tar.gz"));
+}
+
+#[test]
+fn tarball_rejects_path_traversal() {
+    let state = make_state();
+    for bad in [
+        "/aarch64-linux-gnu/curl/../../../etc/passwd",
+        "/aarch64-linux-gnu/curl/../../secret.tar.gz",
+    ] {
+        let resp = packages::route("GET", bad, &headers(&[]), b"", &state);
+        assert_eq!(resp.status, 404, "expected 404 for '{bad}'");
     }
 }
 
