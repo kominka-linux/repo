@@ -4,14 +4,10 @@ var name    = 'glibc'
 var ver     = '2.43'
 var rel     = '5'
 var deps    = []
-var mkdeps  = ['xz']
-
-# Repackage Debian's prebuilt glibc binaries — avoids build-time
-# dependencies on python3, gawk, bison.
-var DEB_VER = '2.43-2'
-var DEB_BASE = 'https://ftp.debian.org/debian/pool/main/g/glibc'
+var mkdeps  = ['zig', 'make']
 
 var sources = [
+    'https://ftp.gnu.org/gnu/glibc/glibc-VERSION.tar.xz',
     'files/cdefs.h',
     'files/queue.h',
     'files/tree.h',
@@ -19,6 +15,7 @@ var sources = [
     'files/getent.c',
 ]
 var checksums = [
+    'd9c86c6b5dbddb43a3e08270c5844fc5177d19442cf5b8df4be7c07cd5fa3831',
     'a83818007069c222d24d283a99348c2376f35bac3282d8142004c47d3dc5ecac',
     'c13407edd0e33be73cae72514cb234f8612e1c0e54401c9448daffd3a240158b',
     'e1e498a79bf160a5766fa560f2b07b206fe89fe21a62600c77d72e00a6992f92',
@@ -26,70 +23,36 @@ var checksums = [
     'a0cd48081df3442d3f2bee232d5539eca274949f72a38776db661512dc8809db',
 ]
 
-proc deb_extract (deb, outdir) {
-    ### Download, verify, and extract a .deb into outdir.
-    var file = "${outdir}.deb"
-    curl -fsSLo $file $deb
-    mkdir -p $outdir
-    cd $outdir
-    ar x "../${file##*/}" data.tar.xz
-    tar xJf data.tar.xz
-    cd ..
-}
-
 proc build(dest) {
     var ARCH   = $(uname -m)
     var CC     = ENV => get("CC", "cc")
     var srcdir = $(pwd)
 
-    var deb_arch = ''
-    var libc_sum = ''
-    var dev_sum  = ''
-    case (ARCH) {
-        aarch64 {
-            setvar deb_arch = 'arm64'
-            setvar libc_sum = '477a4a2d56f2703decb010a48dbe6d7802277f27a1d2971e8924d4899271d4b5'
-            setvar dev_sum  = '347667983bd4591883b56ab43b62d1b33224a3506d705d4a3c86a036f2ae0c4a'
-        }
-        x86_64 {
-            setvar deb_arch = 'amd64'
-            setvar libc_sum = '3143b9e4255bc94f62fc114dd18dd208f9b6dab06805c8e5e1f2f4ad7a4054bf'
-            setvar dev_sum  = '0ff17d3d7d16d5688439d18fc05defe036f6bf51007bee2c89f50a0e12aee54a'
-        }
-    }
+    # glibc must be built outside its source tree.
+    mkdir -p glibc-build
+    cd glibc-build
 
-    deb_extract "${DEB_BASE}/libc6_${DEB_VER}_${deb_arch}.deb"     deb-libc6
-    deb_extract "${DEB_BASE}/libc6-dev_${DEB_VER}_${deb_arch}.deb" deb-libc6-dev
+    # CET (Control-flow Enforcement Technology) uses GCC-specific attributes
+    # not supported by clang/zig cc on x86_64. Disable it.
+    var extra = []
+    if (ARCH === 'x86_64') { call extra->append('--disable-cet') }
 
-    # Verify checksums.
-    for pair in @[["deb-libc6.deb:$libc_sum", "deb-libc6-dev.deb:$dev_sum"]] {
-        var parts    = pair => split(':')
-        var got      = $(sha256sum $[parts[0]] | awk '{print $1}')
-        if (got !== parts[1]) { die $[parts[0]] "checksum mismatch" }
-    }
+    CC=$CC ../configure \
+        --prefix=/usr \
+        --libdir=/usr/lib \
+        --libexecdir=/usr/lib \
+        --enable-bind-now \
+        --enable-kernel=5.10 \
+        --enable-stack-protector=strong \
+        --enable-crypt \
+        --disable-nscd \
+        --disable-profile \
+        --disable-werror \
+        @extra \
+        libc_cv_slibdir=/usr/lib
 
-    mkdir -p "${dest}/usr/lib" "${dest}/usr/bin" "${dest}/usr/include"
-
-    # Flatten multiarch lib dir into /usr/lib; skip gconv (iconv modules).
-    for multiarch_dir in @[glob("deb-libc6/usr/lib/*-linux-gnu")] {
-        for f in @[glob("${multiarch_dir}/*")] {
-            if ! test -d $f {
-                cp -a $f "${dest}/usr/lib/"
-            } elif (${f##*/} !== 'gconv') {
-                cp -a $f "${dest}/usr/lib/"
-            }
-        }
-    }
-
-    # Dev: headers and static libs.
-    cp -a deb-libc6-dev/usr/include/. "${dest}/usr/include/"
-    for multiarch_dir in @[glob("deb-libc6-dev/usr/lib/*-linux-gnu")] {
-        cp -a "${multiarch_dir}/." "${dest}/usr/lib/"
-    }
-
-    # BSD compatibility headers.
-    cp -f "${srcdir}/cdefs.h" "${srcdir}/queue.h" "${srcdir}/tree.h" \
-        "${dest}/usr/include/sys/"
+    make
+    make DESTDIR=$dest install
 
     # ldd symlink.
     var ldso = ''
@@ -97,7 +60,18 @@ proc build(dest) {
         aarch64 { setvar ldso = 'ld-linux-aarch64.so.1' }
         x86_64  { setvar ldso = 'ld-linux-x86-64.so.2' }
     }
+    mkdir -p "${dest}/usr/bin"
     ln -sf "/usr/lib/${ldso}" "${dest}/usr/bin/ldd"
+
+    # Compat symlinks: libdl, libpthread, librt merged into libc in 2.34+.
+    for lib in (:| dl pthread rt |) {
+        ln -sf libc.so.6 "${dest}/usr/lib/lib${lib}.so.2"
+        ln -sf libc.so.6 "${dest}/usr/lib/lib${lib}.so"
+    }
+
+    # BSD compatibility headers.
+    cp -f "${srcdir}/cdefs.h" "${srcdir}/queue.h" "${srcdir}/tree.h" \
+        "${dest}/usr/include/sys"
 
     # getconf and getent.
     $CC "${srcdir}/getconf.c" -o "${dest}/usr/bin/getconf"
