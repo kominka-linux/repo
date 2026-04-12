@@ -4,17 +4,18 @@ var name    = 'zlib'
 var ver     = '1.3.2'
 var rel     = '4'
 var deps    = []
-var mkdeps  = ['zig', 'make']
+var mkdeps  = ['zig', 'cmake', 'samurai']
 
 var sources = ['https://zlib.net/fossils/zlib-VERSION.tar.gz']
 var checksums = ['bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16']
 
 proc build(dest) {
-    # zlib configure detects shared lib support internally — do NOT preset
-    # CFLAGS or CC before configure or the shared lib detection test fails.
-    ./configure \
-        --prefix=/usr
+    cmake -GNinja -B build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=ON \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib
 
-    make
-    make DESTDIR=$dest install
+    ninja -C build
+    DESTDIR=$dest ninja -C build install
 }
