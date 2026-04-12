@@ -38,7 +38,7 @@ proc build(dest) {
 
     # glibc requires GCC: clang/zig cc lacks working alias attribute support.
     # glibc is pure C so GCC-compiled glibc has no libstdc++ runtime dependency.
-    CC=gcc ../configure \
+    env CC=gcc ../configure \
         --prefix=/usr \
         --libdir=/usr/lib \
         --libexecdir=/usr/lib \
