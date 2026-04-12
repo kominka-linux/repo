@@ -143,7 +143,7 @@ proc build(dest) {
     # Build and install suid busybox.
     cp -f .config-suid .config
     while true {
-        var _out = $(yes '' | make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh oldconfig 2>&1 || true)
+        setvar _out = $(yes '' | make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh oldconfig 2>&1 || true)
         echo $_out | grep -q '(NEW)' || break
     }
     try { grep -rl -- -lcrypt . 2>/dev/null | xargs sed -i 's/-lcrypt//g' }
