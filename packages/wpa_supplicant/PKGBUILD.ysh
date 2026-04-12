@@ -2,7 +2,7 @@
 
 var name    = 'wpa_supplicant'
 var ver     = '2.11'
-var rel     = '3'
+var rel     = '4'
 var deps    = ['glibc', 'libnl']
 var mkdeps  = ['zig', 'make']
 
@@ -12,7 +12,7 @@ var sources = [
 ]
 var checksums = [
     '912ea06f74e30a8e36fbb68064d6cdff218d8d591db0fc5d75dee6c81ac7fc0a',
-    '9e068a046b24f6283b71d31977d50154a5ffdcde46c52242443fd9f0836f1897',
+    '96380cd7e16c450c67d3067581aa1787569c4e0f2194bfd2ff6b1f795e87d4ee',
 ]
 
 proc build(dest) {
