@@ -2,7 +2,7 @@
 
 var name    = 'glibc'
 var ver     = '2.43'
-var rel     = '4'
+var rel     = '5'
 var deps    = []
 var mkdeps  = ['zig', 'make']
 
@@ -32,6 +32,12 @@ proc build(dest) {
     mkdir -p glibc-build
     cd glibc-build
 
+    # CET (Control-flow Enforcement Technology) is x86_64-only and uses
+    # GCC-specific attributes that clang does not support. Disable it so
+    # glibc builds cleanly with zig cc (clang) on x86_64.
+    var cet_flag = ''
+    if (ARCH === 'x86_64') { setvar cet_flag = '--disable-cet' }
+
     CC=$CC ../configure \
         --prefix=/usr \
         --libdir=/usr/lib \
@@ -43,6 +49,7 @@ proc build(dest) {
         --disable-nscd \
         --disable-profile \
         --disable-werror \
+        $cet_flag \
         libc_cv_slibdir=/usr/lib
 
     make
