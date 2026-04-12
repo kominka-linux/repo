@@ -1,36 +1,37 @@
 #!/usr/local/bin/ysh
 
 var name    = 'baseinit'
-var ver     = '1.0.3'
+var ver     = '2.0.0'
 var rel     = '1'
 var deps    = []
-var mkdeps  = ['zig']
+var mkdeps  = []
 
-var sources = ['https://github.com/kisslinux/init/archive/VERSION.tar.gz']
-var checksums = ['889d02e36c5808b1adadaa4e567df3fef97156e38a477579a20e7c53622018d6']
+# Fully self-contained — no upstream C utilities needed.
+# kpow replaced by busybox init's built-in reboot/poweroff handling.
+# kall replaced by busybox killall5.
+var sources = [
+    'files/rc.lib',
+    'files/rc.boot',
+    'files/rc.shutdown',
+    'files/inittab',
+    'files/rc.conf',
+]
+var checksums = [
+    'aa7541121a56139c8fc37bc01cdf5818229f3e2a8b9faaddf2ce06d8d1341cf1',
+    'adf5c9d4513c6ce46d34d7c25296855aed4bf62eaea1fe2598bc028dd93bed5e',
+    '10093e57452e4b4389d1a3ebae9673f7240b2698537dc5a609b50c70028b74c3',
+    'eb2f8283e9af9528e857b339ad3d665502723457d31d89e2f9e75b4ac4ff8e63',
+    'f6d445830f39ce7c498f8be90f636c48184bc94b3904dd7c1b7e0cfe041412d0',
+]
 
 proc build(dest) {
-    var CC = ENV => get("CC", "cc")
-    var CFLAGS = ENV => get("CFLAGS", "") => split(' ')
-
     mkdir -p \
-        "${dest}/usr/bin" \
-        "${dest}/usr/share/doc/kominka/init"
+        "${dest}/usr/lib/init" \
+        "${dest}/etc"
 
-    cp -R etc "${dest}"
-    cp -R lib "${dest}/usr/lib"
-
-    # Rebrand KISS -> Kominka.
-    sed -i 's/KISS/Kominka/g' "${dest}/usr/lib/init/rc.boot"
-
-    # Silence 'command -v' stderr for shells that print "not found" (osh).
-    sed -i 's|command -v \([a-z]*\) >/dev/null|command -v \1 >/dev/null 2>\&1|g' "${dest}/usr/lib/init/rc.boot"
-
-    # Skip fsck when no filesystem-specific helpers are installed.
-    sed -i '/fsck -ATat/s/^/command -v fsck.ext4 >\/dev\/null 2>\&1 \&\& /' "${dest}/usr/lib/init/rc.boot"
-
-    for bin in (:| kpow kall |) {
-        $CC -o "${dest}/usr/bin/${bin}" "bin/${bin}.c" @CFLAGS
-        cp -f "bin/${bin}.c" "${dest}/usr/share/doc/kominka/init/${bin}.c"
-    }
+    install -m755 rc.lib      "${dest}/usr/lib/init/rc.lib"
+    install -m755 rc.boot     "${dest}/usr/lib/init/rc.boot"
+    install -m755 rc.shutdown "${dest}/usr/lib/init/rc.shutdown"
+    install -m644 inittab     "${dest}/etc/inittab"
+    install -m644 rc.conf     "${dest}/etc/rc.conf"
 }

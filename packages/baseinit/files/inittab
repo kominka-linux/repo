@@ -1,0 +1,9 @@
+::sysinit:/usr/lib/init/rc.boot
+::restart:/sbin/init
+::shutdown:/usr/lib/init/rc.shutdown
+
+# runit service supervision
+::respawn:runsvdir -P /var/service 'log: ................................................................................................................................................................................................................................................................'
+
+# Virtual terminal gettys (runit service manages hvc0; tty1 as fallback)
+tty1::respawn:/bin/getty 38400 tty1

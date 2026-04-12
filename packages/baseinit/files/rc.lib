@@ -1,0 +1,58 @@
+#!/usr/local/bin/ysh
+# Init library — sourced by rc.boot and rc.shutdown.
+# Not executed directly.
+
+proc log(...msgs) {
+    for msg in (msgs) {
+        printf '\033[31;1m=>\033[m %s\n' $msg
+        if test -w /dev/null && test -w /dev/kmsg {
+            printf 'init: %s\n' $msg > /dev/kmsg 2>/dev/null || true
+        }
+    }
+}
+
+proc mounted(path) {
+    if ! test -e $path { return 1 }
+    grep -q " $path " /proc/mounts 2>/dev/null
+}
+
+proc mnt(opts, fstype, src, target) {
+    if mounted $target {
+        mount -o "remount,$opts" -t $fstype $src $target
+    } else {
+        mount -o $opts -t $fstype $src $target
+    }
+}
+
+proc sos() {
+    log "Init system encountered an error, starting emergency shell." \
+        "When ready, type 'exit' to continue the boot."
+    /bin/sh
+}
+
+proc run_hook(type) {
+    for dir in /usr/lib/init/rc.d /etc/rc.d {
+        for file in @[glob("${dir}/*.${type}")] {
+            if test -f $file {
+                log "Running $type hook: $file"
+                source $file
+            }
+        }
+    }
+}
+
+proc random_seed(action) {
+    var seed = '/var/lib/init/random-seed'
+    case (action) {
+        save {
+            mkdir -p $(dirname $seed) || {
+                log "Warning: Failed to create random seed directory."
+                return 1
+            }
+            dd count=1 bs=512 if=/dev/urandom of=$seed >/dev/null 2>&1
+        }
+        load {
+            if test -f $seed { cat $seed > /dev/urandom }
+        }
+    }
+}
