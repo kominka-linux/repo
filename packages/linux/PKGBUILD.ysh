@@ -2,7 +2,7 @@
 
 var name    = 'linux'
 var ver     = '6.19.12'
-var rel     = '2'
+var rel     = '3'
 var deps    = []
 var mkdeps  = ['make', 'bison', 'perl']
 
@@ -10,11 +10,17 @@ var sources = [
     'https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-VERSION.tar.xz',
     'files/kernel.config',
     'files/kernel-x86_64.config',
+    'files/machines/dell-xps13-9343.config',
+    'files/machines/generic-x86_64.config',
+    'files/machines/index',
 ]
 var checksums = [
     'ce5c4f1205f9729286b569b037649591555f31ca1e03cc504bd3b70b8e58a8d5',
     '0125c9ae402accd9fa5c2d05aec3ede0d919d10c0aba513292ab6ae813967da1',
     '04e885aaa2deff3bdeaf72f1ff18aec5daece7ec74a7cfee0a957c3dcb92fc2d',
+    '4869eea9729d3dab78b67d28fe8027afaf5aaf9197914044bc80f38f2c458591',
+    '6eb882bfc1db00ff75e11f17da73aae496146a04a6e0e2d00dcaabbbf5c55c5a',
+    '841aaa44cd8f08daf2f51132f167a55ceb49866c21f2c4e25e88d085f2622bf5',
 ]
 
 proc build(dest) {
@@ -60,4 +66,10 @@ proc build(dest) {
     # Save the final .config for reference.
     mkdir -p "${dest}/usr/share/kominka"
     cp .config "${dest}/usr/share/kominka/kernel.config"
+
+    # Install machine profiles so the installer can build machine-specific kernels.
+    mkdir -p "${dest}/usr/share/kominka/machines"
+    cp -f dell-xps13-9343.config  "${dest}/usr/share/kominka/machines/"
+    cp -f generic-x86_64.config   "${dest}/usr/share/kominka/machines/"
+    cp -f index                    "${dest}/usr/share/kominka/machines/"
 }

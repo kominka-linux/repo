@@ -1,0 +1,4 @@
+# DMI product name → machine profile mapping.
+# Format: <exact DMI string>=<profile filename without .config>
+# Read via: grep "^$(cat /sys/class/dmi/id/product_name)=" index
+XPS 13 9343=dell-xps13-9343
