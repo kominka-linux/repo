@@ -2,9 +2,10 @@
 
 var name    = 'ysh'
 var ver     = '0.37.0'
-var rel     = '3'
+var rel     = '4'
 var deps    = []
 var mkdeps  = ['zig', 'make']
+var nostrip = true  # musl static binary; strip not in kominka:core
 
 var sources = ['https://oils.pub/download/oils-for-unix-VERSION.tar.gz']
 var checksums = ['f4d41d20a0523dbcfbd4ba231f82edf25b08d4965d65bc71fcb56666d6743000']
@@ -39,7 +40,9 @@ EOF
     cp _bin/cxx-opt-sh/oils-for-unix "${dest}/usr/local/bin/oils-for-unix"
     ln -s oils-for-unix "${dest}/usr/local/bin/osh"
     ln -s oils-for-unix "${dest}/usr/local/bin/ysh"
-    # Provide /bin/sh (via /usr/bin/sh since /bin → usr/bin in baselayout).
-    # ash is not built; ysh is the system POSIX shell.
-    ln -s /usr/local/bin/oils-for-unix "${dest}/usr/bin/sh"
+    # /bin/sh → osh (the POSIX-compatible mode of oils-for-unix).
+    # Pointing to ysh breaks POSIX scripts (trap, etc. have different syntax).
+    # osh handles trap/set -e/here-docs correctly; use ysh explicitly for
+    # scripts that want the extended language.
+    ln -s /usr/local/bin/osh "${dest}/usr/bin/sh"
 }
