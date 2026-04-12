@@ -132,6 +132,10 @@ proc build(dest) {
     # oldconfig regenerates config.mak.autogen which may re-add -lcrypt.
     # Strip it again after oldconfig so zig's strict linker doesn't fail.
     try { grep -rl -- -lcrypt . 2>/dev/null | xargs sed -i 's/-lcrypt//g' }
+    # tc.c references TCA_CBQ_MAX/TCA_CBQ_RATE etc. which were removed in
+    # Linux 6.x. Guard against oldconfig re-enabling TC by removing tc.o
+    # from the networking Makefile entirely.
+    try { sed -i 's/^lib-\$(CONFIG_TC) += tc\.o//' networking/Makefile }
     make HOSTCC=$HOSTCC SKIP_STRIP=y
     make CONFIG_PREFIX="${dest}/usr" install
 
