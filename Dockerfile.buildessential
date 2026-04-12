@@ -1,0 +1,6 @@
+# Build environment: kominka:core + busybox (full utils) + binutils-strip.
+# Used by CI for all zig-cc package builds.
+
+FROM kominka:core
+
+RUN /usr/local/bin/ysh -c 'pm i busybox binutils-strip'

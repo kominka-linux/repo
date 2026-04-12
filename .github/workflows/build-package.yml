@@ -46,15 +46,15 @@ jobs:
 
       # ── zig cc path (arm64 default) ─────────────────────────────────────
 
-      - name: Cache kominka:core
+      - name: Cache kominka:build-essential
         id: cache
         if: ${{ !matrix.debian && !inputs.debian }}
         uses: actions/cache@v4
         with:
-          path: /tmp/kominka-core.tar.gz
-          key: kominka-core-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'pm/pm.ysh', 'packages/**/PKGBUILD.ysh') }}
+          path: /tmp/kominka-build-essential.tar.gz
+          key: kominka-build-essential-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'Dockerfile.buildessential', 'pm/pm.ysh', 'packages/**/PKGBUILD.ysh') }}
 
-      - name: Build kominka:core
+      - name: Build kominka:build-essential
         if: ${{ !matrix.debian && !inputs.debian && steps.cache.outputs.cache-hit != 'true' }}
         run: |
           docker build \
@@ -62,11 +62,12 @@ jobs:
             --build-context pm=pm \
             --build-arg REPO_URL=https://kominka.17166969.xyz \
             -t kominka:core .
-          docker save kominka:core | gzip > /tmp/kominka-core.tar.gz
+          docker build -t kominka:build-essential -f Dockerfile.buildessential .
+          docker save kominka:build-essential | gzip > /tmp/kominka-build-essential.tar.gz
 
-      - name: Load kominka:core
+      - name: Load kominka:build-essential
         if: ${{ !matrix.debian && !inputs.debian && steps.cache.outputs.cache-hit == 'true' }}
-        run: docker load < /tmp/kominka-core.tar.gz
+        run: docker load < /tmp/kominka-build-essential.tar.gz
 
       - name: Build ${{ inputs.package }} (zig cc)
         if: ${{ !matrix.debian && !inputs.debian }}
@@ -87,9 +88,7 @@ jobs:
             -e LD_LIBRARY_PATH=/usr/lib \
             -e LOGNAME=root \
             -e HOME=/root \
-            kominka:core /usr/local/bin/osh -c '
-              ln -sf /usr/local/bin/osh /usr/bin/sh 2>/dev/null || true
-              pm i busybox binutils-strip
+            kominka:build-essential /usr/local/bin/ysh -c '
               pm b "${{ inputs.package }}"
               for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
                 [ -f "$f" ] && cp "$f" /out/
