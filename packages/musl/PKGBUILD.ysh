@@ -1,0 +1,38 @@
+#!/usr/local/bin/ysh
+
+var name    = 'musl'
+var ver     = '1.2.5'
+var rel     = '1'
+var deps    = []
+var mkdeps  = ['zig']
+
+var sources   = ['https://musl.libc.org/releases/musl-VERSION.tar.gz']
+var checksums = ['a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4']
+
+proc build(dest) {
+    # Build musl with plain zig cc — no -target musl (that would be circular).
+    # zig cc compiles musl's C sources for the native architecture; the result
+    # is the musl runtime that programs compiled with -target musl link against.
+    # Use the zig binary directly to bypass the cc wrapper (which targets musl).
+    var zig_bin = $(command -v zig)
+
+    ./configure \
+        --prefix=/usr \
+        --libdir=/usr/lib \
+        --syslibdir=/usr/lib \
+        --disable-gcc-wrapper \
+        CC="$zig_bin cc"
+
+    make
+    make DESTDIR=$dest install
+
+    # ldd is the dynamic linker invoked with --list.
+    var ARCH = $(uname -m)
+    var ldso = ''
+    case (ARCH) {
+        aarch64 { setvar ldso = 'ld-musl-aarch64.so.1' }
+        x86_64  { setvar ldso = 'ld-musl-x86_64.so.1' }
+    }
+    mkdir -p "${dest}/usr/bin"
+    ln -sf "/usr/lib/${ldso}" "${dest}/usr/bin/ldd"
+}

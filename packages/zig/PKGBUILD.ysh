@@ -2,7 +2,7 @@
 
 var name    = 'zig'
 var ver     = '0.15.2'
-var rel     = '8'
+var rel     = '9'
 var deps    = []
 var mkdeps  = []
 
@@ -25,14 +25,16 @@ proc build(dest) {
     cp -a zig "${dest}/usr/bin/"
     cp -a lib "${dest}/usr/lib/zig"
 
-    # cc/c++ wrappers using native target (system glibc).
+    # cc/c++ wrappers targeting musl — the system libc for Kominka.
     # cc detects c++ flags (-std=c++*) and upgrades to zig c++ automatically.
     # Some build systems (oils) pass -std=c++11 to CC instead of CXX.
-    write -- '#!/bin/sh
+    var ARCH = $(uname -m)
+    var MUSL_TRIPLE = "${ARCH}-linux-musl"
+    write -- "#!/bin/sh
     mode=cc
-    for a in "$@"; do case "$a" in -std=c++*) mode="c++";; esac; done
-    exec zig $mode "$@"' > "${dest}/usr/bin/cc"
-    write -- '#!/bin/sh' 'exec zig c++ "$@"' > "${dest}/usr/bin/c++"
+    for a in \"\$@\"; do case \"\$a\" in -std=c++*) mode=\"c++\";; esac; done
+    exec zig \$mode -target $MUSL_TRIPLE \"\$@\"" > "${dest}/usr/bin/cc"
+    write -- "#!/bin/sh" "exec zig c++ -target $MUSL_TRIPLE \"\$@\"" > "${dest}/usr/bin/c++"
     # ld — zig's bundled lld, exposed directly.
     write -- '#!/bin/sh' 'exec zig ld.lld "$@"' > "${dest}/usr/bin/ld"
     # ar wrapper — autotools and make need it.
