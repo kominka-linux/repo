@@ -2,7 +2,7 @@
 
 var name    = 'wpa_supplicant'
 var ver     = '2.11'
-var rel     = '5'
+var rel     = '6'
 var deps    = ['glibc', 'libnl']
 var mkdeps  = ['zig', 'make']
 
@@ -12,7 +12,7 @@ var sources = [
 ]
 var checksums = [
     '912ea06f74e30a8e36fbb68064d6cdff218d8d591db0fc5d75dee6c81ac7fc0a',
-    '12a01cca09b3d5d71e5fb33f1be2f2f668569a528388a3195b0c359518ead758',
+    '1c94f3357bebbb629288f4a92de8afde30e0fda5fbe89ae9828ce61cd9932c4b',
 ]
 
 proc build(dest) {
@@ -29,15 +29,19 @@ proc build(dest) {
 
     var _pc = "${_kr}/usr/lib/pkgconfig"
 
-    # Do NOT pass CFLAGS on the command line — wpa_supplicant's Makefile
-    # does CFLAGS += -I../src -I../src/utils which would be discarded by
-    # a command-line override, breaking its own header includes.
-    # pkg-config (via PKG_CONFIG_PATH) adds the libnl include path instead.
+    # Set CFLAGS/LDFLAGS in the environment, NOT on the command line.
+    # Command-line make CFLAGS=... overrides the Makefile's CFLAGS += additions
+    # (like -I../src -I../src/utils), breaking wpa_supplicant's own includes.
+    # Environment vars are preserved because Makefile does: CFLAGS += -I../src
+    # which APPENDS to whatever was already in CFLAGS from the environment.
+    var CFLAGS  = ENV => get("CFLAGS", "-O2 -DNDEBUG")
+    var LDFLAGS = ENV => get("LDFLAGS", "")
+    setglobal ENV.CFLAGS  = "${CFLAGS} -I${_kr}/usr/include"
+    setglobal ENV.LDFLAGS = "${LDFLAGS} -L${_kr}/usr/lib"
+
     PKG_CONFIG_PATH=$_pc \
     PKG_CONFIG_SYSROOT_DIR=$_kr \
-    make -j$(nproc) \
-        CC=$CC \
-        LDFLAGS="-L${_kr}/usr/lib"
+    make -j$(nproc) CC=$CC
 
     install -Dm755 wpa_supplicant   "${dest}/usr/sbin/wpa_supplicant"
     install -Dm755 wpa_cli          "${dest}/usr/sbin/wpa_cli"
