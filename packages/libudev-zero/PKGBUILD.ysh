@@ -1,0 +1,20 @@
+#!/usr/local/bin/ysh
+
+var name    = 'libudev-zero'
+var ver     = '1.0.3'
+var rel     = '2'
+var deps    = []
+var mkdeps  = ['zig', 'make', 'linux']
+
+var sources = ['https://github.com/illiliti/libudev-zero/archive/refs/tags/VERSION.tar.gz']
+var checksums = ['0bd89b657d62d019598e6c7ed726ff8fed80e8ba092a83b484d66afb80b77da5']
+
+proc build(dest) {
+    var CC = ENV => get("CC", "cc")
+
+    make PREFIX=/usr
+    make PREFIX=/usr DESTDIR="${dest}" install
+
+    mkdir -p "${dest}/usr/bin"
+    $CC -o "${dest}/usr/bin/libudev-zero-helper" contrib/helper.c
+}
