@@ -2,7 +2,7 @@
 
 var name    = 'wpa_supplicant'
 var ver     = '2.11'
-var rel     = '6'
+var rel     = '8'
 var deps    = ['glibc', 'libnl']
 var mkdeps  = ['zig', 'make']
 
@@ -12,7 +12,7 @@ var sources = [
 ]
 var checksums = [
     '912ea06f74e30a8e36fbb68064d6cdff218d8d591db0fc5d75dee6c81ac7fc0a',
-    '1c94f3357bebbb629288f4a92de8afde30e0fda5fbe89ae9828ce61cd9932c4b',
+    '6ca881160e858c425381044dc8875644f4f89fc47f9d1b9074d1f9b868ecdea3',
 ]
 
 proc build(dest) {
@@ -27,23 +27,28 @@ proc build(dest) {
     # lands at the root of the build directory (one level above wpa_supplicant/).
     cp -f ../.config .config
 
-    var _pc = "${_kr}/usr/lib/pkgconfig"
+    # Isolate libnl libs so -L doesn't pull in Kominka's glibc and shadow
+    # Debian's — the linker would find libc.so.6 in KOMINKA_ROOT first and
+    # try to resolve it from /usr/lib/libc.so.6 which doesn't exist on Debian.
+    var _libnl_dir = "/tmp/wpa-libnl-$$"
+    mkdir -p $_libnl_dir
+    ln -sf "${_kr}/usr/lib/libnl-3.so"      "${_libnl_dir}/"
+    ln -sf "${_kr}/usr/lib/libnl-genl-3.so" "${_libnl_dir}/"
 
-    # Set CFLAGS/LDFLAGS in the environment, NOT on the command line.
-    # Command-line make CFLAGS=... overrides the Makefile's CFLAGS += additions
-    # (like -I../src -I../src/utils), breaking wpa_supplicant's own includes.
-    # Environment vars are preserved because Makefile does: CFLAGS += -I../src
-    # which APPENDS to whatever was already in CFLAGS from the environment.
-    var CFLAGS  = ENV => get("CFLAGS", "-O2 -DNDEBUG")
-    var LDFLAGS = ENV => get("LDFLAGS", "")
-    setglobal ENV.CFLAGS  = "${CFLAGS} -I${_kr}/usr/include"
-    setglobal ENV.LDFLAGS = "${LDFLAGS} -L${_kr}/usr/lib"
+    # CFLAGS via environment so the Makefile's CFLAGS += additions survive.
+    # Command-line CFLAGS= would override them, breaking wpa_supplicant's
+    # own -I../src -I../src/utils include paths.
+    var CFLAGS = ENV => get("CFLAGS", "-O2 -DNDEBUG")
+    setglobal ENV.CFLAGS = "${CFLAGS} -I${_kr}/usr/include/libnl3"
 
-    PKG_CONFIG_PATH=$_pc \
-    PKG_CONFIG_SYSROOT_DIR=$_kr \
-    make -j$(nproc) CC=$CC
+    PKG_CONFIG_PATH="${_kr}/usr/lib/pkgconfig" \
+    make -j$(nproc) \
+        CC=$CC \
+        LDFLAGS="-L${_libnl_dir}"
 
     install -Dm755 wpa_supplicant   "${dest}/usr/sbin/wpa_supplicant"
     install -Dm755 wpa_cli          "${dest}/usr/sbin/wpa_cli"
     install -Dm755 wpa_passphrase   "${dest}/usr/bin/wpa_passphrase"
+
+    rm -rf $_libnl_dir
 }
