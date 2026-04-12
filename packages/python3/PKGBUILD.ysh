@@ -1,0 +1,35 @@
+#!/usr/local/bin/ysh
+
+var name    = 'python3'
+var ver     = '3.13.13'
+var rel     = '1'
+var deps    = []
+var mkdeps  = []
+
+# Static musl builds from python-build-standalone — self-contained, no host
+# glibc required. Used as a build-time tool (e.g. glibc's gen-as-const.py).
+var sources = [
+    'https://github.com/indygreg/python-build-standalone/releases/download/20260408/cpython-VERSION+20260408-ARCH-unknown-linux-musl-install_only_stripped.tar.gz',
+]
+var checksums_aarch64 = [
+    '8b6b175ae857897bf255b0874f4eb165dbd5cb3caeed245bb89bfc41be3572ee',
+]
+var checksums_x86_64 = [
+    '8ed95fd6f9c9a2d31108629aff3c55ae224e2a137784fbd34196bbd3b0ffcc2e',
+]
+
+proc build(dest) {
+    # Tarball extracts to python/ with a standard install layout.
+    tar xzf *.tar.gz
+
+    mkdir -p "${dest}/usr"
+    cp -a python/. "${dest}/usr/"
+
+    # Canonical /usr/bin/python3 and /usr/bin/python symlinks.
+    mkdir -p "${dest}/usr/bin"
+    for bin in @[glob("${dest}/usr/bin/python3.*")] {
+        ln -sf "${bin##*/}" "${dest}/usr/bin/python3"
+        ln -sf "${bin##*/}" "${dest}/usr/bin/python"
+        break
+    }
+}

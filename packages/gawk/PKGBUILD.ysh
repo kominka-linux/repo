@@ -1,0 +1,16 @@
+#!/usr/local/bin/ysh
+
+var name    = 'gawk'
+var ver     = '1'
+var rel     = '1'
+var deps    = []
+var mkdeps  = []
+var sources    = []
+var checksums  = []
+
+proc build(dest) {
+    mkdir -p "${dest}/usr/bin"
+    # Busybox awk satisfies glibc's configure requirement for a 'gawk' binary.
+    write -- '#!/bin/sh' 'exec awk "$@"' > "${dest}/usr/bin/gawk"
+    chmod +x "${dest}/usr/bin/gawk"
+}
