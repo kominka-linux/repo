@@ -61,20 +61,16 @@ proc build(dest) {
     try { command -v gcc >/dev/null 2>&1 }
     if ! failed { setvar HOSTCC = 'gcc' }
 
-    # CONFIG_USE_BB_CRYPT=y means busybox has its own crypt — no libcrypt needed.
-    # However, make oldconfig regenerates config.mak.autogen with -lcrypt based
-    # on autodetection even with USE_BB_CRYPT=y. zig's linker errors on missing
-    # dynamic libs (unlike gcc which silently ignores them). Wrap CC to silently
-    # drop -lcrypt from every link invocation so it never reaches zig ld.
-    var CC_WRAPPED = "/tmp/busybox-cc-wrapper-$$"
-    write -- '#!/bin/sh
-args=""
-for a in "$@"; do
-  case "$a" in -lcrypt) ;; *) args="$args \"$a\"";; esac
-done
-eval exec ' ++ $CC ++ ' $args' > $CC_WRAPPED
-    chmod +x $CC_WRAPPED
-    setvar CC = CC_WRAPPED
+    # CONFIG_USE_BB_CRYPT=y means busybox provides its own crypt — no libcrypt
+    # dep at runtime. But make oldconfig re-adds -lcrypt to config.mak.autogen
+    # based on system detection even with USE_BB_CRYPT=y. glibc 2.43+ removed
+    # libcrypt, so the .so doesn't exist and zig's strict linker errors.
+    # Create an empty static libcrypt.a so -lcrypt is satisfied at link time
+    # without adding a NEEDED entry (static libs don't create NEEDED entries).
+    touch /tmp/_crypt_empty.c
+    $CC -c /tmp/_crypt_empty.c -o /tmp/_crypt_empty.o 2>/dev/null || true
+    ar rcs /usr/lib/libcrypt.a /tmp/_crypt_empty.o 2>/dev/null || true
+    rm -f /tmp/_crypt_empty.c /tmp/_crypt_empty.o
 
     for patch in @[glob('patch/*.patch')] {
         patch -p1 < $patch
@@ -191,6 +187,4 @@ eval exec ' ++ $CC ++ ' $args' > $CC_WRAPPED
     mkdir -p "${dest}/etc"
     cp -f udhcpc.sh "${dest}/etc/udhcpc.sh"
     chmod +x "${dest}/etc/udhcpc.sh"
-
-    rm -f $CC_WRAPPED
 }
