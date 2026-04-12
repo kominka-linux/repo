@@ -9,6 +9,7 @@ dev:
 	@: $${ALLOWED_USERS:?is not set — source .env first}
 	@: $${RP_ID:?is not set — source .env first}
 	@: $${RP_ORIGIN:?is not set — source .env first}
+	@: $${R2_PUBLIC_URL:?is not set — source .env first}
 	cd server && cargo run
 
 test:
