@@ -25,7 +25,9 @@ var checksums = [
 
 proc build(dest) {
     var ARCH   = $(uname -m)
-    var CC     = ENV => get("CC", "cc")
+    # glibc requires GCC: clang/zig cc lacks working alias attribute support.
+    # glibc is pure C so GCC produces no libstdc++ runtime dependency.
+    var CC     = $(command -v gcc 2>/dev/null || echo cc)
     var srcdir = $(pwd)
 
     # glibc must be built outside its source tree.
