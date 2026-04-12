@@ -87,7 +87,7 @@ jobs:
             -e LD_LIBRARY_PATH=/usr/lib \
             -e LOGNAME=root \
             -e HOME=/root \
-            kominka:core sh -c '
+            kominka:core /usr/local/bin/osh -c '
               pm b "${{ inputs.package }}"
               for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
                 [ -f "$f" ] && cp "$f" /out/
