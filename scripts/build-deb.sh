@@ -4,8 +4,9 @@
 # target: aarch64-unknown-linux-gnu or x86_64-unknown-linux-gnu
 # With no target, builds both aarch64 and x86_64.
 #
-# Requires: cross (cargo install cross) + Docker, for cross-compilation.
-# ring and other C-dependent crates cannot be cross-compiled with plain cargo.
+# Requires: zig (brew install zig) + cargo-zigbuild (cargo install cargo-zigbuild).
+# ring and other C-dependent crates cannot be cross-compiled with plain cargo;
+# zigbuild uses zig as a drop-in C cross-compiler without needing Docker.
 
 set -eu
 
@@ -16,7 +17,7 @@ PKG="kominka-repo_${VERSION}"
 
 build_deb() {
     TARGET="$1"
-    cross build --release --target "$TARGET"
+    cargo zigbuild --release --target "$TARGET"
     BIN="target/${TARGET}/release/kominka-repo"
 
     STAGE=$(mktemp -d)
