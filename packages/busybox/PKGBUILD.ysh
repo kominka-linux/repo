@@ -2,7 +2,7 @@
 
 var name    = 'busybox'
 var ver     = '1.36.1'
-var rel     = '7'
+var rel     = '8'
 var deps    = []
 var mkdeps  = ['zig', 'make', 'linux']
 
@@ -40,7 +40,7 @@ var checksums = [
     'd70c4cd6381baeb3836c0387f53553021b48bdc851de49f1c86d836f7d0355fc',
     'b030d6ac2b3284cf3cc0a2eec886d26b7e09ea59feb460a6a09165da62a582b4',
     'c8a6fc95a75fa355d570c14e214d68a618e060a486b824b83b5140b9c6a894a7',
-    'e70901312ce57b65c1da182dc31f74f0c2aaf9568077b31edbdf42d30836572a',
+    '6684486f55da595dfafe7fb722b399703651f8a91619cd1b04b9e9e0e5151d0c',
     '0c6c739c8fde77029c5d27a4af216ab07563b59462f5f71cc039110059ad9ab2',
     'f31e8c7552af2bb45a62f50c19524c2086f8f749f2ddc660de76d840c93a1f9f',
     '2b22b878442f8a31b9b98601db68a71923ca05c6fc2f4f681060f38f3bf71f3f',
