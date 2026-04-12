@@ -70,7 +70,7 @@ fi
 EOF
     chmod 755 "$STAGE/DEBIAN/postinst"
 
-    dpkg-deb --build "$STAGE" "${PKG}_${DEB_ARCH}.deb"
+    dpkg-deb --root-owner-group --build "$STAGE" "${PKG}_${DEB_ARCH}.deb"
     echo "Built ${PKG}_${DEB_ARCH}.deb"
 }
 
