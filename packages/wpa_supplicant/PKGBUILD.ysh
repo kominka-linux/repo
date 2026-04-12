@@ -2,22 +2,33 @@
 
 var name    = 'wpa_supplicant'
 var ver     = '2.11'
-var rel     = '1'
+var rel     = '2'
 var deps    = ['glibc', 'libnl']
 var mkdeps  = ['zig', 'make']
 
-var sources   = ['https://w1.fi/releases/wpa_supplicant-VERSION.tar.gz']
-var checksums = ['912ea06f74e30a8e36fbb68064d6cdff218d8d591db0fc5d75dee6c81ac7fc0a']
+var sources = [
+    'https://w1.fi/releases/wpa_supplicant-VERSION.tar.gz',
+    'files/.config',
+]
+var checksums = [
+    '912ea06f74e30a8e36fbb68064d6cdff218d8d591db0fc5d75dee6c81ac7fc0a',
+    '9e068a046b24f6283b71d31977d50154a5ffdcde46c52242443fd9f0836f1897',
+]
 
 proc build(dest) {
     var _kr = ENV => get("KOMINKA_ROOT", "")
     if (_kr === '/') { setvar _kr = '' }
 
+    var CC     = ENV => get("CC", "cc")
+    var CFLAGS  = ENV => get("CFLAGS", "-O2 -DNDEBUG")
+    var LDFLAGS = ENV => get("LDFLAGS", "")
+
     cd wpa_supplicant
 
-    cp -f ../files/.config .config
+    # pm strips the 'files/' prefix when copying local sources, so .config
+    # lands at the root of the build directory (one level above wpa_supplicant/).
+    cp -f ../.config .config
 
-    # Point pkg-config at our libnl installation.
     var _pc = "${_kr}/usr/lib/pkgconfig"
 
     PKG_CONFIG_PATH=$_pc \
