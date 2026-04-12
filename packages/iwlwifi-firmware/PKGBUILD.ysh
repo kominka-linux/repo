@@ -1,0 +1,26 @@
+#!/usr/local/bin/ysh
+
+var name    = 'iwlwifi-firmware'
+var ver     = '20260410'
+var rel     = '1'
+var deps    = []
+var mkdeps  = []
+
+# Firmware blobs for Intel Wireless 7265 (used in e.g. Dell XPS 13 9343).
+# Sourced from linux-firmware (GPL-2.0-only + per-file proprietary licenses).
+# The 7265D variant (D-29) is the primary; 7265 (non-D, rev 17) is the fallback.
+var sources = [
+    'files/iwlwifi-7265D-29.ucode',
+    'files/iwlwifi-7265-17.ucode',
+]
+var checksums = [
+    'c52bcaa0595f64d5fb32b7db3dd4b832ea7bf78f1037bcafc19d9c0f5c5c617e',
+    '91f699308f102a9ed90217d813bfdb355464ece958a4f8ac96bba5e9d77fe870',
+]
+var nostrip = true
+
+proc build(dest) {
+    mkdir -p "${dest}/lib/firmware"
+    cp -f iwlwifi-7265D-29.ucode "${dest}/lib/firmware/"
+    cp -f iwlwifi-7265-17.ucode  "${dest}/lib/firmware/"
+}
