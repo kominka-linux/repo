@@ -126,7 +126,7 @@ proc build(dest) {
     # Use a temp file to avoid pipeline-in-command-substitution (YSH strict_errexit).
     var _oc_tmp = "/tmp/busybox-oc-${KOMINKA_PID}"
     while true {
-        try { yes '' | make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh oldconfig > $_oc_tmp 2>&1 }
+        try { yes '' | make HOSTCC=$HOSTCC oldconfig >$_oc_tmp 2>&1 }
         grep -q '(NEW)' $_oc_tmp || break
     }
     rm -f $_oc_tmp
@@ -137,8 +137,8 @@ proc build(dest) {
     # Linux 6.x. Guard against oldconfig re-enabling TC by removing tc.o
     # from the networking Makefile entirely.
     try { sed -i 's/^lib-\$(CONFIG_TC) += tc\.o//' networking/Makefile }
-    make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh SKIP_STRIP=y
-    make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh CONFIG_PREFIX="${dest}/usr" install
+    make HOSTCC=$HOSTCC SKIP_STRIP=y
+    make HOSTCC=$HOSTCC CONFIG_PREFIX="${dest}/usr" install
 
     # Rename the binary temporarily.
     mv "${dest}/usr/bin/busybox" "${dest}/usr/bin/busybox-nosuid"
@@ -147,13 +147,13 @@ proc build(dest) {
     cp -f .config-suid .config
     var _oc_tmp2 = "/tmp/busybox-oc2-${KOMINKA_PID}"
     while true {
-        try { yes '' | make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh oldconfig > $_oc_tmp2 2>&1 }
+        try { yes '' | make HOSTCC=$HOSTCC oldconfig >$_oc_tmp2 2>&1 }
         grep -q '(NEW)' $_oc_tmp2 || break
     }
     rm -f $_oc_tmp2
     try { grep -rl -- -lcrypt . 2>/dev/null | xargs sed -i 's/-lcrypt//g' }
-    make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh SKIP_STRIP=y
-    make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh CONFIG_PREFIX="${dest}/usr" install
+    make HOSTCC=$HOSTCC SKIP_STRIP=y
+    make HOSTCC=$HOSTCC CONFIG_PREFIX="${dest}/usr" install
 
     # Aptly name the busybox binaries.
     mv -f "${dest}/usr/bin/busybox"        "${dest}/usr/bin/busybox-suid"
