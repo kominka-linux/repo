@@ -18,6 +18,9 @@ while (i < len(ARGV)) {
 
 proc die(msg) { echo $msg >&2; exit 1 }
 
+# Restore terminal echo if interrupted between stty -echo / stty echo.
+trap 'stty echo 2>/dev/null' EXIT INT TERM
+
 proc detect_iface() {
     ### First wireless interface in /sys/class/net/*/wireless, or ''.
     for d in @[glob('/sys/class/net/*/wireless')] {
@@ -37,7 +40,7 @@ proc scan(iface) {
         -P /tmp/wpa-scan.pid 2>/dev/null
 
     wpa_cli -p /tmp/wpa-scan-ctrl -i $iface scan > /dev/null 2>&1
-    sleep 2
+    sleep 3
 
     wpa_cli -p /tmp/wpa-scan-ctrl -i $iface scan_results 2>/dev/null \
         | tail -n +2 \
@@ -64,7 +67,7 @@ proc try_connect(iface, ssid, psk) {
 
     # Kill any running wpa_supplicant on this interface.
     kill $(cat /run/wpa_supplicant.pid 2>/dev/null) 2>/dev/null || true
-    sleep 0.3
+    sleep 1
 
     mkdir -p /run/wpa_supplicant
 

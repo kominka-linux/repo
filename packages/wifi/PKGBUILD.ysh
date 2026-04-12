@@ -2,12 +2,22 @@
 
 var name    = 'wifi'
 var ver     = '1.0.0'
-var rel     = '1'
+var rel     = '2'
 var deps    = ['wpa_supplicant', 'busybox', 'ysh']
 var mkdeps  = []
 
-var sources   = []
-var checksums = []
+var sources = [
+    'files/wifi-setup',
+    'files/action.sh',
+    'files/wifi.run',
+    'files/wifi.finish',
+]
+var checksums = [
+    '660f1dea106ac35de06ec8ff4f4bb4279cef67c78b8131bd1dd7636aba90c726',
+    '0b1a873a3889776d66cc5b2e5b77d7a821d9aa9d52ac7b35487c8d44cbfa1eed',
+    'f9fc8a036f77a92f8444a08a6422065730ffa93cb696371594d821476f3a1a13',
+    'f1748ecb6b136e1b4f94da6b268cb0b7cd725e7557287df7ecfed68a6576220b',
+]
 
 proc build(dest) {
 
@@ -16,18 +26,10 @@ proc build(dest) {
         "${dest}/usr/lib/wifi" \
         "${dest}/etc/sv/wifi"
 
-    # Interactive setup script (called from installer and by user directly).
-    cp -f wifi-setup "${dest}/usr/bin/wifi-setup"
-    chmod +x "${dest}/usr/bin/wifi-setup"
+    install -m755 wifi-setup   "${dest}/usr/bin/wifi-setup"
+    install -m755 action.sh    "${dest}/usr/lib/wifi/action.sh"
+    install -m755 wifi.run     "${dest}/etc/sv/wifi/run"
+    install -m755 wifi.finish  "${dest}/etc/sv/wifi/finish"
 
-    # wpa_supplicant action script: drives udhcpc on association events.
-    cp -f action.sh "${dest}/usr/lib/wifi/action.sh"
-    chmod +x "${dest}/usr/lib/wifi/action.sh"
-
-    # runit service.
-    cp -f wifi.run "${dest}/etc/sv/wifi/run"
-    chmod +x "${dest}/etc/sv/wifi/run"
-
-    # runit supervise symlink (runit requires this to be a symlink to a writable dir).
     ln -sf "/run/runit/supervise.wifi" "${dest}/etc/sv/wifi/supervise"
 }

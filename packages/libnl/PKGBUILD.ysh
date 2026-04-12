@@ -19,8 +19,7 @@ proc build(dest) {
     make
     make DESTDIR=$dest install
 
-    # Remove unneeded dev files; keep only the shared libraries.
-    rm -rf "${dest}/usr/include" \
-           "${dest}/usr/lib/pkgconfig" \
-           "${dest}/usr/share"
+    # Drop docs/man; keep headers + pkgconfig so packages that depend on
+    # libnl (wpa_supplicant) can find them at build time via KOMINKA_ROOT.
+    rm -rf "${dest}/usr/share"
 }

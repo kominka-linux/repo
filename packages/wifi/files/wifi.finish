@@ -1,0 +1,14 @@
+#!/bin/sh
+# runit finish script for the wifi service.
+# Called when wpa_supplicant exits for any reason (crash, card removed, etc.).
+# Kill udhcpc so we don't have a DHCP client running with no underlying link.
+
+[ -f /etc/wifi.conf ] || exit 0
+# shellcheck disable=SC1091
+. /etc/wifi.conf
+[ -n "$IFACE" ] || exit 0
+
+PID_FILE="/run/udhcpc-${IFACE}.pid"
+[ -f "$PID_FILE" ] && kill "$(cat "$PID_FILE")" 2>/dev/null || true
+rm -f "$PID_FILE"
+ip addr flush dev "$IFACE" 2>/dev/null || true
