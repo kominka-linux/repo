@@ -4,7 +4,7 @@ var name    = 'ysh'
 var ver     = '0.37.0'
 var rel     = '4'
 var deps    = []
-var mkdeps  = ['zig', 'make']
+var mkdeps  = ['zig', 'make', 'binutils-strip']
 var nostrip = true  # musl static binary; strip not in kominka:core
 
 var sources = ['https://oils.pub/download/oils-for-unix-VERSION.tar.gz']
