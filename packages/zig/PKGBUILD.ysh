@@ -2,7 +2,7 @@
 
 var name    = 'zig'
 var ver     = '0.15.2'
-var rel     = '8'
+var rel     = '9'
 var deps    = []
 var mkdeps  = []
 
@@ -45,4 +45,31 @@ proc build(dest) {
     "${dest}/usr/bin/zig" cc -o "${dest}/usr/bin/nm" nm.c
     chmod +x "${dest}/usr/bin/cc" "${dest}/usr/bin/c++" "${dest}/usr/bin/ld" \
              "${dest}/usr/bin/ar" "${dest}/usr/bin/ranlib" "${dest}/usr/bin/objcopy"
+
+    # strip — replaces binutils-strip. Wraps zig objcopy for in-place
+    # ELF stripping with the same interface as GNU strip.
+    write -- '#!/usr/local/bin/ysh
+# strip — in-place ELF stripper via zig objcopy.
+var mode = "--strip-debug"
+var removes = []
+var files = []
+var i = 0
+while (i < len(ARGV)) {
+    var a = ARGV[i]
+    case (a) {
+        -s           { setvar mode = "--strip-all" }
+        -g | -d | -p { setvar mode = "--strip-debug" }
+        -R {
+            setvar i = i + 1
+            setvar removes = removes ++ ["--remove-section=${ARGV[i]}"]
+        }
+        * { if not (a ~ "^-") { setvar files = files ++ [a] } }
+    }
+    setvar i = i + 1
+}
+for f in (files) {
+    var tmp = "${f}.__strip__"
+    if zig objcopy $mode @removes $f $tmp { mv $tmp $f } else { rm -f $tmp; exit 1 }
+}' > "${dest}/usr/bin/strip"
+    chmod +x "${dest}/usr/bin/strip"
 }
