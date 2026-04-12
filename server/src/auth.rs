@@ -1,14 +1,30 @@
-use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 
-/// Validate Bearer token against the stored API key hash.
-pub fn check_auth(api_key_hash: &[u8; 32], headers: &std::collections::HashMap<String, String>) -> bool {
-    let auth = headers.get("authorization").map(|s| s.as_str()).unwrap_or("");
-    let token = match auth.strip_prefix("Bearer ") {
-        Some(t) if !t.is_empty() => t,
-        _ => return false,
+use crate::AppState;
+
+pub fn authenticated(headers: &HashMap<String, String>, state: &AppState) -> bool {
+    let Some(token) = extract_bearer(headers) else {
+        return false;
     };
-    let mut hasher = Sha256::new();
-    hasher.update(token.as_bytes());
-    let hash: [u8; 32] = hasher.finalize().into();
-    hash == *api_key_hash
+
+    // 1. DB token lookup
+    match state.db.lock().unwrap().verify_token(token) {
+        Ok(Some(_)) => return true,
+        Ok(None) => {}
+        Err(e) => tracing::warn!("db token lookup: {e}"),
+    }
+
+    // 2. JWT verification (if configured)
+    if let Some(jwks_mutex) = &state.jwks {
+        match jwks_mutex.lock().unwrap().verify(token) {
+            Ok(_) => return true,
+            Err(e) => tracing::debug!("jwt: {e}"),
+        }
+    }
+
+    false
+}
+
+fn extract_bearer(headers: &HashMap<String, String>) -> Option<&str> {
+    headers.get("authorization")?.strip_prefix("Bearer ")
 }

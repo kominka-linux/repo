@@ -32,35 +32,55 @@ pub struct Response {
     pub status: u16,
     pub content_type: &'static str,
     pub body: Vec<u8>,
+    pub extra_headers: Vec<(&'static str, String)>,
 }
 
 impl Response {
-    fn json(status: u16, body: &str) -> Self {
-        Self { status, content_type: "application/json", body: body.as_bytes().to_vec() }
+    pub fn json(status: u16, body: &str) -> Self {
+        Self { status, content_type: "application/json", body: body.as_bytes().to_vec(), extra_headers: vec![] }
     }
 
-    fn json_bytes(status: u16, body: Vec<u8>) -> Self {
-        Self { status, content_type: "application/json", body }
+    pub fn json_bytes(status: u16, body: Vec<u8>) -> Self {
+        Self { status, content_type: "application/json", body, extra_headers: vec![] }
     }
 
-    fn octet(body: Vec<u8>) -> Self {
-        Self { status: 200, content_type: "application/octet-stream", body }
+    pub fn html(body: Vec<u8>) -> Self {
+        Self { status: 200, content_type: "text/html; charset=utf-8", body, extra_headers: vec![] }
     }
 
-    fn not_found() -> Self {
-        Self { status: 404, content_type: "text/plain", body: b"Not Found".to_vec() }
+    pub fn octet(body: Vec<u8>) -> Self {
+        Self { status: 200, content_type: "application/octet-stream", body, extra_headers: vec![] }
     }
 
-    fn unauthorized() -> Self {
+    pub fn redirect(location: &str) -> Self {
+        Self {
+            status: 302,
+            content_type: "text/plain",
+            body: vec![],
+            extra_headers: vec![("Location", location.to_string())],
+        }
+    }
+
+    pub fn not_found() -> Self {
+        Self { status: 404, content_type: "text/plain", body: b"Not Found".to_vec(), extra_headers: vec![] }
+    }
+
+    pub fn unauthorized() -> Self {
         Self::json(401, r#"{"error":"unauthorized"}"#)
     }
 
-    fn bad_request(msg: &str) -> Self {
+    pub fn bad_request(msg: &str) -> Self {
         Self::json(400, &format!(r#"{{"error":"{msg}"}}"#))
     }
 
-    fn error(msg: &str) -> Self {
+    pub fn error(msg: &str) -> Self {
         Self::json(500, &format!(r#"{{"error":"{msg}"}}"#))
+    }
+
+    /// Chain a Set-Cookie header onto any response.
+    pub fn with_set_cookie(mut self, value: String) -> Self {
+        self.extra_headers.push(("Set-Cookie", value));
+        self
     }
 }
 
@@ -98,10 +118,23 @@ pub fn route(
     match method {
         "GET" => {
             if path == "/" {
-                return root_index(state);
+                return root_index(headers, state);
             }
             if path == "/health" {
                 return Response::json(200, r#"{"status":"ok"}"#);
+            }
+            if path == "/auth" || path.starts_with("/auth?") {
+                return crate::webauthn_handlers::auth_page();
+            }
+            if path.starts_with("/auth/poll") {
+                let query = path.find('?').map(|i| &path[i + 1..]).unwrap_or("");
+                return crate::webauthn_handlers::poll_session(query, state);
+            }
+            if path == "/auth/logout" {
+                return crate::webauthn_handlers::logout(&headers, &state);
+            }
+            if path == "/auth/settings" {
+                return crate::webauthn_handlers::settings_page(&headers, &state);
             }
             if let Some(arch) = path.strip_prefix('/').and_then(|p| p.strip_suffix("/packages.json")) {
                 return get_index(arch, state);
@@ -114,6 +147,12 @@ pub fn route(
             Response::not_found()
         }
         "POST" => match path {
+            "/auth/register/options" => crate::webauthn_handlers::register_options(body, state),
+            "/auth/register/verify" => crate::webauthn_handlers::register_verify(body, state),
+            "/auth/authenticate/options" => crate::webauthn_handlers::authenticate_options(state),
+            "/auth/authenticate/verify" => crate::webauthn_handlers::authenticate_verify(body, state),
+            "/auth/tokens" => crate::webauthn_handlers::create_token_api(body, headers, state),
+            "/auth/tokens/delete" => crate::webauthn_handlers::delete_token_api(body, headers, state),
             "/api/upload" => upload(headers, body, state),
             "/api/publish" => publish(headers, body, state),
             "/api/reindex" => reindex(headers, body, state),
@@ -124,27 +163,51 @@ pub fn route(
     }
 }
 
-fn root_index(state: &AppState) -> Response {
+pub(crate) fn session_cookie(headers: &HashMap<String, String>) -> Option<String> {
+    headers.get("cookie").and_then(|h| {
+        h.split(';').find_map(|kv| {
+            let (k, v) = kv.trim().split_once('=')?;
+            if k.trim() == "kominka_session" { Some(v.trim().to_string()) } else { None }
+        })
+    })
+}
+
+fn root_index(headers: &HashMap<String, String>, state: &AppState) -> Response {
+    let username = session_cookie(headers)
+        .and_then(|t| state.db.lock().unwrap().verify_browser_session(&t).ok().flatten());
+
+    let userbar = match &username {
+        Some(name) => format!(
+            "<span class=userbar>{name} <a href=\"/auth/settings\">(settings)</a> \u{00b7} <a href=\"/auth/logout\">sign out</a></span>"
+        ),
+        None => "<a href=\"/auth\" class=signin>sign in</a>".to_string(),
+    };
+
     let indexes = state.indexes.read().unwrap();
-    let mut html = String::from(
+    let mut html = format!(
         "<!doctype html>\
         <html><head><meta charset=utf-8><meta name=viewport content=\"width=device-width\">\
         <title>Kominka Packages</title><style>\
-        *{margin:0;padding:0;box-sizing:border-box}\
-        body{font-family:system-ui,sans-serif;max-width:960px;margin:0 auto;padding:2rem 1rem;\
-        color:#e0e0e0;background:#1a1a1a}\
-        h1{font-size:1.4rem;margin-bottom:1.5rem;color:#fff}\
-        h2{font-size:1.1rem;margin:1.5rem 0 .5rem;color:#ccc}\
-        table{width:100%;border-collapse:collapse;font-size:.85rem}\
-        th{text-align:left;padding:.3rem .5rem;border-bottom:1px solid #333;color:#888;font-weight:normal}\
-        td{padding:.3rem .5rem;border-bottom:1px solid #222}\
-        a{color:#6ba3f7;text-decoration:none}a:hover{text-decoration:underline}\
-        .dep{color:#888}.mkdep{color:#666}\
-        .empty{color:#666;padding:2rem 0}\
-        @media(prefers-color-scheme:light){body{color:#222;background:#fff}\
-        h1{color:#000}h2{color:#333}th{color:#666;border-color:#ddd}\
-        td{border-color:#eee}a{color:#1a6be0}.dep{color:#555}.mkdep{color:#888}}\
-        </style></head><body><h1>Kominka Packages</h1>",
+        *{{margin:0;padding:0;box-sizing:border-box}}\
+        body{{font-family:system-ui,sans-serif;max-width:960px;margin:0 auto;padding:2rem 1rem;\
+        color:#e0e0e0;background:#1a1a1a}}\
+        header{{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1.5rem}}\
+        h1{{font-size:1.4rem;color:#fff}}\
+        .signin{{font-size:.8rem;color:#666}}\
+        .userbar{{font-size:.8rem;color:#888}}.userbar a{{color:#888;text-decoration:none}}.userbar a:hover{{text-decoration:underline}}\
+        h2{{font-size:1.1rem;margin:1.5rem 0 .5rem;color:#ccc}}\
+        table{{width:100%;border-collapse:collapse;font-size:.85rem}}\
+        th{{text-align:left;padding:.3rem .5rem;border-bottom:1px solid #333;color:#888;font-weight:normal}}\
+        td{{padding:.3rem .5rem;border-bottom:1px solid #222}}\
+        a{{color:#6ba3f7;text-decoration:none}}a:hover{{text-decoration:underline}}\
+        .dep{{color:#888}}.mkdep{{color:#666}}\
+        .empty{{color:#666;padding:2rem 0}}\
+        @media(prefers-color-scheme:light){{body{{color:#222;background:#fff}}\
+        h1{{color:#000}}h2{{color:#333}}th{{color:#666;border-color:#ddd}}\
+        td{{border-color:#eee}}a{{color:#1a6be0}}.dep{{color:#555}}.mkdep{{color:#888}}\
+        .signin{{color:#999}}.userbar,.userbar a{{color:#aaa}}}}\
+        </style></head><body>\
+        <header><h1>Kominka Packages</h1>{userbar}</header>",
     );
 
     let mut has_packages = false;
@@ -206,7 +269,7 @@ fn root_index(state: &AppState) -> Response {
     }
 
     html.push_str("</body></html>");
-    Response { status: 200, content_type: "text/html", body: html.into_bytes() }
+    Response::html(html.into_bytes())
 }
 
 fn get_index(arch: &str, state: &AppState) -> Response {
@@ -217,11 +280,7 @@ fn get_index(arch: &str, state: &AppState) -> Response {
     match indexes.get(arch) {
         Some(idx) => {
             let json = serde_json::to_vec_pretty(idx).unwrap();
-            Response {
-                status: 200,
-                content_type: "application/json",
-                body: json,
-            }
+            Response::json_bytes(200, json)
         }
         None => Response::not_found(),
     }
@@ -239,7 +298,7 @@ fn get_tarball(arch: &str, pkg: &str, file: &str, state: &AppState) -> Response 
 }
 
 fn upload(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> Response {
-    if !auth::check_auth(&state.api_key_hash, headers) {
+    if !auth::authenticated(headers, state) {
         return Response::unauthorized();
     }
 
@@ -295,7 +354,7 @@ fn upload(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> R
 }
 
 fn publish(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> Response {
-    if !auth::check_auth(&state.api_key_hash, headers) {
+    if !auth::authenticated(headers, state) {
         return Response::unauthorized();
     }
 
@@ -341,7 +400,7 @@ struct PublishRequest {
 /// POST /api/reindex — register an already-uploaded tarball in the index
 /// without re-uploading. Useful for rebuilding the index from existing R2 objects.
 fn reindex(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> Response {
-    if !auth::check_auth(&state.api_key_hash, headers) {
+    if !auth::authenticated(headers, state) {
         return Response::unauthorized();
     }
 
@@ -394,7 +453,7 @@ fn reindex(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> 
 
 /// POST /api/delete — remove a package from the index (does not delete R2 object).
 fn delete_pkg(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> Response {
-    if !auth::check_auth(&state.api_key_hash, headers) {
+    if !auth::authenticated(headers, state) {
         return Response::unauthorized();
     }
     #[derive(serde::Deserialize)]

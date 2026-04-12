@@ -54,14 +54,13 @@ Updated server-side on each upload via read-modify-write. Server keeps the
 index in memory and writes to S3 on mutation. On startup, reads from S3 to
 hydrate.
 
-## V2: Passkey Authentication + JWT for CI
+## Passkey Authentication + JWT for CI
 
-The static API key is sufficient for a single maintainer but doesn't scale to
-multiple contributors and lacks the security properties of modern
-authentication. V2 replaces it with browser passkeys for human auth and
-JWT/OIDC for CI.
+Replaces the original static API key with browser passkeys for human auth and
+JWT/OIDC for CI. Implemented in `server/src/{auth,db,jwt,webauthn_handlers}.rs`
+and `server/static/auth.html`.
 
-### Dependencies Added
+### Dependencies
 
 | Crate | Role |
 |-------|------|
@@ -106,7 +105,7 @@ CREATE TABLE sessions (
 );
 ```
 
-### Configuration Added
+### Configuration
 
 ```sh
 ALLOWED_USERS=josh

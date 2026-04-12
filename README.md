@@ -2,8 +2,6 @@
 
 Package definitions and repository server for [Kominka Linux](https://github.com/user/davinci).
 
-## Layout
-
 ```
 packages/       Package definitions (PKGBUILD.ysh files)
 server/         Repository server (Rust)
@@ -12,150 +10,88 @@ scripts/        Build .deb
 
 ## Server Setup
 
-### 1. Create an R2 Bucket
+**1. Create an R2 bucket** in the Cloudflare dashboard. Note the S3 endpoint
+(`https://<ACCOUNT_ID>.r2.cloudflarestorage.com`), bucket name, and API credentials.
 
-In the Cloudflare dashboard:
-
-1. Go to R2 → Create bucket (e.g., `kominka-packages`)
-2. Go to R2 → Manage R2 API Tokens → Create API token
-3. Choose "Object Read & Write" permissions, scope to your bucket
-4. Save the Access Key ID and Secret Access Key
-
-Note the S3 API endpoint — it's `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`.
-
-### 2. Generate an API Key
-
-```sh
-openssl rand -hex 32
-```
-
-This is the shared secret between the server and `pm`. Anyone with this key
-can upload packages.
-
-### 3. Configure
-
-Copy the example env file and fill in credentials:
-
-```sh
-cp server/kominka-repo.env.example /etc/kominka-repo/env
-chmod 600 /etc/kominka-repo/env
-```
+**2. Configure** — copy and fill in `server/kominka-repo.env.example`:
 
 ```sh
 LISTEN_ADDR=127.0.0.1:3000
 S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
 S3_BUCKET=kominka-packages
-S3_ACCESS_KEY_ID=<from step 1>
-S3_SECRET_ACCESS_KEY=<from step 1>
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
 S3_REGION=auto
-API_KEY=<from step 2>
+
+DB_PATH=/var/lib/kominka-repo/auth.db
+ALLOWED_USERS=josh
+RP_ID=repo.kominka.org
+RP_ORIGIN=https://repo.kominka.org
+
+# JWT/OIDC for CI (optional)
+JWT_JWKS_URL=https://token.actions.githubusercontent.com/.well-known/jwks
+JWT_ISSUER=https://token.actions.githubusercontent.com
+JWT_AUDIENCE=kominka-repo
+JWT_SUBJECT_PATTERN=repo:josh/*
 ```
 
-### 4. Run
-
-Development (source secrets from .env):
+**3. Run**
 
 ```sh
-cd server
-source ~/d/repo/.env
-cargo run
-```
+# Local dev (checks required env vars)
+source .env && make dev
 
-Production (systemd):
-
-```sh
-# Build and install the .deb
-./scripts/build-deb.sh
-dpkg -i kominka-repo_*.deb
-
-# Edit /etc/kominka-repo/env with real credentials
+# Production (systemd)
+./scripts/build-deb.sh && dpkg -i kominka-repo_*.deb
 systemctl enable --now kominka-repo
 ```
 
-Put a reverse proxy (caddy, nginx) in front for TLS. The server listens on
-`127.0.0.1:3000` with no TLS.
+Put a reverse proxy (caddy, nginx) in front for TLS. The server binds `127.0.0.1:3000`.
 
-### 5. Populate the Index
+**4. First login** — open `/auth`, register a passkey, copy the generated `KOMINKA_TOKEN`
+into `.env`. Subsequent logins just set a browser session; manage tokens at `/auth/settings`.
 
-After the server is running, publish packages with `pm p`. This handles both
-regular packages (uploads the tarball) and metapackages (registers metadata
-only):
+## Client Setup
 
-```sh
-# Source credentials from .env, then build+upload each package
-source ~/d/repo/.env
+`pm` authenticates with `KOMINKA_TOKEN` in the environment. Get a token at `/auth/settings`.
 
-# From ~/d/davinci — make targets source .env automatically:
-make rebuild-curl
-make rebuild-glibc-debian   # packages needing gcc
-
-# Or publish all at once (from ~/d/davinci with KOMINKA_PATH set):
-for pkg in packages/*/; do pm p "$(basename "$pkg")"; done
-```
-
-## Client Setup (pm)
-
-### Auth
-
-Store the API key so `pm p` can upload:
-
-```sh
-# Option A: pm auth (prompts for the key, stores in keychain/file)
-KOMINKA_REPO=https://repo.kominka.org pm auth
-
-# Option B: environment variable (for CI)
-export KOMINKA_TOKEN=<your API_KEY>
-```
-
-Token storage locations:
-- macOS: Keychain (`security find-generic-password -s kominka-repo`)
-- Linux: `~/.config/kominka/token`
-
-### Usage
-
-```sh
-export KOMINKA_REPO=https://repo.kominka.org
-
-# Update the package index
-pm u
-
-# Install a package (resolves deps from remote index, no git checkout needed)
-pm i curl
-
-# Build and upload a package
-pm b curl
-pm p curl
-
-# Upload a metapackage
-pm p core
-```
+For CI, GitHub Actions uses a short-lived OIDC token automatically — no stored secret needed.
+The workflow has `id-token: write` and fetches the JWT from GitHub's OIDC endpoint with
+`audience=kominka-repo`. Configure `JWT_*` vars on the server to validate it.
 
 ## API
 
 ### Public
 
 ```
-GET /health                           → {"status":"ok"}
-GET /{arch}/packages.json             → package index (JSON)
-GET /{arch}/{pkg}/{ver}-{rel}.tar.gz  → tarball
+GET /health
+GET /{arch}/packages.json
+GET /{arch}/{pkg}/{ver}-{rel}.tar.gz
 ```
 
-### Authenticated (Authorization: Bearer <API_KEY>)
+### Auth
 
 ```
-POST /api/upload                      → upload tarball
-  Headers: X-Arch, X-Pkg, X-Ver, X-Rel, X-Deps, X-Mkdeps
-  Body: tarball bytes
-  Returns: {"ok":true,"sha256":"..."}
-
-POST /api/publish                     → register metapackage
-  Body: {"arch","pkg","ver","rel","deps","mkdeps"}
-  Returns: {"ok":true}
+GET  /auth                            → login page
+POST /auth/register/options           → start passkey registration
+POST /auth/register/verify            → complete registration
+POST /auth/authenticate/options       → start authentication
+POST /auth/authenticate/verify        → complete authentication
+GET  /auth/settings                   → token management page
+POST /auth/tokens                     → create token  {"name","expires_days"?}
+POST /auth/tokens/delete              → delete token  {"id"}
+GET  /auth/logout
 ```
 
-## Storage Layout
+### Authenticated (`Authorization: Bearer <token>`)
 
-Tarballs are stored at `{arch}/{pkg}/{ver}-{rel}.tar.gz` in R2. The index
-tracks the sha256 of each tarball for integrity verification on download.
+```
+POST /api/upload     X-Arch, X-Pkg, X-Ver, X-Rel, X-Deps, X-Mkdeps; body: tarball
+POST /api/publish    {"arch","pkg","ver","rel","deps","mkdeps"}
+POST /api/reindex    {"arch","pkg","ver","rel"}
+POST /api/delete     {"arch","pkg"}
+```
 
-See `REPOSITORY.md` for the V2 auth design (passkeys + JWT/OIDC, not yet implemented).
+## Storage
+
+Tarballs live at `{arch}/{pkg}/{ver}-{rel}.tar.gz` in R2. The index tracks sha256 per tarball.

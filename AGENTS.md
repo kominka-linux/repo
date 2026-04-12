@@ -14,15 +14,20 @@ The client is `pm` (package manager) in the `davinci` repo at `~/d/davinci/pm.ys
 
 ## Server
 
-~400 lines of Rust. Blocking, threaded (tiny_http). No async runtime.
+~800 lines of Rust. Blocking, threaded (tiny_http). No async runtime.
 
 ```
 server/src/
-  lib.rs         AppState (Storage + API key hash + index cache)
-  main.rs        tiny_http server loop, thread-per-request
-  packages.rs    route() dispatcher, all HTTP handlers, PackageIndex type
-  auth.rs        Bearer token validation (SHA-256 comparison)
-  s3.rs          Storage enum (S3 via ureq + SigV4 signing, or Memory for tests)
+  lib.rs               AppState (db, webauthn, jwks, indexes)
+  main.rs              tiny_http server loop, thread-per-request
+  packages.rs          route() dispatcher, all HTTP handlers, PackageIndex type
+  auth.rs              Bearer token validation: DB lookup then JWT fallback
+  db.rs                SQLite auth store (users, credentials, tokens, sessions)
+  jwt.rs               JWKS fetch + cache, JWT/OIDC verification
+  webauthn_handlers.rs Passkey registration and authentication endpoints
+  s3.rs                Storage enum (S3 via ureq + SigV4 signing, or Memory for tests)
+server/static/
+  auth.html            Login page served at GET /auth (passkey UI, no external JS)
 ```
 
 ### Request Flow
@@ -67,11 +72,31 @@ not content-addressed. The sha256 field is for integrity verification on downloa
 
 ### Auth
 
-V1: static API key. Server stores `sha256(API_KEY)`, compares against
-`sha256(bearer_token)` on each authenticated request. No database.
+Bearer token authentication. Two accepted credential types:
 
-V2 (designed, not yet implemented): browser passkeys + JWT/OIDC for CI.
-See `REPOSITORY.md` for the full design.
+**Passkey-issued tokens** — 64 random hex chars (256-bit). The server stores
+only the SHA-256 hash in SQLite (`tokens` table). Created when an admin signs
+in via `/auth` with a registered passkey (Touch ID, hardware key). Long-lived,
+no expiry. Checked by hashing the presented token and doing a DB lookup.
+
+**GitHub OIDC JWTs** — Short-lived tokens fetched by CI via the GitHub OIDC
+endpoint. Validated by fetching JWKS from `JWT_JWKS_URL`, verifying the RSA
+signature, and checking `iss`, `aud`, and `sub` claims. Keys are cached in
+memory for 1 hour. Enabled only when `JWT_JWKS_URL` is set in env.
+
+Auth check order (in `auth.rs`): DB token lookup → JWT verification → 401.
+
+### WebAuthn Flow
+
+`/auth` serves `static/auth.html`. Registration and authentication use the
+standard WebAuthn browser API with base64url helpers inlined in the HTML —
+no external JS. Challenge state (`PasskeyRegistration` / `PasskeyAuthentication`)
+is serialized and stored in the `sessions` table between the options and verify
+round-trips. Sessions expire after 10 minutes.
+
+On successful authentication the server creates a new token, stores its hash,
+and returns the plaintext once. Tokens are also stored in the session row so
+a future `pm auth` CLI flow can poll `/auth/poll?session={id}` to retrieve them.
 
 ## pm Integration
 
@@ -81,7 +106,6 @@ See `REPOSITORY.md` for the full design.
   from the server. No local checkout of package definitions needed.
 - `pm p curl` — POSTs the built tarball to `/api/upload` with metadata headers.
 - `pm u` — downloads fresh `packages.json` before doing git pull.
-- `pm auth` — prompts for the API key and stores it in keychain or file.
 
 Key pm procs: `index_load`, `index_refresh`, `_download`, `pkg_cache`,
 `pkg_upload`, `auth_token_load`, `auth_token_store`.
@@ -152,19 +176,23 @@ Both source credentials from `~/d/repo/.env` automatically.
 ## Server Development
 
 ```sh
-cd server
-source ~/d/repo/.env
-cargo run          # start server at LISTEN_ADDR (default 127.0.0.1:3000)
-cargo test         # run 15 unit tests (use Storage::Memory, no S3 needed)
+source .env          # load credentials and auth config
+make dev             # check required vars, then: cd server && cargo run
+make test            # run tests (Storage::Memory, no S3, no DB needed)
 ```
 
-Dependencies: tiny_http, ureq, sha2, hmac, serde/serde_json, tracing — all
+On first run of `make dev`, open `http://localhost:3000/auth` to register your
+passkey and get a `KOMINKA_TOKEN`. Add it to `.env`.
+
+Dependencies: tiny_http, ureq, sha2, hmac, serde/serde_json, tracing,
+rusqlite (bundled SQLite), webauthn-rs, jsonwebtoken, url, uuid — all
 blocking/sync. No tokio.
 
 ## Testing
 
-`cargo test` runs 15 integration tests in `tests/api.rs`. Tests call
-`packages::route()` directly with `Storage::Memory` — no HTTP, no S3, no
-threads. Covers: upload + index round-trip, auth rejection, input validation,
-arch isolation, metapackage publishing, SHA-256 correctness, index
-accumulation and overwrite behavior, large body integrity.
+`cargo test` (via `make test`) runs 15 integration tests in `tests/api.rs`.
+Tests call `packages::route()` directly with `Storage::Memory` and an
+in-memory SQLite DB — no HTTP, no S3, no threads, no real passkeys. Covers:
+upload + index round-trip, auth rejection, input validation, arch isolation,
+metapackage publishing, SHA-256 correctness, index accumulation and overwrite
+behavior, large body integrity.

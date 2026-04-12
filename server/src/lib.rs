@@ -1,12 +1,20 @@
 pub mod auth;
+pub mod db;
+pub mod jwt;
 pub mod packages;
 pub mod s3;
+pub mod webauthn_handlers;
 
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 
 pub struct AppState {
     pub s3: s3::Storage,
-    pub api_key_hash: [u8; 32],
+    pub db: Mutex<db::Db>,
+    pub webauthn: webauthn_rs::prelude::Webauthn,
+    pub jwks: Option<Mutex<jwt::JwksCache>>,
+    pub allowed_users: Vec<String>,
     pub indexes: RwLock<HashMap<String, packages::PackageIndex>>,
+    /// Set when RP_ORIGIN is https:// so Set-Cookie includes the Secure flag.
+    pub secure_cookies: bool,
 }

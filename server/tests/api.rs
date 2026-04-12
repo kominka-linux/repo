@@ -3,17 +3,39 @@ use std::sync::RwLock;
 
 use kominka_repo::{AppState, packages, s3};
 
-const API_KEY: &str = "test-secret-key-for-unit-tests";
+const TEST_USER: &str = "testuser";
+const TEST_TOKEN: &str = "aaaaaabbbbbbccccccddddddeeeeeeffffffffaaaaaaabbbbbbccccccddddddee";
 
-fn test_state() -> AppState {
-    use sha2::{Digest, Sha256};
-    let mut h = Sha256::new();
-    h.update(API_KEY.as_bytes());
+fn make_state() -> AppState {
+    use webauthn_rs::prelude::*;
+
+    let db = kominka_repo::db::Db::open(":memory:").expect("db");
+    db.create_user("test-user-id", TEST_USER).expect("create user");
+    db.seed_token("test-user-id", "test", TEST_TOKEN).expect("seed token");
+
+    let url = url::Url::parse("https://test.example.com").unwrap();
+    let webauthn = WebauthnBuilder::new("test.example.com", &url)
+        .unwrap()
+        .build()
+        .unwrap();
+
     AppState {
         s3: s3::Storage::memory(),
-        api_key_hash: h.finalize().into(),
+        db: std::sync::Mutex::new(db),
+        webauthn,
+        jwks: None,
+        allowed_users: vec![TEST_USER.to_string()],
         indexes: RwLock::new(HashMap::new()),
+        secure_cookies: false,
     }
+}
+
+/// Creates a browser session and returns the cookie header string.
+fn make_browser_session(state: &AppState) -> String {
+    let session = state.db.lock().unwrap()
+        .create_browser_session("test-user-id")
+        .expect("browser session");
+    format!("kominka_session={session}")
 }
 
 fn headers(pairs: &[(&str, &str)]) -> HashMap<String, String> {
@@ -21,7 +43,7 @@ fn headers(pairs: &[(&str, &str)]) -> HashMap<String, String> {
 }
 
 fn auth_headers(extra: &[(&str, &str)]) -> HashMap<String, String> {
-    let mut h = headers(&[("authorization", &format!("Bearer {API_KEY}"))]);
+    let mut h = headers(&[("authorization", &format!("Bearer {TEST_TOKEN}"))]);
     for (k, v) in extra {
         h.insert(k.to_string(), v.to_string());
     }
@@ -41,7 +63,7 @@ fn upload_pkg(state: &AppState, arch: &str, pkg: &str, ver: &str, rel: &str, dep
 
 #[test]
 fn health_returns_ok() {
-    let state = test_state();
+    let state = make_state();
     let resp = packages::route("GET", "/health", &headers(&[]), b"", &state);
     assert_eq!(resp.status, 200);
     assert_eq!(body_json(&resp)["status"], "ok");
@@ -49,7 +71,7 @@ fn health_returns_ok() {
 
 #[test]
 fn upload_rejects_bad_auth() {
-    let state = test_state();
+    let state = make_state();
     let resp = packages::route("POST", "/api/upload", &headers(&[]), b"", &state);
     assert_eq!(resp.status, 401);
     let h = headers(&[("authorization", "Bearer wrong-token")]);
@@ -59,7 +81,7 @@ fn upload_rejects_bad_auth() {
 
 #[test]
 fn upload_stores_tarball_and_updates_index() {
-    let state = test_state();
+    let state = make_state();
     let tarball = b"fake tarball content";
 
     let resp = upload_pkg(&state, "aarch64-linux-gnu", "curl", "8.19.0", "6", "boringssl,zlib", tarball);
@@ -68,7 +90,6 @@ fn upload_stores_tarball_and_updates_index() {
     assert_eq!(body["ok"], true);
     assert_eq!(body["sha256"].as_str().unwrap().len(), 64);
 
-    // Verify index.
     let resp = packages::route("GET", "/aarch64-linux-gnu/packages.json", &headers(&[]), b"", &state);
     assert_eq!(resp.status, 200);
     let idx = body_json(&resp);
@@ -78,7 +99,6 @@ fn upload_stores_tarball_and_updates_index() {
     let deps = idx["packages"]["curl"]["deps"].as_array().unwrap();
     assert_eq!(deps, &["boringssl", "zlib"]);
 
-    // Verify tarball download at {ver}-{rel} path.
     let resp = packages::route("GET", "/aarch64-linux-gnu/curl/8.19.0-6.tar.gz", &headers(&[]), b"", &state);
     assert_eq!(resp.status, 200);
     assert_eq!(resp.body, tarball);
@@ -86,7 +106,7 @@ fn upload_stores_tarball_and_updates_index() {
 
 #[test]
 fn upload_with_no_deps() {
-    let state = test_state();
+    let state = make_state();
     let resp = upload_pkg(&state, "x86_64-linux-gnu", "zlib", "1.3.1", "1", "", b"data");
     assert_eq!(resp.status, 201);
 
@@ -97,7 +117,7 @@ fn upload_with_no_deps() {
 
 #[test]
 fn upload_rejects_missing_headers() {
-    let state = test_state();
+    let state = make_state();
     let h = auth_headers(&[("x-arch", "aarch64-linux-gnu")]);
     let resp = packages::route("POST", "/api/upload", &h, b"data", &state);
     assert_eq!(resp.status, 400);
@@ -106,7 +126,7 @@ fn upload_rejects_missing_headers() {
 
 #[test]
 fn upload_rejects_unknown_arch() {
-    let state = test_state();
+    let state = make_state();
     let resp = upload_pkg(&state, "mips-unknown-linux", "curl", "1.0", "1", "", b"data");
     assert_eq!(resp.status, 400);
     assert_eq!(body_json(&resp)["error"], "unknown arch");
@@ -114,7 +134,7 @@ fn upload_rejects_unknown_arch() {
 
 #[test]
 fn upload_rejects_invalid_pkg_name() {
-    let state = test_state();
+    let state = make_state();
     for bad_name in ["UPPER", "../etc/passwd", "", "-leading-dash"] {
         let resp = upload_pkg(&state, "aarch64-linux-gnu", bad_name, "1.0", "1", "", b"data");
         assert_eq!(resp.status, 400, "expected 400 for pkg name '{bad_name}'");
@@ -123,7 +143,7 @@ fn upload_rejects_invalid_pkg_name() {
 
 #[test]
 fn publish_registers_metapackage() {
-    let state = test_state();
+    let state = make_state();
     let body = br#"{"arch":"aarch64-linux-gnu","pkg":"core","ver":"1.0","rel":"1","deps":["glibc","busybox"]}"#;
     let h = auth_headers(&[]);
     let resp = packages::route("POST", "/api/publish", &h, body, &state);
@@ -138,7 +158,7 @@ fn publish_registers_metapackage() {
 
 #[test]
 fn publish_rejects_unknown_arch() {
-    let state = test_state();
+    let state = make_state();
     let body = br#"{"arch":"bad-arch","pkg":"test","ver":"1.0","rel":"1","deps":[]}"#;
     let h = auth_headers(&[]);
     let resp = packages::route("POST", "/api/publish", &h, body, &state);
@@ -147,7 +167,7 @@ fn publish_rejects_unknown_arch() {
 
 #[test]
 fn indexes_are_per_arch() {
-    let state = test_state();
+    let state = make_state();
     let resp = upload_pkg(&state, "aarch64-linux-gnu", "curl", "1.0", "1", "", b"arm-data");
     assert_eq!(resp.status, 201);
 
@@ -157,7 +177,7 @@ fn indexes_are_per_arch() {
 
 #[test]
 fn multiple_uploads_accumulate_in_index() {
-    let state = test_state();
+    let state = make_state();
     for pkg in ["curl", "zlib", "boringssl"] {
         let resp = upload_pkg(&state, "aarch64-linux-gnu", pkg, "1.0", "1", "", b"data");
         assert_eq!(resp.status, 201);
@@ -170,7 +190,7 @@ fn multiple_uploads_accumulate_in_index() {
 
 #[test]
 fn upload_overwrites_package_in_index() {
-    let state = test_state();
+    let state = make_state();
     upload_pkg(&state, "aarch64-linux-gnu", "curl", "1.0", "1", "", b"v1");
     upload_pkg(&state, "aarch64-linux-gnu", "curl", "2.0", "1", "", b"v2");
 
@@ -183,7 +203,7 @@ fn upload_overwrites_package_in_index() {
 #[test]
 fn upload_sha256_is_correct() {
     use sha2::{Digest, Sha256};
-    let state = test_state();
+    let state = make_state();
     let data = b"deterministic test content";
     let expected = format!("{:x}", Sha256::digest(data));
 
@@ -198,8 +218,7 @@ fn upload_sha256_is_correct() {
 fn upload_download_body_is_intact() {
     use sha2::{Digest, Sha256};
 
-    let state = test_state();
-    // Use a body large enough to exercise any size-related paths (1MB).
+    let state = make_state();
     let data: Vec<u8> = (0u8..=255).cycle().take(1024 * 1024).collect();
     let expected_sha = format!("{:x}", Sha256::digest(&data));
 
@@ -207,7 +226,6 @@ fn upload_download_body_is_intact() {
     assert_eq!(resp.status, 201);
     assert_eq!(body_json(&resp)["sha256"], expected_sha);
 
-    // Download and verify body is exactly what was uploaded.
     let resp = packages::route("GET", "/aarch64-linux-gnu/bigpkg/1.0-1.tar.gz", &headers(&[]), b"", &state);
     assert_eq!(resp.status, 200);
     assert_eq!(resp.body.len(), data.len());
@@ -216,9 +234,156 @@ fn upload_download_body_is_intact() {
 
 #[test]
 fn valid_package_names_accepted() {
-    let state = test_state();
+    let state = make_state();
     for name in ["curl", "ca-certificates", "linux", "e2fsprogs", "sudo-rs", "zlib1g"] {
         let resp = upload_pkg(&state, "aarch64-linux-gnu", name, "1.0", "1", "", b"data");
         assert_eq!(resp.status, 201, "expected 201 for pkg name '{name}'");
     }
+}
+
+// ── Auth / settings tests ──────────────────────────────────────────────────
+
+#[test]
+fn auth_page_returns_html() {
+    let state = make_state();
+    let resp = packages::route("GET", "/auth", &headers(&[]), b"", &state);
+    assert_eq!(resp.status, 200);
+    assert!(resp.content_type.starts_with("text/html"));
+}
+
+#[test]
+fn settings_page_redirects_without_session() {
+    let state = make_state();
+    let resp = packages::route("GET", "/auth/settings", &headers(&[]), b"", &state);
+    assert_eq!(resp.status, 302);
+    let loc = resp.extra_headers.iter().find(|(k, _)| *k == "Location").map(|(_, v)| v.as_str());
+    assert_eq!(loc, Some("/auth"));
+}
+
+#[test]
+fn settings_page_accessible_with_browser_session() {
+    let state = make_state();
+    let cookie = make_browser_session(&state);
+    let resp = packages::route("GET", "/auth/settings", &headers(&[("cookie", &cookie)]), b"", &state);
+    assert_eq!(resp.status, 200);
+    assert!(resp.content_type.starts_with("text/html"));
+    // Page should contain the username
+    let body = String::from_utf8_lossy(&resp.body);
+    assert!(body.contains(TEST_USER));
+}
+
+#[test]
+fn create_token_requires_browser_session() {
+    let state = make_state();
+    let resp = packages::route("POST", "/auth/tokens", &headers(&[]), br#"{"name":"test"}"#, &state);
+    assert_eq!(resp.status, 401);
+}
+
+#[test]
+fn create_token_returns_usable_api_token() {
+    let state = make_state();
+    let cookie = make_browser_session(&state);
+    let h = headers(&[("cookie", &cookie)]);
+
+    let resp = packages::route("POST", "/auth/tokens", &h, br#"{"name":"ci","expires_days":7}"#, &state);
+    assert_eq!(resp.status, 200);
+    let token = body_json(&resp)["token"].as_str().expect("token field").to_string();
+    assert_eq!(token.len(), 64, "token should be 64 hex chars");
+
+    // The new token must authenticate API calls
+    let auth_h = headers(&[("authorization", &format!("Bearer {token}"))]);
+    let pkg_body = br#"{"arch":"aarch64-linux-gnu","pkg":"test","ver":"1","rel":"1","deps":[],"mkdeps":[]}"#;
+    let resp = packages::route("POST", "/api/publish", &auth_h, pkg_body, &state);
+    assert_eq!(resp.status, 201, "new token should authenticate publish");
+}
+
+#[test]
+fn delete_token_revokes_api_access() {
+    let state = make_state();
+    let cookie = make_browser_session(&state);
+    let h = headers(&[("cookie", &cookie)]);
+
+    // Create a fresh token
+    let resp = packages::route("POST", "/auth/tokens", &h, br#"{"name":"ephemeral"}"#, &state);
+    assert_eq!(resp.status, 200);
+    let token = body_json(&resp)["token"].as_str().unwrap().to_string();
+
+    // Verify it works
+    let auth_h = headers(&[("authorization", &format!("Bearer {token}"))]);
+    let pkg_body = br#"{"arch":"aarch64-linux-gnu","pkg":"t","ver":"1","rel":"1","deps":[],"mkdeps":[]}"#;
+    let resp = packages::route("POST", "/api/publish", &auth_h, pkg_body, &state);
+    assert_eq!(resp.status, 201);
+
+    // Look up the token ID
+    let token_id = {
+        let db = state.db.lock().unwrap();
+        db.list_tokens("test-user-id").unwrap()
+            .into_iter()
+            .find(|t| t.name == "ephemeral")
+            .expect("token should be listed")
+            .id
+    };
+
+    // Delete it
+    let del_body = format!(r#"{{"id":"{token_id}"}}"#);
+    let resp = packages::route("POST", "/auth/tokens/delete", &h, del_body.as_bytes(), &state);
+    assert_eq!(resp.status, 200);
+
+    // Token must no longer authenticate
+    let resp = packages::route("POST", "/api/publish", &auth_h, pkg_body, &state);
+    assert_eq!(resp.status, 401, "deleted token must be rejected");
+}
+
+#[test]
+fn logout_invalidates_browser_session() {
+    let state = make_state();
+    let cookie = make_browser_session(&state);
+    let h = headers(&[("cookie", &cookie)]);
+
+    // Confirm session is live
+    let resp = packages::route("GET", "/auth/settings", &h, b"", &state);
+    assert_eq!(resp.status, 200);
+
+    // Logout
+    let resp = packages::route("GET", "/auth/logout", &h, b"", &state);
+    assert_eq!(resp.status, 302);
+
+    // Same cookie must no longer grant access — server invalidated the session, not just the cookie
+    let resp = packages::route("GET", "/auth/settings", &h, b"", &state);
+    assert_eq!(resp.status, 302, "session must be invalidated server-side after logout");
+}
+
+#[test]
+fn session_cookie_does_not_authenticate_api_calls() {
+    // Browser sessions are for the settings UI only, not for Bearer-token API auth.
+    let state = make_state();
+    let cookie = make_browser_session(&state);
+    // Pass the session cookie value as a Bearer token — must be rejected
+    let session_val = cookie.strip_prefix("kominka_session=").unwrap();
+    let h = headers(&[("authorization", &format!("Bearer {session_val}"))]);
+    let pkg_body = br#"{"arch":"aarch64-linux-gnu","pkg":"t","ver":"1","rel":"1","deps":[],"mkdeps":[]}"#;
+    let resp = packages::route("POST", "/api/publish", &h, pkg_body, &state);
+    assert_eq!(resp.status, 401, "browser session token must not work as a Bearer token");
+}
+
+#[test]
+fn root_shows_signin_link_when_unauthenticated() {
+    let state = make_state();
+    let resp = packages::route("GET", "/", &headers(&[]), b"", &state);
+    assert_eq!(resp.status, 200);
+    let body = String::from_utf8_lossy(&resp.body);
+    assert!(body.contains("sign in"), "should show sign-in link when not logged in");
+    assert!(!body.contains("sign out"), "should not show sign-out when not logged in");
+}
+
+#[test]
+fn root_shows_settings_link_when_authenticated() {
+    let state = make_state();
+    let cookie = make_browser_session(&state);
+    let resp = packages::route("GET", "/", &headers(&[("cookie", &cookie)]), b"", &state);
+    assert_eq!(resp.status, 200);
+    let body = String::from_utf8_lossy(&resp.body);
+    assert!(body.contains("settings"), "should show settings link when logged in");
+    assert!(body.contains("sign out"), "should show sign-out when logged in");
+    assert!(body.contains(TEST_USER), "should show username when logged in");
 }

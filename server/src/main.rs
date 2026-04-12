@@ -11,13 +11,38 @@ fn main() {
         .init();
 
     let listen_addr = env_or("LISTEN_ADDR", "127.0.0.1:3000");
-    let api_key = env_required("API_KEY");
 
-    let api_key_hash = {
-        use sha2::{Digest, Sha256};
-        let mut h = Sha256::new();
-        h.update(api_key.as_bytes());
-        h.finalize().into()
+    let allowed_users: Vec<String> = env_required("ALLOWED_USERS")
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let rp_id = env_required("RP_ID");
+    let rp_origin = env_required("RP_ORIGIN");
+
+    let db = kominka_repo::db::Db::open(&env_required("DB_PATH"))
+        .expect("failed to open auth database");
+
+    let rp_origin_url =
+        url::Url::parse(&rp_origin).expect("RP_ORIGIN must be a valid URL");
+    let webauthn = webauthn_rs::prelude::WebauthnBuilder::new(&rp_id, &rp_origin_url)
+        .expect("invalid WebAuthn configuration")
+        .rp_name("Kominka Repo")
+        .build()
+        .expect("failed to build WebAuthn");
+
+    let jwks = if let Ok(jwks_url) = std::env::var("JWT_JWKS_URL") {
+        let config = kominka_repo::jwt::JwtConfig {
+            jwks_url,
+            issuer: env_required("JWT_ISSUER"),
+            audience: env_required("JWT_AUDIENCE"),
+            subject_pattern: env_required("JWT_SUBJECT_PATTERN"),
+        };
+        Some(std::sync::Mutex::new(kominka_repo::jwt::JwksCache::new(config)))
+    } else {
+        tracing::info!("JWT_JWKS_URL not set; JWT/OIDC auth disabled");
+        None
     };
 
     let s3 = s3::Storage::s3(
@@ -30,11 +55,14 @@ fn main() {
 
     let state = Arc::new(AppState {
         s3,
-        api_key_hash,
+        db: std::sync::Mutex::new(db),
+        webauthn,
+        jwks,
+        allowed_users,
         indexes: std::sync::RwLock::new(HashMap::new()),
+        secure_cookies: rp_origin.starts_with("https://"),
     });
 
-    // Hydrate indexes from S3 on startup.
     for arch in packages::KNOWN_ARCHES {
         if let Some(idx) = packages::load_index(&state.s3, arch) {
             state.indexes.write().unwrap().insert(arch.to_string(), idx);
@@ -43,7 +71,9 @@ fn main() {
     }
 
     let server = tiny_http::Server::http(&listen_addr).expect("failed to bind");
-    tracing::info!("listening on {listen_addr}");
+    println!("http://{listen_addr}");
+    println!("  packages: http://{listen_addr}/");
+    println!("  auth:     http://{listen_addr}/auth");
 
     for mut request in server.incoming_requests() {
         let state = state.clone();
@@ -61,15 +91,20 @@ fn main() {
 
             let resp = packages::route(&method, &url, &headers, &body, &state);
 
-            let header = tiny_http::Header::from_bytes(
+            let ct = tiny_http::Header::from_bytes(
                 &b"Content-Type"[..],
                 resp.content_type.as_bytes(),
             )
             .unwrap();
 
-            let response = tiny_http::Response::from_data(resp.body)
+            let mut response = tiny_http::Response::from_data(resp.body)
                 .with_status_code(resp.status)
-                .with_header(header);
+                .with_header(ct);
+            for (name, value) in &resp.extra_headers {
+                if let Ok(h) = tiny_http::Header::from_bytes(name.as_bytes(), value.as_bytes()) {
+                    response = response.with_header(h);
+                }
+            }
 
             if let Some(arch_path) = url.strip_prefix('/') {
                 if arch_path.ends_with("/packages.json") && resp.status == 200 {
