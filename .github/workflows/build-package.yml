@@ -89,6 +89,7 @@ jobs:
             -e HOME=/root \
             kominka:core /usr/local/bin/osh -c '
               ln -sf /usr/local/bin/osh /usr/bin/sh 2>/dev/null || true
+              pm i binutils-strip
               pm b "${{ inputs.package }}"
               for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
                 [ -f "$f" ] && cp "$f" /out/
