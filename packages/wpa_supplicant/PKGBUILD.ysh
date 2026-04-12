@@ -2,7 +2,7 @@
 
 var name    = 'wpa_supplicant'
 var ver     = '2.11'
-var rel     = '2'
+var rel     = '3'
 var deps    = ['glibc', 'libnl']
 var mkdeps  = ['zig', 'make']
 
@@ -19,9 +19,7 @@ proc build(dest) {
     var _kr = ENV => get("KOMINKA_ROOT", "")
     if (_kr === '/') { setvar _kr = '' }
 
-    var CC     = ENV => get("CC", "cc")
-    var CFLAGS  = ENV => get("CFLAGS", "-O2 -DNDEBUG")
-    var LDFLAGS = ENV => get("LDFLAGS", "")
+    var CC = ENV => get("CC", "cc")
 
     cd wpa_supplicant
 
@@ -31,12 +29,15 @@ proc build(dest) {
 
     var _pc = "${_kr}/usr/lib/pkgconfig"
 
+    # Do NOT pass CFLAGS on the command line — wpa_supplicant's Makefile
+    # does CFLAGS += -I../src -I../src/utils which would be discarded by
+    # a command-line override, breaking its own header includes.
+    # pkg-config (via PKG_CONFIG_PATH) adds the libnl include path instead.
     PKG_CONFIG_PATH=$_pc \
     PKG_CONFIG_SYSROOT_DIR=$_kr \
     make -j$(nproc) \
         CC=$CC \
-        CFLAGS="${CFLAGS} -I${_kr}/usr/include" \
-        LDFLAGS="${LDFLAGS} -L${_kr}/usr/lib"
+        LDFLAGS="-L${_kr}/usr/lib"
 
     install -Dm755 wpa_supplicant   "${dest}/usr/sbin/wpa_supplicant"
     install -Dm755 wpa_cli          "${dest}/usr/sbin/wpa_cli"
