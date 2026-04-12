@@ -8,7 +8,7 @@
 var iface = ENV => get("IFNAME", "wlan0")
 var pid_file = "/run/udhcpc-${iface}.pid"
 
-case $1 {
+case ($1) {
     CONNECTED {
         # Kill any stale udhcpc for this interface.
         if test -f $pid_file { kill $(cat $pid_file) 2>/dev/null || true }

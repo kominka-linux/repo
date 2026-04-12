@@ -9,7 +9,7 @@ var mask   = ENV => get("mask", "24")
 var router = ENV => get("router", "")
 var dns_   = ENV => get("dns", "")
 
-case $event {
+case (event) {
     bound|renew {
         ip addr flush dev $iface
         ip addr add "${ip_}/${mask}" dev $iface
