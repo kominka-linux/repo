@@ -40,7 +40,6 @@ input:focus{outline:none;border-color:#4c8cf8}
 
   <div id="section-signin">
     <button class="btn btn-primary" id="signin-btn">Sign in with passkey</button>
-    <button class="btn btn-secondary" id="show-register-btn">Register new passkey</button>
     <div class="msg" id="signin-msg"></div>
   </div>
 
@@ -199,7 +198,7 @@ async function doAuthenticate() {
   try {
     setMsg('signin-msg', 'Waiting for passkey…', false);
     cred = await navigator.credentials.get({
-      publicKey: decodeGetOptions(options.publicKey),
+      publicKey: decodeGetOptions(options),
     });
   } catch (e) {
     setMsg('signin-msg', e.name === 'NotAllowedError' ? 'Cancelled' : String(e), true);
@@ -271,7 +270,7 @@ async function doRegister() {
   try {
     setMsg('register-msg', 'Waiting for passkey…', false);
     cred = await navigator.credentials.create({
-      publicKey: decodeCreateOptions(options.publicKey),
+      publicKey: decodeCreateOptions(options),
     });
   } catch (e) {
     setMsg('register-msg', e.name === 'NotAllowedError' ? 'Cancelled' : String(e), true);
@@ -309,10 +308,6 @@ async function doRegister() {
 
 document.getElementById('signin-btn').addEventListener('click', doAuthenticate);
 document.getElementById('register-btn').addEventListener('click', doRegister);
-document.getElementById('show-register-btn').addEventListener('click', () => {
-  document.getElementById('section-signin').style.display = 'none';
-  document.getElementById('section-register').style.display = 'block';
-});
 document.getElementById('back-btn').addEventListener('click', () => {
   document.getElementById('section-register').style.display = 'none';
   document.getElementById('section-signin').style.display = 'block';

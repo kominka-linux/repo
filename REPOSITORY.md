@@ -57,7 +57,7 @@ hydrate.
 ## Passkey Authentication + JWT for CI
 
 Replaces the original static API key with browser passkeys for human auth and
-JWT/OIDC for CI. Implemented in `server/src/{auth,db,jwt,webauthn_handlers}.rs`
+JWT/OIDC for CI. Implemented in `server/src/{auth,db,jwt,webauthn,webauthn_handlers}.rs`
 and `server/static/auth.html`.
 
 ### Dependencies
@@ -65,7 +65,7 @@ and `server/static/auth.html`.
 | Crate | Role |
 |-------|------|
 | `rusqlite` (bundled) | Auth state: users, credentials, tokens, sessions |
-| `webauthn-rs` | Passkey registration/authentication |
+| `p256` + `ciborium` + `base64ct` | Passkey registration/authentication (pure Rust, no OpenSSL) |
 | `jsonwebtoken` | CI OIDC token verification |
 
 ### SQLite Schema
@@ -78,11 +78,9 @@ CREATE TABLE users (
 );
 
 CREATE TABLE credentials (
-  id         TEXT PRIMARY KEY,       -- base64url credential ID
+  id         TEXT PRIMARY KEY,       -- hex credential ID
   user_id    TEXT NOT NULL REFERENCES users(id),
-  public_key BLOB NOT NULL,          -- COSE public key
-  counter    INTEGER NOT NULL DEFAULT 0,
-  transports TEXT,                   -- JSON array: ["internal","hybrid"]
+  passkey    TEXT NOT NULL,          -- JSON: {cred_id, x, y, sign_count}
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -146,15 +144,17 @@ GET  /auth/poll?session={id}           # CLI polls for completed token
 
 ### Auth Page
 
-Single HTML file with `@simplewebauthn/browser` bundled inline (pre-built with
-esbuild, committed as static asset). Minimal styling (system font, centered
-card, dark mode via `prefers-color-scheme`).
+Single HTML file (`server/static/auth.html`) with no external dependencies.
+Uses the browser's native `navigator.credentials` API directly with hand-rolled
+base64url helpers. Minimal styling (system font, centered card, dark mode via
+`prefers-color-scheme`).
 
 Flow:
 1. Page reads `session` from query params
-2. If user has no passkey registered: show Register button (enter username,
-   tap passkey)
-3. If registered: show Sign In button (tap passkey, discoverable)
+2. Click "Sign in with passkey" — if no credentials are registered yet, the
+   server returns 404 and the page automatically shows the registration form
+   (enter username, tap passkey)
+3. If registered: tap passkey (discoverable credential)
 4. On success: "Done — you can close this tab"
 
 Allowed usernames hardcoded in `ALLOWED_USERS` env var. Registration rejects

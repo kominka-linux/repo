@@ -24,13 +24,7 @@ fn main() {
     let db = kominka_repo::db::Db::open(&env_required("DB_PATH"))
         .expect("failed to open auth database");
 
-    let rp_origin_url =
-        url::Url::parse(&rp_origin).expect("RP_ORIGIN must be a valid URL");
-    let webauthn = webauthn_rs::prelude::WebauthnBuilder::new(&rp_id, &rp_origin_url)
-        .expect("invalid WebAuthn configuration")
-        .rp_name("Kominka Repo")
-        .build()
-        .expect("failed to build WebAuthn");
+    let webauthn = kominka_repo::webauthn::RelyingParty::new(&rp_id, &rp_origin, "Kominka Repo");
 
     let jwks = if let Ok(jwks_url) = std::env::var("JWT_JWKS_URL") {
         let config = kominka_repo::jwt::JwtConfig {

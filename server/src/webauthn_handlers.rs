@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use webauthn_rs::prelude::{
-    Passkey, PasskeyAuthentication, PasskeyRegistration, PublicKeyCredential,
-    RegisterPublicKeyCredential,
-};
+use crate::webauthn::{AuthChallenge, RegChallenge, StoredCredential};
 
 use crate::AppState;
 use crate::packages::{Response, session_cookie};
@@ -54,20 +51,7 @@ pub fn register_options(body: &[u8], state: &AppState) -> Response {
         }
     };
 
-    let uuid = match uuid::Uuid::parse_str(&user_id) {
-        Ok(u) => u,
-        Err(_) => return Response::error("invalid user id"),
-    };
-
-    let (ccr, reg_state) = match state.webauthn.start_passkey_registration(
-        uuid,
-        &req.username,
-        &req.username,
-        None,
-    ) {
-        Ok(pair) => pair,
-        Err(e) => return Response::error(&format!("webauthn: {e}")),
-    };
+    let (ccr, reg_state) = state.webauthn.start_registration(&user_id, &req.username);
 
     let challenge_json = serde_json::to_string(&reg_state).unwrap();
     let session_id = {
@@ -111,26 +95,21 @@ pub fn register_verify(body: &[u8], state: &AppState) -> Response {
         (uid, ch)
     };
 
-    let reg_state: PasskeyRegistration = match serde_json::from_str(&challenge_json) {
+    let reg_state: RegChallenge = match serde_json::from_str(&challenge_json) {
         Ok(s) => s,
         Err(e) => return Response::json(400, &format!(r#"{{"error":"bad challenge: {e}"}}"#)),
     };
 
-    let rpkc: RegisterPublicKeyCredential = match serde_json::from_value(req.credential) {
+    let cred = match state.webauthn.finish_registration(&req.credential, &reg_state) {
         Ok(c) => c,
-        Err(e) => return Response::bad_request(&format!("invalid credential: {e}")),
-    };
-
-    let passkey = match state.webauthn.finish_passkey_registration(&rpkc, &reg_state) {
-        Ok(pk) => pk,
         Err(e) => {
             tracing::warn!("passkey registration failed: {e}");
             return Response::json(400, r#"{"error":"registration failed"}"#);
         }
     };
 
-    let cred_id = crate::db::hex_encode(passkey.cred_id().as_ref());
-    let passkey_json = serde_json::to_string(&passkey).unwrap();
+    let cred_id = cred.cred_id.clone();
+    let passkey_json = serde_json::to_string(&cred).unwrap();
 
     let (new_token, browser_session) = {
         let db = state.db.lock().unwrap();
@@ -166,7 +145,7 @@ pub fn register_verify(body: &[u8], state: &AppState) -> Response {
 
 /// POST /auth/authenticate/options
 pub fn authenticate_options(state: &AppState) -> Response {
-    let (user_id, passkeys) = {
+    let (user_id, creds) = {
         let db = state.db.lock().unwrap();
 
         let username = match state.allowed_users.first() {
@@ -185,22 +164,19 @@ pub fn authenticate_options(state: &AppState) -> Response {
             Err(e) => return Response::error(&format!("db: {e}")),
         };
 
-        let passkeys: Vec<Passkey> = rows
+        let creds: Vec<StoredCredential> = rows
             .iter()
             .filter_map(|(_, json)| serde_json::from_str(json).ok())
             .collect();
 
-        if passkeys.is_empty() {
+        if creds.is_empty() {
             return Response::json(404, r#"{"error":"no credentials registered"}"#);
         }
 
-        (user_id, passkeys)
+        (user_id, creds)
     };
 
-    let (rcr, auth_state) = match state.webauthn.start_passkey_authentication(&passkeys) {
-        Ok(pair) => pair,
-        Err(e) => return Response::error(&format!("webauthn: {e}")),
-    };
+    let (rcr, auth_state) = state.webauthn.start_authentication(&creds);
 
     let challenge_json = serde_json::to_string(&auth_state).unwrap();
     let session_id = {
@@ -251,18 +227,18 @@ pub fn authenticate_verify(body: &[u8], state: &AppState) -> Response {
         (uid, ch, rows)
     };
 
-    let auth_state: PasskeyAuthentication = match serde_json::from_str(&challenge_json) {
+    let auth_state: AuthChallenge = match serde_json::from_str(&challenge_json) {
         Ok(s) => s,
         Err(e) => return Response::json(400, &format!(r#"{{"error":"bad challenge: {e}"}}"#)),
     };
 
-    let pkc: PublicKeyCredential = match serde_json::from_value(req.credential) {
-        Ok(c) => c,
-        Err(e) => return Response::bad_request(&format!("invalid credential: {e}")),
-    };
+    let stored_creds: Vec<StoredCredential> = passkey_rows
+        .iter()
+        .filter_map(|(_, json)| serde_json::from_str(json).ok())
+        .collect();
 
-    let auth_result = match state.webauthn.finish_passkey_authentication(&pkc, &auth_state) {
-        Ok(r) => r,
+    let updated_cred = match state.webauthn.finish_authentication(&req.credential, &auth_state, &stored_creds) {
+        Ok(c) => c,
         Err(e) => {
             tracing::warn!("passkey authentication failed: {e}");
             return Response::json(401, r#"{"error":"authentication failed"}"#);
@@ -272,17 +248,9 @@ pub fn authenticate_verify(body: &[u8], state: &AppState) -> Response {
     let (new_token, browser_session) = {
         let db = state.db.lock().unwrap();
 
-        // Update counter for the credential that was used.
-        for (cred_id, passkey_json) in &passkey_rows {
-            let mut pk: Passkey = match serde_json::from_str(passkey_json) {
-                Ok(p) => p,
-                Err(_) => continue,
-            };
-            if pk.update_credential(&auth_result).is_some() {
-                let updated = serde_json::to_string(&pk).unwrap();
-                let _ = db.update_passkey(cred_id, &updated);
-            }
-        }
+        // Persist updated sign counter.
+        let updated_json = serde_json::to_string(&updated_cred).unwrap();
+        let _ = db.update_passkey(&updated_cred.cred_id, &updated_json);
 
         // Only create an API token if user has none yet.
         let token = if !db.has_any_token(&user_id).unwrap_or(false) {

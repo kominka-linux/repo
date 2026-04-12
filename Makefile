@@ -14,3 +14,6 @@ dev:
 
 test:
 	cd server && cargo test
+
+release:
+	scripts/build-deb.sh

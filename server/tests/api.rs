@@ -7,22 +7,18 @@ const TEST_USER: &str = "testuser";
 const TEST_TOKEN: &str = "aaaaaabbbbbbccccccddddddeeeeeeffffffffaaaaaaabbbbbbccccccddddddee";
 
 fn make_state() -> AppState {
-    use webauthn_rs::prelude::*;
-
     let db = kominka_repo::db::Db::open(":memory:").expect("db");
     db.create_user("test-user-id", TEST_USER).expect("create user");
     db.seed_token("test-user-id", "test", TEST_TOKEN).expect("seed token");
 
-    let url = url::Url::parse("https://test.example.com").unwrap();
-    let webauthn = WebauthnBuilder::new("test.example.com", &url)
-        .unwrap()
-        .build()
-        .unwrap();
-
     AppState {
         s3: s3::Storage::memory(),
         db: std::sync::Mutex::new(db),
-        webauthn,
+        webauthn: kominka_repo::webauthn::RelyingParty::new(
+            "test.example.com",
+            "https://test.example.com",
+            "Test",
+        ),
         jwks: None,
         allowed_users: vec![TEST_USER.to_string()],
         indexes: RwLock::new(HashMap::new()),
