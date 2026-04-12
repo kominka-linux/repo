@@ -51,7 +51,7 @@ log "Remounting rootfs as read-only..." {
 
 log "Checking filesystems..." {
     if command -v fsck.ext4 >/dev/null 2>&1 {
-        fsck -ATat noopts=_netdev
+        fsck -pATat noopts=_netdev
         if ($? > 1) { sos }
     }
 }

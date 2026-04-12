@@ -1,0 +1,392 @@
+#!/usr/local/bin/ysh
+# Kominka Linux installer.
+# Partitions a disk, formats filesystems, copies the live rootfs, and
+# optionally builds a machine-specific kernel for the target hardware.
+#
+# Partition layout (MBR via busybox fdisk):
+#   1: EFI System (256M, FAT32, type 0xEF)  -> /boot
+#   2: Linux swap  (8G, type 0x82)
+#   3: Linux root  (rest, ext4, type 0x83)
+
+var ARCH       = $(uname -m)
+var MNT        = '/mnt/target'
+var KERNEL_VER = '6.19.12'
+var KERNEL_SHA = 'ce5c4f1205f9729286b569b037649591555f31ca1e03cc504bd3b70b8e58a8d5'
+
+var MACHINE_PROFILE = ''
+var MACHINE_NAME    = ''
+
+echo "Kominka Linux Installer"
+echo ""
+
+# ── Network setup ─────────────────────────────────────────────────────────────
+
+proc setup_network() {
+    var wlan = ''
+    for _d in @[glob('/sys/class/net/*/wireless')] {
+        if test -d $_d {
+            setvar wlan = $(basename $(dirname $_d))
+            break
+        }
+    }
+    if (wlan === '') { return }
+
+    echo "Wireless interface $wlan detected. Connect to WiFi now? [y/N]"
+    echo "(needed for machine-specific kernel download)"
+    var ans; read --line (&ans)
+    if (ans === 'y' or ans === 'Y') { wifi-setup }
+}
+
+# ── Machine selection ─────────────────────────────────────────────────────────
+
+proc detect_machine() {
+    if (ARCH !== 'x86_64') { return }
+    var machines_dir = '/usr/share/kominka/machines'
+    if ! test -d $machines_dir { return }
+
+    var dmi = $(cat /sys/class/dmi/id/product_name 2>/dev/null || true)
+    if (dmi === '') { return }
+
+    var match = $(awk -F= -v name=$dmi '$1 == name { print $2 }' \
+        "${machines_dir}/index" 2>/dev/null || true)
+
+    echo ""
+    echo "==> Machine detection"
+    var ans = ''
+    if test -n $match && test -f "${machines_dir}/${match}.config" {
+        echo "    Detected: $dmi"
+        echo ""
+        printf "    Build kernel for '%s'? [Y/n/list] " $match
+        read --line (&ans)
+        case (ans) {
+            n|N          { setglobal MACHINE_PROFILE = '' }
+            l|L|list     { select_machine }
+            *            { setglobal MACHINE_PROFILE = match
+                           setglobal MACHINE_NAME = dmi }
+        }
+    } else {
+        echo "    Machine not in profile list (DMI: ${dmi:-unknown})"
+        echo ""
+        printf "    Build a machine-specific kernel? [y/N/list] "
+        read --line (&ans)
+        case (ans) {
+            y|Y | l|L|list { select_machine }
+            *               { setglobal MACHINE_PROFILE = '' }
+        }
+    }
+
+    if (MACHINE_PROFILE !== '') {
+        echo "    Will build: $MACHINE_PROFILE"
+    } else {
+        echo "    Using pre-built baseline kernel."
+    }
+    echo ""
+}
+
+proc select_machine() {
+    var machines_dir = '/usr/share/kominka/machines'
+    echo ""
+    echo "    Available profiles:"
+    var i = 1
+    var cfgs = @[glob("${machines_dir}/*.config")]
+    for cfg in (cfgs) {
+        var name = $(basename $cfg .config)
+        printf '      %2d) %s\n' $i $name
+        setvar i = i + 1
+    }
+    echo ""
+    printf "    Enter number (or blank to use baseline): "
+    var num; read --line (&num)
+    if (num === '') { return }
+
+    setvar i = 1
+    for cfg in (cfgs) {
+        if (str(i) === num) {
+            setglobal MACHINE_PROFILE = $(basename $cfg .config)
+            setglobal MACHINE_NAME = MACHINE_PROFILE
+            return
+        }
+        setvar i = i + 1
+    }
+    echo "    Invalid selection — using baseline."
+}
+
+# ── Kernel installation ───────────────────────────────────────────────────────
+
+proc install_kernel() {
+    mkdir -p "${MNT}/boot/EFI/BOOT"
+
+    if (ARCH === 'x86_64' and MACHINE_PROFILE !== '') {
+        build_kernel_x86_64
+        return
+    }
+
+    # Baseline pre-built kernel.
+    var efi_name
+    case (ARCH) {
+        x86_64  { setvar efi_name = 'BOOTX64.EFI' }
+        aarch64 { setvar efi_name = 'BOOTAA64.EFI' }
+        *       { setvar efi_name = 'BOOTX64.EFI' }
+    }
+    cp /usr/share/kominka/Image "${MNT}/boot/EFI/BOOT/${efi_name}"
+    echo "    Baseline kernel installed."
+}
+
+proc build_kernel_x86_64() {
+    var machines_dir = '/usr/share/kominka/machines'
+    var profile_cfg  = "${machines_dir}/${MACHINE_PROFILE}.config"
+    var build_dir    = "${MNT}/tmp/kernel-build"
+    var kernel_url   = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${KERNEL_VER}.tar.xz"
+
+    echo ""
+    echo "==> Building machine-specific kernel ($MACHINE_PROFILE)"
+    echo "    Kernel: linux-$KERNEL_VER"
+    echo ""
+
+    mkdir -p $build_dir
+
+    echo "    Downloading kernel source (~130MB)..."
+    var tarball = "${build_dir}/linux-${KERNEL_VER}.tar.xz"
+    if ! curl -fsSL --progress-bar -o $tarball $kernel_url {
+        echo "    Download failed — falling back to baseline kernel."
+        cp /usr/share/kominka/Image "${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
+        rm -rf $build_dir
+        return
+    }
+
+    # Verify checksum if sha256sum is available.
+    # SHA256 hashes are exactly 64 hex chars; slice to avoid quoted-space issue.
+    var _sum  = $(sha256sum $tarball 2>/dev/null || true)
+    var actual = _sum[0:64]
+    if (actual !== '' and actual !== KERNEL_SHA) {
+        echo "    Checksum mismatch — falling back to baseline kernel."
+        cp /usr/share/kominka/Image "${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
+        rm -rf $build_dir
+        return
+    }
+
+    echo "    Extracting..."
+    tar xJf $tarball -C $build_dir
+    var src = "${build_dir}/linux-${KERNEL_VER}"
+
+    # Merge base config with machine profile (later entries win).
+    echo "    Configuring..."
+    cp /usr/share/kominka/kernel.config "${src}/.config"
+    grep -v '^#' $profile_cfg | grep -v '^$' >> "${src}/.config"
+    make -C $src ARCH=x86_64 olddefconfig 2>&1 | grep -v '^#' || true
+
+    var nproc = $(nproc 2>/dev/null || echo 4)
+    echo "    Building kernel (10-20 minutes on $nproc cores)..."
+    echo "    Output: ${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
+    echo ""
+
+    if make -C $src ARCH=x86_64 -j$nproc bzImage {
+        cp "${src}/arch/x86/boot/bzImage" "${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
+        cp "${src}/.config" "${MNT}/usr/share/kominka/kernel.config" 2>/dev/null || true
+        echo ""
+        echo "    Kernel built and installed."
+    } else {
+        echo ""
+        echo "    Build failed — falling back to baseline kernel."
+        cp /usr/share/kominka/Image "${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
+    }
+
+    echo "    Cleaning up build directory..."
+    rm -rf $build_dir
+}
+
+# ── Disk listing ──────────────────────────────────────────────────────────────
+
+proc list_disks() {
+    for dev in @[glob('/sys/block/*')] {
+        var name = $(basename $dev)
+        case (name) {
+            loop*|ram*|dm-* { continue }
+        }
+        var size = $(cat "${dev}/size" 2>/dev/null || echo 0)
+        var size_mb = int(size) // 2048
+        if (size_mb <= 0) { continue }
+        var model = $(cat "${dev}/device/model" 2>/dev/null | sed 's/ *$//' || true)
+        printf '  /dev/%-10s %6d MB  %s\n' $name $size_mb $model
+    }
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+setup_network
+detect_machine
+
+echo "Available disks:"
+echo ""
+list_disks
+echo ""
+
+printf "Install to (e.g. /dev/sda): "
+var DISK; read --line (&DISK)
+
+if (DISK === '') { echo "Aborted."; exit 0 }
+
+if ! test -b $DISK { echo "error: $DISK is not a block device"; exit 1 }
+
+var size    = $(cat "/sys/block/$(basename $DISK)/size" 2>/dev/null || echo 0)
+var size_mb = int(size) // 2048
+var root_mb = size_mb - 256 - 8192
+
+echo ""
+echo "WARNING: all data on $DISK will be destroyed."
+echo ""
+echo "  Partition layout (MBR):"
+echo "    ${DISK}1   256M   EFI System (FAT32)   /boot"
+echo "    ${DISK}2     8G   Linux swap"
+echo "    ${DISK}3  ${root_mb}M   Linux (ext4)          /"
+echo ""
+printf "Continue? [y/N] "
+var ans; read --line (&ans)
+if (ans !== 'y' and ans !== 'Y') { echo "Aborted."; exit 0 }
+
+echo ""
+echo "==> Partitioning $DISK (MBR)"
+dd if=/dev/zero of=$DISK bs=1M count=1 2>/dev/null
+
+busybox fdisk $DISK <<'FDISK'
+o
+n
+p
+1
+
++256M
+t
+ef
+n
+p
+2
+
++8G
+t
+2
+82
+n
+p
+3
+
+
+
+w
+FDISK
+
+sleep 1
+
+var P
+case (DISK) {
+    *nvme*|*mmcblk* { setvar P = "${DISK}p" }
+    *               { setvar P = DISK }
+}
+
+echo "==> Formatting partitions"
+mkfs.vfat -F32 -n KOMINKA_EFI "${P}1"
+mkswap -L KOMINKA_SWAP "${P}2"
+mkfs.ext4 -q -L KOMINKA_ROOT "${P}3"
+
+echo "==> Mounting target"
+mkdir -p $MNT
+mount "${P}3" $MNT
+mkdir -p "${MNT}/boot"
+mount "${P}1" "${MNT}/boot"
+
+echo "==> Copying rootfs"
+for dir in usr etc var root {
+    if test -d "/$dir" { cp -a "/$dir" "${MNT}/" }
+}
+mkdir -p "${MNT}/dev" "${MNT}/proc" "${MNT}/sys" "${MNT}/tmp" "${MNT}/mnt"
+ln -sf usr/bin "${MNT}/bin"
+ln -sf usr/bin "${MNT}/sbin"
+ln -sf usr/lib "${MNT}/lib"
+
+rm -f "${MNT}/usr/bin/pm-install"
+
+echo "==> Installing kernel"
+install_kernel
+
+echo "==> Writing fstab"
+cat > "${MNT}/etc/fstab" <<'EOF'
+LABEL=KOMINKA_ROOT  /      ext4  defaults  0 0
+LABEL=KOMINKA_EFI   /boot  vfat  defaults  0 0
+LABEL=KOMINKA_SWAP  none   swap  defaults  0 0
+EOF
+
+echo ""
+echo "==> Setting up user account"
+echo ""
+printf "Username: "
+var NEW_USER; read --line (&NEW_USER)
+
+if (NEW_USER !== '') {
+    grep -q '^wheel:' "${MNT}/etc/group" || echo "wheel:x:10:" >> "${MNT}/etc/group"
+
+    echo "${NEW_USER}:x:1000:1000:${NEW_USER}:/home/${NEW_USER}:/bin/sh" \
+        >> "${MNT}/etc/passwd"
+    echo "${NEW_USER}:!:14871::::::" >> "${MNT}/etc/shadow"
+
+    if grep -q '^wheel:.*:$' "${MNT}/etc/group" {
+        sed -i "s/^wheel:\\(.*\\):\$/wheel:\\1:${NEW_USER}/" "${MNT}/etc/group"
+    } else {
+        sed -i "s/^wheel:\\(.*\\)/wheel:\\1,${NEW_USER}/" "${MNT}/etc/group"
+    }
+    echo "${NEW_USER}:x:1000:" >> "${MNT}/etc/group"
+
+    mkdir -p "${MNT}/home/${NEW_USER}"
+    chown 1000:1000 "${MNT}/home/${NEW_USER}"
+
+    echo ""
+    echo "Set password for ${NEW_USER}:"
+    chroot $MNT /usr/bin/busybox passwd $NEW_USER
+    echo ""
+    echo "  User '${NEW_USER}' created (wheel group, sudo access)."
+} else {
+    echo "  Skipped — root-only system."
+}
+
+echo ""
+echo "==> WiFi setup"
+var WLAN = ''
+for _d in @[glob('/sys/class/net/*/wireless')] {
+    if test -d $_d {
+        setvar WLAN = $(basename $(dirname $_d))
+        break
+    }
+}
+
+if (WLAN !== '') {
+    if test -f /etc/wifi.conf {
+        printf "Reuse WiFi config from this session on installed system? [Y/n] "
+        var _ans; read --line (&_ans)
+        if (_ans === 'n' or _ans === 'N') {
+            wifi-setup --target $MNT
+        } else {
+            cp /etc/wifi.conf "${MNT}/etc/wifi.conf"
+            cp /etc/wpa_supplicant.conf "${MNT}/etc/wpa_supplicant.conf" 2>/dev/null || true
+            chmod 600 "${MNT}/etc/wifi.conf" "${MNT}/etc/wpa_supplicant.conf" 2>/dev/null || true
+        }
+    } else {
+        printf "Wireless interface %s detected. Configure WiFi? [y/N] " $WLAN
+        var _ans; read --line (&_ans)
+        if (_ans === 'y' or _ans === 'Y') { wifi-setup --target $MNT }
+    }
+
+    if test -f "${MNT}/etc/wifi.conf" {
+        mkdir -p "${MNT}/var/service"
+        ln -sf /etc/sv/wifi "${MNT}/var/service/wifi"
+    }
+}
+
+echo ""
+echo "==> Unmounting"
+umount "${MNT}/boot"
+umount $MNT
+
+echo ""
+echo "Done! Kominka Linux installed to $DISK."
+if (MACHINE_NAME !== '') {
+    echo "Kernel: $MACHINE_PROFILE (built for $MACHINE_NAME)"
+}
+echo "Remove installer media and reboot."

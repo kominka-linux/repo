@@ -6,10 +6,14 @@ var rel     = '1'
 var deps    = ['core', 'e2fsprogs', 'dosfstools', 'wifi', 'zig', 'make', 'bison', 'perl', 'iwlwifi-firmware']
 var mkdeps  = []
 
-var sources = []
-var checksums = []
+var sources = [
+    'files/install.ysh',
+]
+var checksums = [
+    '097676a876f711ebca95c2f772149215e3ed65e3315d48b36a56e97b86b9f76e',
+]
 
 proc build(dest) {
-    # metapackage — no build step
-    true
+    mkdir -p "${dest}/usr/bin"
+    install -m755 install.ysh "${dest}/usr/bin/pm-install"
 }
