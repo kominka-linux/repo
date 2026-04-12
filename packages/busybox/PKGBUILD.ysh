@@ -123,10 +123,13 @@ proc build(dest) {
     try { grep -rl -- -lcrypt . 2>/dev/null | xargs sed -i 's/-lcrypt//g' }
     # Settle any new config symbols before the main build. Run oldconfig
     # until no NEW symbols remain; silentoldconfig aborts otherwise.
+    # Use a temp file to avoid pipeline-in-command-substitution (YSH strict_errexit).
+    var _oc_tmp = "/tmp/busybox-oc-${KOMINKA_PID}"
     while true {
-        var _out = $(yes '' | make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh oldconfig 2>&1 || true)
-        echo $_out | grep -q '(NEW)' || break
+        try { yes '' | make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh oldconfig > $_oc_tmp 2>&1 }
+        grep -q '(NEW)' $_oc_tmp || break
     }
+    rm -f $_oc_tmp
     # oldconfig regenerates config.mak.autogen which may re-add -lcrypt.
     # Strip it again after oldconfig so zig's strict linker doesn't fail.
     try { grep -rl -- -lcrypt . 2>/dev/null | xargs sed -i 's/-lcrypt//g' }
@@ -142,10 +145,12 @@ proc build(dest) {
 
     # Build and install suid busybox.
     cp -f .config-suid .config
+    var _oc_tmp2 = "/tmp/busybox-oc2-${KOMINKA_PID}"
     while true {
-        setvar _out = $(yes '' | make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh oldconfig 2>&1 || true)
-        echo $_out | grep -q '(NEW)' || break
+        try { yes '' | make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh oldconfig > $_oc_tmp2 2>&1 }
+        grep -q '(NEW)' $_oc_tmp2 || break
     }
+    rm -f $_oc_tmp2
     try { grep -rl -- -lcrypt . 2>/dev/null | xargs sed -i 's/-lcrypt//g' }
     make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh SKIP_STRIP=y
     make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh CONFIG_PREFIX="${dest}/usr" install
