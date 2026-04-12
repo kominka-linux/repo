@@ -61,7 +61,8 @@ while (i < len(ARGV)) {
         -g | -d | -p { setvar mode = "--strip-debug" }
         -R {
             setvar i = i + 1
-            setvar removes = removes ++ ["--remove-section=${ARGV[i]}"]
+            var sec = ARGV[i]
+            setvar removes = removes ++ ["--remove-section=$sec"]
         }
         * { if not (a ~ "^-") { setvar files = files ++ [a] } }
     }
