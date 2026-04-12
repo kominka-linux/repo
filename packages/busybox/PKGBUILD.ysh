@@ -125,7 +125,7 @@ proc build(dest) {
     # until no NEW symbols remain; silentoldconfig aborts otherwise.
     while true {
         var _out = $(yes '' | make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh oldconfig 2>&1 || true)
-        if ! (echo $_out | grep -q '(NEW)') { break }
+        echo $_out | grep -q '(NEW)' || break
     }
     # oldconfig regenerates config.mak.autogen which may re-add -lcrypt.
     # Strip it again after oldconfig so zig's strict linker doesn't fail.
@@ -144,7 +144,7 @@ proc build(dest) {
     cp -f .config-suid .config
     while true {
         var _out = $(yes '' | make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh oldconfig 2>&1 || true)
-        if ! (echo $_out | grep -q '(NEW)') { break }
+        echo $_out | grep -q '(NEW)' || break
     }
     try { grep -rl -- -lcrypt . 2>/dev/null | xargs sed -i 's/-lcrypt//g' }
     make HOSTCC=$HOSTCC SHELL=/usr/local/bin/ysh SKIP_STRIP=y
