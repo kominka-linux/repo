@@ -1,0 +1,33 @@
+#!/usr/local/bin/ysh
+
+var name    = 'wpa_supplicant'
+var ver     = '2.11'
+var rel     = '1'
+var deps    = ['glibc', 'libnl']
+var mkdeps  = ['zig', 'make']
+
+var sources   = ['https://w1.fi/releases/wpa_supplicant-VERSION.tar.gz']
+var checksums = ['912ea06f74e30a8e36fbb68064d6cdff218d8d591db0fc5d75dee6c81ac7fc0a']
+
+proc build(dest) {
+    var _kr = ENV => get("KOMINKA_ROOT", "")
+    if (_kr === '/') { setvar _kr = '' }
+
+    cd wpa_supplicant
+
+    cp -f ../files/.config .config
+
+    # Point pkg-config at our libnl installation.
+    var _pc = "${_kr}/usr/lib/pkgconfig"
+
+    PKG_CONFIG_PATH=$_pc \
+    PKG_CONFIG_SYSROOT_DIR=$_kr \
+    make -j$(nproc) \
+        CC=$CC \
+        CFLAGS="${CFLAGS} -I${_kr}/usr/include" \
+        LDFLAGS="${LDFLAGS} -L${_kr}/usr/lib"
+
+    install -Dm755 wpa_supplicant   "${dest}/usr/sbin/wpa_supplicant"
+    install -Dm755 wpa_cli          "${dest}/usr/sbin/wpa_cli"
+    install -Dm755 wpa_passphrase   "${dest}/usr/bin/wpa_passphrase"
+}

@@ -3,7 +3,7 @@
 var name    = 'liveiso'
 var ver     = '1'
 var rel     = '1'
-var deps    = ['core', 'e2fsprogs', 'dosfstools']
+var deps    = ['core', 'e2fsprogs', 'dosfstools', 'wifi']
 var mkdeps  = []
 
 var sources = []

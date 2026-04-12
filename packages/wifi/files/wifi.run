@@ -1,0 +1,30 @@
+#!/bin/sh
+# runit service: wifi
+# Runs wpa_supplicant for the configured interface; wpa_supplicant calls
+# /usr/lib/wifi/action.sh on CONNECTED/DISCONNECTED to drive udhcpc.
+
+[ -f /etc/wifi.conf ] || exec sv stop wifi
+
+# shellcheck disable=SC1091
+. /etc/wifi.conf
+[ -n "$IFACE" ] || exec sv stop wifi
+
+# Regenerate wpa_supplicant.conf if wifi.conf is newer (password change etc.).
+if [ ! -f /etc/wpa_supplicant.conf ] || \
+   [ /etc/wifi.conf -nt /etc/wpa_supplicant.conf ]; then
+    {
+        echo 'ctrl_interface=/run/wpa_supplicant'
+        echo 'ctrl_interface_group=0'
+        wpa_passphrase "$SSID" "$PSK" | grep -v '#psk='
+    } > /etc/wpa_supplicant.conf
+    chmod 600 /etc/wpa_supplicant.conf
+fi
+
+mkdir -p /run/wpa_supplicant
+ip link set "$IFACE" up
+
+# Run wpa_supplicant in the foreground; runit supervises it.
+# -a: action script called on CONNECTED / DISCONNECTED events.
+exec wpa_supplicant -D nl80211 -i "$IFACE" \
+    -c /etc/wpa_supplicant.conf \
+    -a /usr/lib/wifi/action.sh

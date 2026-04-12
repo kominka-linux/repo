@@ -1,0 +1,33 @@
+#!/usr/local/bin/ysh
+
+var name    = 'wifi'
+var ver     = '1.0.0'
+var rel     = '1'
+var deps    = ['wpa_supplicant', 'busybox', 'ysh']
+var mkdeps  = []
+
+var sources   = []
+var checksums = []
+
+proc build(dest) {
+
+    mkdir -p \
+        "${dest}/usr/bin" \
+        "${dest}/usr/lib/wifi" \
+        "${dest}/etc/sv/wifi"
+
+    # Interactive setup script (called from installer and by user directly).
+    cp -f wifi-setup "${dest}/usr/bin/wifi-setup"
+    chmod +x "${dest}/usr/bin/wifi-setup"
+
+    # wpa_supplicant action script: drives udhcpc on association events.
+    cp -f action.sh "${dest}/usr/lib/wifi/action.sh"
+    chmod +x "${dest}/usr/lib/wifi/action.sh"
+
+    # runit service.
+    cp -f wifi.run "${dest}/etc/sv/wifi/run"
+    chmod +x "${dest}/etc/sv/wifi/run"
+
+    # runit supervise symlink (runit requires this to be a symlink to a writable dir).
+    ln -sf "/run/runit/supervise.wifi" "${dest}/etc/sv/wifi/supervise"
+}

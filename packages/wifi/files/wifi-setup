@@ -1,0 +1,193 @@
+#!/usr/local/bin/ysh
+# wifi-setup — interactive WiFi configuration for Kominka Linux.
+# Usage: wifi-setup [--target DIR]
+#
+# Scans for networks, prompts for SSID and password, connects, then
+# writes /etc/wifi.conf and /etc/wpa_supplicant.conf (to --target if given).
+
+var target = ''
+
+var i = 0
+while (i < len(ARGV)) {
+    if (ARGV[i] === '--target') {
+        setvar i = i + 1
+        setvar target = ARGV[i]
+    }
+    setvar i = i + 1
+}
+
+proc die(msg) { echo $msg >&2; exit 1 }
+
+proc detect_iface() {
+    ### First wireless interface in /sys/class/net/*/wireless, or ''.
+    for d in @[glob('/sys/class/net/*/wireless')] {
+        echo $(basename $(dirname $d))
+        return
+    }
+    echo ''
+}
+
+proc scan(iface) {
+    ### Print unique SSIDs, one per line.
+    mkdir -p /tmp/wpa-scan-ctrl
+    write -- 'ctrl_interface=/tmp/wpa-scan-ctrl' > /tmp/wpa-scan.conf
+
+    wpa_supplicant -B -D nl80211 -i $iface \
+        -c /tmp/wpa-scan.conf \
+        -P /tmp/wpa-scan.pid 2>/dev/null
+
+    wpa_cli -p /tmp/wpa-scan-ctrl -i $iface scan > /dev/null 2>&1
+    sleep 2
+
+    wpa_cli -p /tmp/wpa-scan-ctrl -i $iface scan_results 2>/dev/null \
+        | tail -n +2 \
+        | awk '{
+            # Fields: bssid freq signal flags ssid(s with spaces)
+            # Skip lines with empty SSID (hidden networks)
+            if (NF >= 5 && $5 != "") {
+                # Collect all SSID fields in case of spaces
+                ssid = $5
+                for (j=6; j<=NF; j++) ssid = ssid " " $j
+                print ssid
+            }
+          }' \
+        | sort -u
+
+    kill $(cat /tmp/wpa-scan.pid 2>/dev/null) 2>/dev/null || true
+    rm -f /tmp/wpa-scan.conf /tmp/wpa-scan.pid
+    rm -rf /tmp/wpa-scan-ctrl
+}
+
+proc try_connect(iface, ssid, psk) {
+    ### Generate config, start wpa_supplicant, wait for association.
+    ### Returns 0 on success, 1 on timeout.
+
+    # Kill any running wpa_supplicant on this interface.
+    kill $(cat /run/wpa_supplicant.pid 2>/dev/null) 2>/dev/null || true
+    sleep 0.3
+
+    mkdir -p /run/wpa_supplicant
+
+    # Prepend ctrl_interface, then append wpa_passphrase output (sans plaintext comment).
+    {
+        echo 'ctrl_interface=/run/wpa_supplicant'
+        echo 'ctrl_interface_group=0'
+        wpa_passphrase $ssid $psk | grep -v '#psk='
+    } > /tmp/wpa-connect.conf
+
+    wpa_supplicant -B -D nl80211 -i $iface \
+        -c /tmp/wpa-connect.conf \
+        -P /run/wpa_supplicant.pid \
+        -a /usr/lib/wifi/action.sh 2>/dev/null
+
+    var t = 0
+    while (t < 20) {
+        var state = $(wpa_cli -i $iface status 2>/dev/null \
+                      | grep '^wpa_state=' | cut -d= -f2)
+        if (state === 'COMPLETED') {
+            return 0
+        }
+        sleep 1
+        setvar t = t + 1
+    }
+    return 1
+}
+
+proc write_config(iface, ssid, psk) {
+    var etc = "${target}/etc"
+    mkdir -p $etc
+
+    write -- """
+IFACE=$iface
+SSID=$ssid
+PSK=$psk
+""" > "${etc}/wifi.conf"
+    chmod 600 "${etc}/wifi.conf"
+
+    {
+        echo 'ctrl_interface=/run/wpa_supplicant'
+        echo 'ctrl_interface_group=0'
+        wpa_passphrase $ssid $psk | grep -v '#psk='
+    } > "${etc}/wpa_supplicant.conf"
+    chmod 600 "${etc}/wpa_supplicant.conf"
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+var iface = $(detect_iface)
+if (iface === '') {
+    echo 'No wireless interface detected.'
+    exit 0
+}
+
+echo "Wireless interface: $iface"
+
+ip link set $iface up
+
+echo 'Scanning for networks...'
+var ssids = @(scan $iface)
+
+if (len(ssids) > 0) {
+    echo ''
+    echo 'Available networks:'
+    var n = 1
+    for s in (ssids) {
+        printf '  %2d) %s\n' $n $s
+        setvar n = n + 1
+    }
+    echo ''
+} else {
+    echo 'No networks found (you can still enter an SSID manually).'
+    echo ''
+}
+
+while true {
+    printf 'SSID (number or name, blank to skip): '
+    var input
+    read --line input
+    if (input === '') {
+        echo 'WiFi setup skipped.'
+        exit 0
+    }
+
+    var ssid = input
+    # If a number was given and it's in range, use that SSID.
+    if (input ~ '[0-9]+') {
+        var idx = int(input)
+        if (idx >= 1 and idx <= len(ssids)) {
+            setvar ssid = ssids[idx - 1]
+        }
+    }
+
+    printf 'Password for "%s": ' $ssid
+    stty -echo
+    var psk
+    read --line psk
+    stty echo
+    echo ''
+
+    printf 'Connecting to "%s"...' $ssid
+    if (try_connect $iface $ssid $psk) {
+        echo ' connected.'
+
+        # Get IP via DHCP.
+        udhcpc -i $iface -q -s /etc/udhcpc.sh 2>/dev/null || true
+        var ip = $(ip addr show $iface 2>/dev/null \
+                   | grep 'inet ' | awk '{print $2}' | cut -d/ -f1)
+        if (ip !== '') {
+            echo "IP address: $ip"
+        }
+
+        write_config $iface $ssid $psk
+        echo "WiFi credentials saved."
+        exit 0
+    } else {
+        echo ' failed.'
+        printf 'Try again? [Y/n] '
+        var ans
+        read --line ans
+        if (ans === 'n' or ans === 'N') {
+            exit 1
+        }
+    }
+}

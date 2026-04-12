@@ -1,0 +1,26 @@
+#!/usr/local/bin/ysh
+
+var name    = 'libnl'
+var ver     = '3.10.0'
+var rel     = '1'
+var deps    = ['glibc']
+var mkdeps  = ['zig', 'make']
+
+var sources   = ['https://github.com/thom311/libnl/releases/download/libnl3_10_0/libnl-VERSION.tar.gz']
+var checksums = ['49b3e2235fdb58f5910bbb3ed0de8143b71ffc220571540502eb6c2471f204f5']
+
+proc build(dest) {
+    ./configure \
+        --prefix=/usr \
+        --disable-static \
+        --disable-cli \
+        --disable-debug
+
+    make
+    make DESTDIR=$dest install
+
+    # Remove unneeded dev files; keep only the shared libraries.
+    rm -rf "${dest}/usr/include" \
+           "${dest}/usr/lib/pkgconfig" \
+           "${dest}/usr/share"
+}
