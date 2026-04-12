@@ -61,6 +61,21 @@ proc build(dest) {
     try { command -v gcc >/dev/null 2>&1 }
     if ! failed { setvar HOSTCC = 'gcc' }
 
+    # CONFIG_USE_BB_CRYPT=y means busybox has its own crypt — no libcrypt needed.
+    # However, make oldconfig regenerates config.mak.autogen with -lcrypt based
+    # on autodetection even with USE_BB_CRYPT=y. zig's linker errors on missing
+    # dynamic libs (unlike gcc which silently ignores them). Wrap CC to silently
+    # drop -lcrypt from every link invocation so it never reaches zig ld.
+    var CC_WRAPPED = "/tmp/busybox-cc-wrapper-$$"
+    write -- '#!/bin/sh
+args=""
+for a in "$@"; do
+  case "$a" in -lcrypt) ;; *) args="$args \"$a\"";; esac
+done
+eval exec ' ++ $CC ++ ' $args' > $CC_WRAPPED
+    chmod +x $CC_WRAPPED
+    setvar CC = CC_WRAPPED
+
     for patch in @[glob('patch/*.patch')] {
         patch -p1 < $patch
     }
@@ -176,4 +191,6 @@ proc build(dest) {
     mkdir -p "${dest}/etc"
     cp -f udhcpc.sh "${dest}/etc/udhcpc.sh"
     chmod +x "${dest}/etc/udhcpc.sh"
+
+    rm -f $CC_WRAPPED
 }
