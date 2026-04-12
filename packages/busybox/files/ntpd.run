@@ -1,8 +1,9 @@
-#!/bin/busybox sh
-
+#!/usr/local/bin/ysh
+# runit service: ntpd
 # Wait for a DHCP lease before starting NTP.
-while [ ! -f /run/network-up ]; do
+
+while ! test -f /run/network-up {
     sleep 2
-done
+}
 
 exec ntpd -n -N -p pool.ntp.org

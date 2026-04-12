@@ -1,2 +1,2 @@
-#!/bin/busybox sh
+#!/usr/local/bin/ysh
 exec getty 115200 hvc0

@@ -2,7 +2,7 @@
 
 var name    = 'wifi'
 var ver     = '1.0.0'
-var rel     = '2'
+var rel     = '3'
 var deps    = ['wpa_supplicant', 'busybox', 'ysh']
 var mkdeps  = []
 
@@ -14,9 +14,9 @@ var sources = [
 ]
 var checksums = [
     '660f1dea106ac35de06ec8ff4f4bb4279cef67c78b8131bd1dd7636aba90c726',
-    '0b1a873a3889776d66cc5b2e5b77d7a821d9aa9d52ac7b35487c8d44cbfa1eed',
-    'f9fc8a036f77a92f8444a08a6422065730ffa93cb696371594d821476f3a1a13',
-    'f1748ecb6b136e1b4f94da6b268cb0b7cd725e7557287df7ecfed68a6576220b',
+    'bc813a4f80a40ea7d0ce0d900f956fd92e4e2ce621751a1acc629fc6239d00a1',
+    '40cff5755dacc0f7e883382756e2fd5d36c7c2c5c01ebb2b9b731ae934e98d2c',
+    '319ac5bd99d3e067fe322a0bade79b6deed0783c1fe671e3f3fa1de682c72505',
 ]
 
 proc build(dest) {

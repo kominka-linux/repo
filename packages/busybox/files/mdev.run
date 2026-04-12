@@ -1,8 +1,7 @@
-#!/bin/busybox sh
+#!/usr/local/bin/ysh
+# runit service: mdev
+# Clear the legacy hotplug handler so mdev takes over device events.
 
-# Null the legacy hotplugger as the
-# service will take over from here.
-printf '\n' 2>/dev/null \
-    > /proc/sys/kernel/hotplug
+echo '' > /proc/sys/kernel/hotplug
 
 exec mdev -df

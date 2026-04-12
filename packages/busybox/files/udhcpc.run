@@ -1,9 +1,10 @@
-#!/bin/busybox sh
+#!/usr/local/bin/ysh
+# runit service: udhcpc
+# Wait for the ethernet interface, bring it up, then request a DHCP lease.
 
-# Wait for network device to appear.
-while ! ip link show eth0 >/dev/null 2>&1; do
+while ! ip link show eth0 >/dev/null 2>&1 {
     sleep 1
-done
+}
 
 ip link set eth0 up
 

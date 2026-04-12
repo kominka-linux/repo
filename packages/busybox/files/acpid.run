@@ -1,2 +1,2 @@
-#!/bin/busybox sh
+#!/usr/local/bin/ysh
 exec acpid -f
