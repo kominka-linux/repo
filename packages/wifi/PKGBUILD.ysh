@@ -8,13 +8,13 @@ var mkdeps  = []
 
 var sources = [
     'files/wifi-setup',
-    'files/action.sh',
+    'files/action.ysh',
     'files/wifi.run',
-    'files/wifi.finish',
+    'files/wifi.finish.ysh',
 ]
 var checksums = [
     '660f1dea106ac35de06ec8ff4f4bb4279cef67c78b8131bd1dd7636aba90c726',
-    'bc813a4f80a40ea7d0ce0d900f956fd92e4e2ce621751a1acc629fc6239d00a1',
+    '87a4244f3895211e446aa116f955eb6a031e02c9051d09e0ad91e7995511aa83',
     '40cff5755dacc0f7e883382756e2fd5d36c7c2c5c01ebb2b9b731ae934e98d2c',
     '319ac5bd99d3e067fe322a0bade79b6deed0783c1fe671e3f3fa1de682c72505',
 ]
@@ -27,9 +27,9 @@ proc build(dest) {
         "${dest}/etc/sv/wifi"
 
     install -m755 wifi-setup   "${dest}/usr/bin/wifi-setup"
-    install -m755 action.sh    "${dest}/usr/lib/wifi/action.sh"
+    install -m755 action.ysh    "${dest}/usr/lib/wifi/action.sh"
     install -m755 wifi.run     "${dest}/etc/sv/wifi/run"
-    install -m755 wifi.finish  "${dest}/etc/sv/wifi/finish"
+    install -m755 wifi.finish.ysh  "${dest}/etc/sv/wifi/finish"
 
     ln -sf "/run/runit/supervise.wifi" "${dest}/etc/sv/wifi/supervise"
 }

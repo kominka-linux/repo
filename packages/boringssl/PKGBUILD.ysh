@@ -8,11 +8,11 @@ var mkdeps  = ['zig', 'cmake', 'go', 'samurai']
 
 var sources = [
     'https://github.com/google/boringssl/releases/download/VERSION/boringssl-VERSION.tar.gz',
-    'files/update-certdata.sh',
+    'files/update-certdata.ysh',
 ]
 var checksums = [
     '6af7037a8891d0e3d097dd61de6d195f6c2b532ed69d138a16da47c06a6cd022',
-    'd4bfcd9ee16eff65bdf6de1e0a3ccac667fdf52d98d0eda5c3e3f638aad13b89',
+    'd32f71803c7c6d3fc85ae36a25ae90a8811c3a7b59e6e8ba7c7f9b67cd1d8ff8',
 ]
 
 proc build(dest) {
@@ -40,7 +40,7 @@ proc build(dest) {
     cp build/libssl.so "${dest}/usr/lib/"
     cp build/libcrypto.so "${dest}/usr/lib/"
 
-    cp -f update-certdata.sh "${dest}/etc/ssl"
+    cp -f update-certdata.ysh "${dest}/etc/ssl"
 
     # pkg-config files for curl and other consumers.
     write -- '''prefix=/usr

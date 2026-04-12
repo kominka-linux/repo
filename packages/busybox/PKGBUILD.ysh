@@ -28,7 +28,7 @@ var sources = [
     'files/getty-hvc0.run',
     'files/getty-tty1.run',
     'files/udhcpc.run',
-    'files/udhcpc.sh',
+    'files/udhcpc.ysh',
 ]
 var checksums = [
     'b8cc24c9574d809e7279c3be349795c5d5ceb6fdf19ca709f80cde50e47de314',
@@ -52,7 +52,7 @@ var checksums = [
     'b27164ddb8d42a4b37768f270665fb9f48ccf879bcb28f0ed0aacce2c0517272',
     'b97efe82ead30cb551aa8848168507c9019c0bdeb442a29a464117948b8520eb',
     '971e546215f013678c96fff910d71224ea085eea5ad82d5d88fbe2205316e709',
-    'ebb9d26bb2c71ce4a90ade8ea880d198dfd85d2a89bb88e5b718eda89adcd014',
+    '89d3c2954ca89943b740d14ad5fab9ef5a85fbb7a8b60c9b579a542dd486be75',
 ]
 
 proc build(dest) {
@@ -191,6 +191,6 @@ proc build(dest) {
 
     # udhcpc lease script.
     mkdir -p "${dest}/etc"
-    cp -f udhcpc.sh "${dest}/etc/udhcpc.sh"
+    cp -f udhcpc.ysh "${dest}/etc/udhcpc.sh"
     chmod +x "${dest}/etc/udhcpc.sh"
 }

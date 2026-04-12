@@ -8,11 +8,11 @@ var mkdeps  = []
 
 var sources = [
     'files/cacert.pem',
-    'files/update-certdata.sh',
+    'files/update-certdata.ysh',
 ]
 var checksums = [
     'b6e66569cc3d438dd5abe514d0df50005d570bfc96c14dca8f768d020cb96171',
-    'ba606f695fe55175e2d521cbefdb80edcb226d4ae6905ca9f4fb5f5b17ad11ff',
+    'a5661ec7b1b9c14cc26c2d05948821b666f94ded3c1273f87e2419bb4dbf9d4c',
 ]
 
 proc build(dest) {
@@ -21,6 +21,6 @@ proc build(dest) {
     cp cacert.pem "${dest}/etc/ssl/certs/ca-certificates.crt"
 
     mkdir -p "${dest}/usr/bin"
-    cp update-certdata.sh "${dest}/usr/bin/update-certdata"
+    cp update-certdata.ysh "${dest}/usr/bin/update-certdata"
     chmod +x "${dest}/usr/bin/update-certdata"
 }
