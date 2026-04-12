@@ -137,6 +137,9 @@ jobs:
                 chmod +x "${DB}/${tool}/build"
                 touch "${DB}/${tool}/manifest"
               done
+              # Prepend KOMINKA_ROOT bin dirs so mkdep-installed zig cc/c++
+              # wrappers shadow Debian's gcc during build procs.
+              export PATH=/kominka-root/usr/local/bin:/kominka-root/usr/bin:$PATH
               pm b "${{ inputs.package }}"
               for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
                 [ -f "$f" ] && cp "$f" /out/
