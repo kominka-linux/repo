@@ -62,7 +62,7 @@ jobs:
           docker build \
             --build-context packages=packages \
             --build-context pm=pm \
-            --build-arg R2_MIRROR=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev \
+            --build-arg REPO_URL=https://kominka.17166969.xyz \
             -t kominka:core .
           docker save kominka:core | gzip > /tmp/kominka-core.tar.gz
 
@@ -78,7 +78,7 @@ jobs:
             -v "$PWD/packages:/packages:ro" \
             -v "$PWD/pm/pm.ysh:/usr/bin/pm:ro" \
             -v "$PWD/out:/out" \
-            -e KOMINKA_REPO="${{ secrets.KOMINKA_REPO }}" \
+            -e KOMINKA_REPO='https://kominka.17166969.xyz' \
             -e KOMINKA_TOKEN="$KOMINKA_TOKEN" \
             -e KOMINKA_PATH=/packages \
             -e KOMINKA_COMPRESS=gz \
@@ -86,17 +86,15 @@ jobs:
             -e KOMINKA_PROMPT=0 \
             -e KOMINKA_FORCE=1 \
             -e KOMINKA_GET=/usr/bin/curl \
-            -e KOMINKA_INSECURE=1 \
             -e LD_LIBRARY_PATH=/usr/lib \
             -e LOGNAME=root \
             -e HOME=/root \
             kominka:core sh -c '
               pm b "${{ inputs.package }}"
-              ldconfig 2>/dev/null
               for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
                 [ -f "$f" ] && cp "$f" /out/
               done
-              pm p "${{ inputs.package }}" || true'
+              pm p "${{ inputs.package }}"'
 
       # ── Debian builder path (amd64 always, arm64 if debian=true) ────────
 
@@ -116,7 +114,7 @@ jobs:
             -v "$PWD/packages:/packages:ro" \
             -v "$PWD/pm/pm.ysh:/usr/bin/pm:ro" \
             -v "$PWD/out:/out" \
-            -e KOMINKA_REPO="${{ secrets.KOMINKA_REPO }}" \
+            -e KOMINKA_REPO='https://kominka.17166969.xyz' \
             -e KOMINKA_TOKEN="$KOMINKA_TOKEN" \
             -e KOMINKA_PATH=/packages \
             -e KOMINKA_ROOT=/kominka-root \
@@ -125,12 +123,14 @@ jobs:
             -e KOMINKA_PROMPT=0 \
             -e KOMINKA_FORCE=1 \
             -e KOMINKA_GET=/usr/bin/curl \
-            -e KOMINKA_INSECURE=1 \
             -e LOGNAME=root \
             -e HOME=/root \
             kominka-debian-builder bash -ec '
               DB=/kominka-root/var/db/kominka/installed
-              for tool in make bison m4 flex bc perl cmake ninja python3 glibc go cargo muon samurai zig; do
+              # Pre-register system tools so pm does not attempt to install
+              # Kominka packages over the Debian toolchain. glibc especially
+              # must not be overwritten; zig is absent here (builds use gcc).
+              for tool in glibc zig make bison m4 flex bc perl cmake ninja go cargo muon samurai; do
                 mkdir -p "${DB}/${tool}"
                 printf "system 1\n" > "${DB}/${tool}/version"
                 printf "#!/bin/sh\n:\n" > "${DB}/${tool}/build"
@@ -141,7 +141,7 @@ jobs:
               for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
                 [ -f "$f" ] && cp "$f" /out/
               done
-              pm p "${{ inputs.package }}" || true'
+              pm p "${{ inputs.package }}"'
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
