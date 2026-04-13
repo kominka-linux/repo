@@ -1,16 +1,7 @@
 # Build environment: kominka:core + busybox (full utils) + binutils-strip + make.
 # Used by CI for all zig-cc package builds.
-#
-# Bootstrap note: our published busybox predates many applets (uname, date, ...).
-# Copy Alpine's full busybox (also musl-linked) so pm has everything it needs.
-# Once our busybox is rebuilt against musl this layer becomes a no-op.
 
-FROM busybox AS static-bb
 FROM kominka:core
-
-# busybox:latest is statically linked — runs without any dynamic linker.
-COPY --from=static-bb /bin/busybox /usr/bin/busybox
-RUN /usr/bin/busybox --install -s /usr/bin/
 
 ARG REPO_URL=https://kominka.17166969.xyz
 ENV LD_LIBRARY_PATH=/usr/lib \

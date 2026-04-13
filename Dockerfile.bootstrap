@@ -1,0 +1,25 @@
+# Bootstrap build environment based on Alpine Linux.
+# Alpine has musl at /lib/ — the path zig cc embeds in ELF interpreters —
+# so packages built with zig cc run correctly here.
+# Used until our own musl+busybox are published to the Kominka repo.
+
+FROM alpine:latest
+
+ARG R2_BASE=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
+
+RUN apk add --no-cache curl xz patch
+
+# ysh is a static musl binary — runs on any Linux.
+RUN ARCH=$(uname -m) && \
+    case "$ARCH" in \
+        x86_64)  KARCH="x86_64-linux-gnu" ;; \
+        aarch64) KARCH="aarch64-linux-gnu" ;; \
+    esac && \
+    curl -fsSL "$R2_BASE/$KARCH/ysh/0.37.0-2.tar.gz" | tar xzf - -C / ./usr/local/bin/
+
+COPY --from=pm pm.ysh /usr/bin/pm
+RUN chmod +x /usr/bin/pm
+
+ENV LD_LIBRARY_PATH=/usr/lib \
+    LOGNAME=root \
+    HOME=/root
