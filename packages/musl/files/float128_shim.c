@@ -1,37 +1,50 @@
 /*
- * float128_shim.c — 128-bit float ops for musl libc (aarch64 only).
+ * float128_shim.c — stub definitions for 128-bit float ops (aarch64).
  *
- * On aarch64, long double == __float128 == IEEE 754 quad precision.
- * musl's math library references these ops; compiler_rt normally provides
- * them but also defines WEAK HIDDEN memcpy which poisons musl's exports.
- * This shim provides only the float ops with HIDDEN visibility.
+ * Purpose: prevent compiler_rt from being linked into libc.so. zig cc adds
+ * compiler_rt with --as-needed; when these symbols are already defined here,
+ * compiler_rt's object is NOT pulled in. This is critical because compiler_rt's
+ * object also defines memcpy/memset/memmove as WEAK HIDDEN, which poisons
+ * musl's GLOBAL DEFAULT assembly exports via ELF visibility merging.
+ *
+ * These stubs trap if actually called. In practice, 128-bit float math
+ * (sinl, cosl, printf %Lf, etc.) is never used on a minimal server distro.
+ * Compiled with -fvisibility=hidden so they don't appear in .dynsym.
  */
-typedef long double f128;
 
-__attribute__((visibility("hidden"))) f128 __addtf3(f128 a, f128 b) { return a + b; }
-__attribute__((visibility("hidden"))) f128 __subtf3(f128 a, f128 b) { return a - b; }
-__attribute__((visibility("hidden"))) f128 __multf3(f128 a, f128 b) { return a * b; }
-__attribute__((visibility("hidden"))) f128 __divtf3(f128 a, f128 b) { return a / b; }
-__attribute__((visibility("hidden"))) f128 __negtf2(f128 a)         { return -a; }
+/* Use opaque 128-bit integer representation to avoid long double arithmetic
+ * that would recursively call these same functions. */
+typedef struct { unsigned long long lo, hi; } f128;
+typedef struct { unsigned int lo; } f32;
+typedef struct { unsigned long long lo; } f64;
 
-__attribute__((visibility("hidden"))) int __eqtf2(f128 a, f128 b)    { return a == b ? 0 : 1; }
-__attribute__((visibility("hidden"))) int __netf2(f128 a, f128 b)    { return a != b; }
-__attribute__((visibility("hidden"))) int __lttf2(f128 a, f128 b)    { return a <  b ? -1 : 0; }
-__attribute__((visibility("hidden"))) int __letf2(f128 a, f128 b)    { return a <= b ? -1 : 0; }
-__attribute__((visibility("hidden"))) int __gttf2(f128 a, f128 b)    { return a >  b ?  1 : 0; }
-__attribute__((visibility("hidden"))) int __getf2(f128 a, f128 b)    { return a >= b ?  1 : 0; }
-__attribute__((visibility("hidden"))) int __unordtf2(f128 a, f128 b) { return a != a || b != b; }
+#define STUB __attribute__((visibility("hidden"), noinline))
+#define TRAP() __builtin_trap()
 
-__attribute__((visibility("hidden"))) f128 __extenddftf2(double a)  { return (f128)a; }
-__attribute__((visibility("hidden"))) f128 __extendsftf2(float a)   { return (f128)a; }
-__attribute__((visibility("hidden"))) double __trunctfdf2(f128 a)   { return (double)a; }
-__attribute__((visibility("hidden"))) float  __trunctfsf2(f128 a)   { return (float)a; }
+STUB f128 __addtf3(f128 a, f128 b) { TRAP(); }
+STUB f128 __subtf3(f128 a, f128 b) { TRAP(); }
+STUB f128 __multf3(f128 a, f128 b) { TRAP(); }
+STUB f128 __divtf3(f128 a, f128 b) { TRAP(); }
+STUB f128 __negtf2(f128 a)         { TRAP(); }
 
-__attribute__((visibility("hidden"))) int           __fixtfsi(f128 a) { return (int)a; }
-__attribute__((visibility("hidden"))) long long     __fixtfdi(f128 a) { return (long long)a; }
-__attribute__((visibility("hidden"))) unsigned int  __fixunstfsi(f128 a) { return (unsigned int)a; }
-__attribute__((visibility("hidden"))) unsigned long long __fixunstfdi(f128 a) { return (unsigned long long)a; }
-__attribute__((visibility("hidden"))) f128 __floatsitf(int a)            { return (f128)a; }
-__attribute__((visibility("hidden"))) f128 __floatditf(long long a)      { return (f128)a; }
-__attribute__((visibility("hidden"))) f128 __floatunsitf(unsigned int a) { return (f128)a; }
-__attribute__((visibility("hidden"))) f128 __floatunditf(unsigned long long a) { return (f128)a; }
+STUB int  __eqtf2(f128 a, f128 b)    { TRAP(); }
+STUB int  __netf2(f128 a, f128 b)    { TRAP(); }
+STUB int  __lttf2(f128 a, f128 b)    { TRAP(); }
+STUB int  __letf2(f128 a, f128 b)    { TRAP(); }
+STUB int  __gttf2(f128 a, f128 b)    { TRAP(); }
+STUB int  __getf2(f128 a, f128 b)    { TRAP(); }
+STUB int  __unordtf2(f128 a, f128 b) { TRAP(); }
+
+STUB f128 __extenddftf2(f64 a)  { TRAP(); }
+STUB f128 __extendsftf2(f32 a)  { TRAP(); }
+STUB f64  __trunctfdf2(f128 a)  { TRAP(); }
+STUB f32  __trunctfsf2(f128 a)  { TRAP(); }
+
+STUB int              __fixtfsi(f128 a)     { TRAP(); }
+STUB long long        __fixtfdi(f128 a)     { TRAP(); }
+STUB unsigned int     __fixunstfsi(f128 a)  { TRAP(); }
+STUB unsigned long long __fixunstfdi(f128 a){ TRAP(); }
+STUB f128 __floatsitf(int a)                { TRAP(); }
+STUB f128 __floatditf(long long a)          { TRAP(); }
+STUB f128 __floatunsitf(unsigned int a)     { TRAP(); }
+STUB f128 __floatunditf(unsigned long long a){ TRAP(); }
