@@ -16,6 +16,8 @@ scripts/        Build .deb
 **2. Configure** — copy and fill in `server/kominka-repo.env.example`:
 
 ```sh
+ALLOWED_USERS=josh
+
 LISTEN_ADDR=127.0.0.1:3000
 S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
 S3_BUCKET=kominka-packages

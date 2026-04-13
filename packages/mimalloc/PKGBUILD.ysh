@@ -1,0 +1,45 @@
+#!/usr/local/bin/ysh
+
+var name    = 'mimalloc'
+var ver     = '2.2.7'
+var rel     = '1'
+var deps    = ['musl']
+var mkdeps  = ['zig']
+
+var sources = [
+    'https://github.com/microsoft/mimalloc/archive/refs/tags/vVERSION.tar.gz',
+]
+var checksums = [
+    '8e0ed89907a681276bff2e49e9a048b47ba51254ab60daf6b3c220acac456a95',
+]
+
+proc build(dest) {
+    var ARCH   = $(uname -m)
+    var zig_bin = $(command -v zig)
+    var target = "${ARCH}-linux-musl"
+
+    # mimalloc ships src/static.c which #includes every source file — no build
+    # system needed. -DMI_MALLOC_OVERRIDE enables malloc/free/realloc symbols
+    # so the library works as an LD_PRELOAD malloc replacement.
+    zig cc -shared -fPIC -O2 -DNDEBUG \
+        -target $target \
+        -Wno-date-time \
+        -I include \
+        -DMI_MALLOC_OVERRIDE \
+        src/static.c \
+        -o "libmimalloc.so.${ver}"
+
+    mkdir -p "${dest}/usr/lib"
+    cp "libmimalloc.so.${ver}" "${dest}/usr/lib/"
+    ln -sf "libmimalloc.so.${ver}" "${dest}/usr/lib/libmimalloc.so.2"
+    ln -sf "libmimalloc.so.${ver}" "${dest}/usr/lib/libmimalloc.so"
+
+    # Include headers for packages that link against mimalloc directly.
+    mkdir -p "${dest}/usr/include"
+    cp -r include/. "${dest}/usr/include/"
+
+    # Wire up system-wide preload so all programs use mimalloc's allocator.
+    # ld.so.preload is processed by musl's dynamic linker at startup.
+    mkdir -p "${dest}/etc"
+    echo /usr/lib/libmimalloc.so.2 > "${dest}/etc/ld.so.preload"
+}
