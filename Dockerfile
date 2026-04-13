@@ -22,7 +22,7 @@ ARG KARCH=aarch64-linux-gnu
 # Includes curl+deps so pm i core has a working HTTPS client (our busybox
 # wget uses external openssl which isn't present in the bootstrap environment).
 RUN mkdir -p /pkg && \
-    wget --no-check-certificate -qO- "$R2/$KARCH/musl/1.2.6-17.tar.gz"             | tar xzf - -C /pkg && \
+    wget --no-check-certificate -qO- "$R2/$KARCH/musl/1.2.6-23.tar.gz"             | tar xzf - -C /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/baselayout/1-9.tar.gz"            | tar xzf - -C /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/busybox/1.36.1-12.tar.gz"         | tar xzf - -C /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/ysh/0.37.0-4.tar.gz"              | tar xzf - -C /pkg && \
