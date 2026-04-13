@@ -14,9 +14,8 @@ proc build(dest) {
     if (_kr === '/') { setvar _kr = '' }
     var ssl_prefix = "${_kr}/usr"
 
-    # BoringSSL ships openssl/time.h (a compat shim).  curl's configure adds
+    # BoringSSL ships openssl/time.h (a compat shim). curl's configure adds
     # -isystem .../openssl which makes that file shadow the real <time.h>.
-    # Move it aside so struct tm / time() are found in the system libc header.
     if test -f "${_kr}/usr/include/openssl/time.h" {
         mv "${_kr}/usr/include/openssl/time.h" "${_kr}/usr/include/openssl/time.h.aside"
     }
@@ -24,19 +23,9 @@ proc build(dest) {
     var _cflags = ENV => get("CFLAGS", "-O2 -DNDEBUG") ++ " -Wno-error"
     var _ldflags = ENV => get("LDFLAGS", "") ++ " -L${_kr}/usr/lib"
 
-    # On Debian bootstrap: configure runs test binaries that load libcrypto.so.
-    # Without LD_LIBRARY_PATH the dynamic linker can't find it at runtime.
-    var _ld_lib = ENV => get("LD_LIBRARY_PATH", "")
-    if (_kr !== '') {
-        if (_ld_lib !== '') {
-            setvar _ld_lib = "${_kr}/usr/lib:${_ld_lib}"
-        } else {
-            setvar _ld_lib = "${_kr}/usr/lib"
-        }
-    }
-
-    CFLAGS=$_cflags LDFLAGS=$_ldflags LD_LIBRARY_PATH=$_ld_lib \
+    CFLAGS=$_cflags LDFLAGS=$_ldflags \
         PKG_CONFIG_PATH="${_kr}/usr/lib/pkgconfig" \
+        LD_LIBRARY_PATH="${_kr}/usr/lib" \
         ./configure \
         --prefix=/usr \
         --enable-ipv6 \
