@@ -2,7 +2,7 @@
 
 var name    = 'dropbear'
 var ver     = '2025.89'
-var rel     = '1'
+var rel     = '2'
 var deps    = ['zlib']
 var mkdeps  = ['zig', 'make']
 
@@ -10,11 +10,18 @@ var sources    = ['https://matt.ucc.asn.au/dropbear/releases/dropbear-VERSION.ta
 var checksums  = ['0d1f7ca711cfc336dc8a85e672cab9cfd8223a02fe2da0a4a7aeb58c9e113634']
 
 proc build(dest) {
+    var zig_bin = $(command -v zig)
+    var kr = ENV => get('KOMINKA_ROOT', '')
+    if (kr === '/') { setvar kr = '' }
+
     # Disable password auth — musl has no libcrypt.
     # Key-based auth is sufficient and more secure anyway.
     printf '#define DROPBEAR_SVR_PASSWORD_AUTH 0\n' > localoptions.h
 
-    ./configure \
+    env CC="$zig_bin cc" \
+        CFLAGS="-I${kr}/usr/include" \
+        LDFLAGS="-L${kr}/usr/lib" \
+        ./configure \
         --prefix=/usr \
         --sbindir=/usr/bin \
         --sysconfdir=/etc \

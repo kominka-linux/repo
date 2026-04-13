@@ -2,7 +2,7 @@
 
 var name    = 'xz'
 var ver     = '5.8.3'
-var rel     = '3'
+var rel     = '4'
 var deps    = []
 var mkdeps  = ['zig', 'make']
 
@@ -12,7 +12,10 @@ var checksums = ['fff1ffcf2b0da84d308a14de513a1aa23d4e9aa3464d17e64b9714bfdd0bbf
 proc build(dest) {
     var zig_bin = $(command -v zig)
 
-    env CC="$zig_bin cc" ./configure \
+    # CFLAGS=-O1: lld 20.x enforces strict aarch64 alignment for R_AARCH64_LDST32
+    # relocations. -O2 generates vectorized loads that hit unaligned addresses
+    # in xz's args.c; -O1 avoids those patterns.
+    env CC="$zig_bin cc" CFLAGS="-O1" ./configure \
         --prefix=/usr \
         --disable-doc \
         --disable-nls
