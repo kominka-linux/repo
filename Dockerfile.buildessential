@@ -5,10 +5,11 @@
 # Copy Alpine's full busybox (also musl-linked) so pm has everything it needs.
 # Once our busybox is rebuilt against musl this layer becomes a no-op.
 
-FROM alpine AS alpine
+FROM busybox AS static-bb
 FROM kominka:core
 
-COPY --from=alpine /bin/busybox /usr/bin/busybox
+# busybox:latest is statically linked — runs without any dynamic linker.
+COPY --from=static-bb /bin/busybox /usr/bin/busybox
 RUN /usr/bin/busybox --install -s /usr/bin/
 
 ARG REPO_URL=https://kominka.17166969.xyz
