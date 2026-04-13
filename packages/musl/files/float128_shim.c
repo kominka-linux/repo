@@ -48,3 +48,9 @@ STUB f128 __floatsitf(int a)                { TRAP(); }
 STUB f128 __floatditf(long long a)          { TRAP(); }
 STUB f128 __floatunsitf(unsigned int a)     { TRAP(); }
 STUB f128 __floatunditf(unsigned long long a){ TRAP(); }
+
+/* Complex multiply (C99 complex.h). Used by musl's <complex.h> functions.
+ * Signatures use void* to avoid complex ABI details — these stubs only trap. */
+STUB void __mulsc3(void) { TRAP(); }  /* float _Complex multiply */
+STUB void __muldc3(void) { TRAP(); }  /* double _Complex multiply */
+STUB void __multc3(void) { TRAP(); }  /* long double _Complex multiply */

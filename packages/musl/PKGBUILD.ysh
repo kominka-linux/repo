@@ -15,7 +15,7 @@ var sources = [
 var checksums = [
     'd585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a',
     'af99fd5b5861cb1aa65e2af14419a321118365d776206171764c5a01310082b1',
-    '3eb78572be16fa8d7cbd1a49f5c83a1ba1f0b1557d895923c2e4d6f5a37816af',
+    '13391c47d9acc811380f97cdab80d0c09228228440e547603bd28850531b1332',
 ]
 
 proc build(dest) {
@@ -78,13 +78,12 @@ proc build(dest) {
     }
 
     var tab = u'\u{09}'
-    # -Wl,--as-needed: zig cc adds ubsan_rt (without --as-needed) after our objects.
-    # --as-needed here applies to ALL subsequently-added archives including ubsan_rt.
-    # With -fno-sanitize=all in CFLAGS_AUTO, compiled .lo files have no UBSan calls,
-    # so ubsan_rt symbols are unreferenced → ubsan_rt NOT pulled in → no WEAK HIDDEN
-    # memcpy/memset/memmove from ubsan_rt.
-    var ldflags = "-Wl,--sort-section,alignment -Wl,--sort-common -Wl,--hash-style=both -Wl,--as-needed"
-    var recipe  = "${tab}${zig_bin} cc -shared -nostdlib -fno-sanitize=all ${ldflags} -Wl,-e,_dlstart -o \$@ \$(LOBJS) \$(LDSO_OBJS) ${float_shim_obj}"
+    # --rtlib=none: suppresses both ubsan_rt AND compiler_rt entirely.
+    # float128_shim.o provides stub __addtf3/__subtf3/etc. so linker references
+    # to those are satisfied without compiler_rt. ubsan_rt suppressed because
+    # -fno-sanitize=all in CFLAGS_AUTO means .lo files make no UBSan calls.
+    var ldflags = "-Wl,--sort-section,alignment -Wl,--sort-common -Wl,--hash-style=both"
+    var recipe  = "${tab}${zig_bin} cc -shared -nostdlib --rtlib=none -fno-sanitize=all ${ldflags} -Wl,-e,_dlstart -o \$@ \$(LOBJS) \$(LDSO_OBJS) ${float_shim_obj}"
     sed -i "s:${tab}.*-nostdlib -shared.*:${recipe}:" ../Makefile
 
     grep -q 'fno-sanitize' ../Makefile || { echo 'ERROR: Makefile patch did not apply' >&2; exit 1; }
