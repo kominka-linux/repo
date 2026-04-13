@@ -4,7 +4,7 @@ var name    = 'boringssl'
 var ver     = '0.20260327.0'
 var rel     = '8'
 var deps    = ['musl']
-var mkdeps  = ['zig', 'cmake', 'go', 'samurai']
+var mkdeps  = ['zig', 'cmake', 'samurai']
 
 var sources = [
     'https://github.com/google/boringssl/releases/download/VERSION/boringssl-VERSION.tar.gz',
