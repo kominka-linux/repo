@@ -81,6 +81,15 @@ jobs:
             -e LOGNAME=root \
             -e HOME=/root \
             kominka:bootstrap /usr/local/bin/ysh -c '
+              # Pre-register Alpine system tools so pm skips them as makedeps.
+              # Alpine provides make, perl, linux-headers natively.
+              for tool in (make perl linux) {
+                mkdir -p "/var/db/kominka/installed/${tool}"
+                printf "system 1\n" > "/var/db/kominka/installed/${tool}/version"
+                printf "#!/bin/sh\n:\n" > "/var/db/kominka/installed/${tool}/build"
+                chmod +x "/var/db/kominka/installed/${tool}/build"
+                touch "/var/db/kominka/installed/${tool}/manifest"
+              }
               pm b "${{ inputs.package }}"
               for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
                 [ -f "$f" ] && cp "$f" /out/
