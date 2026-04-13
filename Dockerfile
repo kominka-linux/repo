@@ -1,47 +1,63 @@
 # Kominka Linux base image (FROM scratch, ~57MB).
 #
-# Bootstrap: busybox:latest (4MB static musl) provides wget+tar+sh.
-# ysh is static musl — runs directly on the busybox base.
-# pm resolves and installs all packages from the repo server.
+# Bootstrap: busybox:latest is used ONLY to download our own packages from R2
+# via wget. The scratch stage copies only our packages — no Docker Hub files
+# end up in the final image or in any stage that actually executes our code.
+#
+# KARCH: architecture string passed by the caller.
+#   x86_64-linux-gnu  or  aarch64-linux-gnu
 #
 # Usage:
-#   make core   (uses repo server at localhost:3000, --network=host)
-#   docker build --build-context packages=<dir> --network=host \
-#     --build-arg REPO_URL=http://localhost:3000 -t kominka:core .
+#   KARCH=$(uname -m | sed 's/x86_64/x86_64-linux-gnu/;s/aarch64/aarch64-linux-gnu/')
+#   docker build --build-context packages=<dir> --build-context pm=<pm dir> \
+#     --build-arg KARCH=$KARCH --build-arg REPO_URL=http://localhost:3000 \
+#     --network=host -t kominka:core .
 
-FROM busybox:latest AS bootstrap
+FROM busybox:latest AS fetch
 
-ARG R2_BASE=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
+ARG R2=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
+ARG KARCH=aarch64-linux-gnu
+
+# Download + extract bootstrap packages. Update versions here when they change.
+# Includes curl+deps so pm i core has a working HTTPS client (our busybox
+# wget uses external openssl which isn't present in the bootstrap environment).
+RUN mkdir -p /pkg && \
+    wget --no-check-certificate -qO- "$R2/$KARCH/musl/1.2.6-2.tar.gz"              | tar xzf - -C /pkg && \
+    wget --no-check-certificate -qO- "$R2/$KARCH/baselayout/1-8.tar.gz"            | tar xzf - -C /pkg && \
+    wget --no-check-certificate -qO- "$R2/$KARCH/busybox/1.36.1-12.tar.gz"         | tar xzf - -C /pkg && \
+    wget --no-check-certificate -qO- "$R2/$KARCH/ysh/0.37.0-4.tar.gz"              | tar xzf - -C /pkg && \
+    wget --no-check-certificate -qO- "$R2/$KARCH/zlib/1.3.2-4.tar.gz"              | tar xzf - -C /pkg && \
+    wget --no-check-certificate -qO- "$R2/$KARCH/boringssl/0.20260327.0-7.tar.gz"  | tar xzf - -C /pkg && \
+    wget --no-check-certificate -qO- "$R2/$KARCH/curl/8.19.0-7.tar.gz"             | tar xzf - -C /pkg
+
+FROM scratch AS bootstrap
+
 ARG REPO_URL=
-
-# Detect architecture.
-RUN case "$(busybox uname -m)" in \
-        x86_64)  echo "x86_64-linux-gnu" > /tmp/arch ;; \
-        *)       echo "aarch64-linux-gnu" > /tmp/arch ;; \
-    esac
-
-# Get ysh (static musl binary — runs on any Linux, no glibc needed).
-RUN busybox mkdir -p /usr/local/bin && \
-    ARCH=$(busybox cat /tmp/arch) && \
-    busybox wget --no-check-certificate -qO- "$R2_BASE/$ARCH/ysh/0.37.0-2.tar.gz" | \
-    busybox tar xzf - -C / ./usr/local/bin/
-
-# Install pm and package definitions.
-COPY --from=pm pm.ysh /usr/bin/pm
-RUN busybox chmod +x /usr/bin/pm
-COPY --from=packages / /packages
-RUN busybox find /packages -name build -exec busybox chmod +x {} + && \
-    busybox find /packages -name post-install -exec busybox chmod +x {} +
-
-RUN busybox mkdir -p /kominka-root/var/db/kominka/installed \
-                     /kominka-root/var/db/kominka/choices
-
-# Install core. R2_PUBLIC_URL makes pm download directly from the CDN,
-# bypassing any server redirect (needed in bootstrap where only wget is available).
 ARG R2_PUBLIC_URL=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
-RUN KOMINKA_REPO=${REPO_URL} \
+
+# Copy only our own packages — no Docker Hub files in this stage.
+COPY --from=fetch /pkg /
+
+# ysh is statically compiled; use it as the shell for all RUN commands.
+SHELL ["/usr/local/bin/ysh", "-c"]
+
+# Promote ARGs to ENV so they're available without ${} substitution in ysh.
+ENV KOMINKA_REPO=${REPO_URL} \
     R2_PUBLIC_URL=${R2_PUBLIC_URL} \
-    KOMINKA_PATH=/packages \
+    KOMINKA_GET=/usr/bin/curl \
+    LOGNAME=root \
+    HOME=/root
+
+COPY --from=pm pm.ysh /usr/bin/pm
+RUN chmod +x /usr/bin/pm
+COPY --from=packages / /packages
+RUN find /packages -name build -exec chmod +x {} + && \
+    find /packages -name post-install -exec chmod +x {} +
+
+RUN mkdir -p /kominka-root/var/db/kominka/installed \
+             /kominka-root/var/db/kominka/choices
+
+RUN KOMINKA_PATH=/packages \
     KOMINKA_ROOT=/kominka-root \
     KOMINKA_COMPRESS=gz \
     KOMINKA_COLOR=0 \
@@ -49,11 +65,9 @@ RUN KOMINKA_REPO=${REPO_URL} \
     KOMINKA_STRIP=0 \
     KOMINKA_FORCE=1 \
     KOMINKA_INSECURE=1 \
-    LOGNAME=root \
-    HOME=/root \
     ysh /usr/bin/pm i core
 
-RUN busybox cp /usr/bin/pm /kominka-root/usr/bin/pm
+RUN cp /usr/bin/pm /kominka-root/usr/bin/pm
 
 FROM scratch
 

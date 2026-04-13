@@ -82,8 +82,7 @@ jobs:
             -e HOME=/root \
             kominka:bootstrap /usr/local/bin/ysh -c '
               # Pre-register Alpine system tools so pm skips them as makedeps.
-              # Alpine provides make, perl, linux-headers natively.
-              for tool in make perl linux {
+              for tool in make perl linux cmake go samurai muon {
                 mkdir -p "/var/db/kominka/installed/${tool}"
                 write -- "system 1" > "/var/db/kominka/installed/${tool}/version"
                 write -- "#!/bin/sh" ":" > "/var/db/kominka/installed/${tool}/build"

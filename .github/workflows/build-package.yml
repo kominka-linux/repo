@@ -48,10 +48,12 @@ jobs:
       - name: Build kominka:build-essential
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}
         run: |
+          KARCH=$(uname -m | sed 's/x86_64/x86_64-linux-gnu/;s/aarch64/aarch64-linux-gnu/')
           docker build \
             --build-context packages=packages \
             --build-context pm=pm \
             --build-arg REPO_URL=https://kominka.17166969.xyz \
+            --build-arg KARCH=$KARCH \
             -t kominka:core .
           docker build --build-arg REPO_URL=https://kominka.17166969.xyz \
             -t kominka:build-essential -f Dockerfile.buildessential .
