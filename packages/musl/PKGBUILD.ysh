@@ -2,36 +2,99 @@
 
 var name    = 'musl'
 var ver     = '1.2.6'
-var rel     = '1'
+var rel     = '2'
 var deps    = []
 var mkdeps  = ['zig']
 
-var sources   = ['https://musl.libc.org/releases/musl-VERSION.tar.gz']
-var checksums = ['d585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a']
+# TODO: upgrade to mimalloc v3 once chimera-linux/cports publishes ported patches.
+# Their current patches target v2.2.7; v3 has API changes in internal.h/prim.h/types.h.
+var MIMALLOC_VER = '2.2.7'
+
+var sources = [
+    'https://musl.libc.org/releases/musl-VERSION.tar.gz',
+    # Extract mimalloc into mimalloc/ subdirectory via dest parameter.
+    "https://github.com/microsoft/mimalloc/archive/refs/tags/v${MIMALLOC_VER}.tar.gz mimalloc",
+    'patches/0001-plumb-in-support-for-externally-provided-allocator-l.patch patch',
+    "patches/0001-implement-necessary-bits-for-musl-integration.patch patch-mimalloc",
+    'patches/mimalloc-errno.patch patch-mimalloc',
+    'files/mimalloc.c',
+    'files/mimalloc-verify-syms.sh',
+]
+var checksums = [
+    'd585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a',
+    '8e0ed89907a681276bff2e49e9a048b47ba51254ab60daf6b3c220acac456a95',
+    '890ef57c19c93aff399c6643a9a634d969758e9edf0088d651c597ca6b876187',
+    '3929b78df567fb2171f16a256232a558227656710e4f967b27620879161f7837',
+    '6fd3b4ef1c98ca3a127efaa7e7e978581fd98d0db315e5211270f7f0d0b4eec6',
+    '858b91087721232a83587ff59bf2d7e676a783066d8c4d56d2f7311d0425c3cf',
+    '3f39a6fa9c231e0db01f89993ab17c7a3dbf779ed43358333c2086bee84f045a',
+]
 
 proc build(dest) {
-    # Build musl with plain zig cc — no -target musl (that would be circular).
-    # zig cc compiles musl's C sources for the native architecture; the result
-    # is the musl runtime that programs compiled with -target musl link against.
-    # Use the zig binary directly to bypass the cc wrapper (which targets musl).
+    var ARCH   = $(uname -m)
+    var srcdir = $(pwd)
+
+    # Apply musl external allocator support patch.
+    patch -p1 < patch/0001-plumb-in-support-for-externally-provided-allocator-l.patch
+
+    # Apply musl integration patches to mimalloc source.
+    # Patch paths are a/mimalloc/... so apply from srcdir with -p1.
+    patch -p1 < "${srcdir}/patch-mimalloc/0001-implement-necessary-bits-for-musl-integration.patch"
+    patch -p1 < "${srcdir}/patch-mimalloc/mimalloc-errno.patch"
+
+    # Install chimera's mimalloc.c integration wrapper (replaces static.c entry point).
+    # mimalloc.c and mimalloc-verify-syms.sh are already in CWD (pm placed them there).
+    cp mimalloc.c mimalloc/src/mimalloc.c
+    chmod +x mimalloc-verify-syms.sh
+
+    # Build musl with external malloc (mimalloc).
+    # Use zig binary directly (not the cc wrapper) to avoid circular musl targeting.
     var zig_bin = $(command -v zig)
 
-    ./configure \
+    mkdir -p musl-build
+    cd musl-build
+
+    # --with-malloc=external tells musl to use the external allocator hooks.
+    # 64-bit only; 32-bit would use mallocng.
+    var malloc_opt = '--with-malloc=mallocng'
+    if (ARCH === 'x86_64' or ARCH === 'aarch64') {
+        setvar malloc_opt = '--with-malloc=external'
+    }
+
+    env CC="$zig_bin cc" ../configure \
         --prefix=/usr \
         --libdir=/usr/lib \
         --syslibdir=/usr/lib \
         --disable-gcc-wrapper \
-        CC="$zig_bin cc"
+        $malloc_opt
 
-    make
+    # EXTRA_OBJ: musl links this into libc.so via MALLOC_OBJS wildcard.
+    # Make's wildcard caches the result from prerequisite-tracking time (before
+    # EXTRA_OBJ is built). Workaround: let make build EXTRA_OBJ first using its
+    # own correct flags (-nostdinc, -ffreestanding, etc.), then immediately run
+    # the full build so MALLOC_OBJS wildcard finds it.
+    var extra_obj = "${srcdir}/src/malloc/external/mimalloc.o"
+    if (ARCH === 'x86_64' or ARCH === 'aarch64') {
+        mkdir -p "${srcdir}/src/malloc/external"
+        # Build EXTRA_OBJ in isolation first (sequential to avoid race with GENH).
+        make -j1 EXTRA_OBJ=$extra_obj $extra_obj
+        # Full build — MALLOC_OBJS now finds the pre-existing mimalloc.o.
+        make EXTRA_OBJ=$extra_obj
+    } else {
+        make
+    }
     make DESTDIR=$dest install
 
-    # ldd is the dynamic linker invoked with --list.
-    var ARCH = $(uname -m)
+    # ldd symlink.
     var ldso = ''
     case (ARCH) {
         aarch64 { setvar ldso = 'ld-musl-aarch64.so.1' }
         x86_64  { setvar ldso = 'ld-musl-x86_64.so.1' }
+    }
+    if (ldso !== '') {
+        # musl installs ld-musl-*.so.1 as a hard link to libc.so.
+        # Replace with a symlink so the relationship survives packaging/tar.
+        ln -sf libc.so "${dest}/usr/lib/${ldso}"
     }
     mkdir -p "${dest}/usr/bin"
     ln -sf "/usr/lib/${ldso}" "${dest}/usr/bin/ldd"

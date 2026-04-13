@@ -28,11 +28,11 @@ ALLOWED_USERS=josh
 RP_ID=repo.kominka.org
 RP_ORIGIN=https://repo.kominka.org
 
-# JWT/OIDC for CI (optional)
+# JWT/OIDC for CI
 JWT_JWKS_URL=https://token.actions.githubusercontent.com/.well-known/jwks
 JWT_ISSUER=https://token.actions.githubusercontent.com
 JWT_AUDIENCE=kominka-repo
-JWT_SUBJECT_PATTERN=repo:josh/*
+JWT_SUBJECT_PATTERN=repo:kominka-linux/*
 ```
 
 **3. Run**
