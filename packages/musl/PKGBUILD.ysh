@@ -2,7 +2,7 @@
 
 var name    = 'musl'
 var ver     = '1.2.6'
-var rel     = '16'
+var rel     = '15'
 var deps    = []
 var mkdeps  = ['zig']
 var nostrip = true  # strip removes dynamic symbols needed by the runtime linker
@@ -36,33 +36,6 @@ proc build(dest) {
     # -U_FORTIFY_SOURCE: zig cc enables _FORTIFY_SOURCE by default, which injects
     # LOCAL __memcpy_chk wrappers that can shadow the assembly GLOBAL memcpy.
     sed -i 's|^CFLAGS_AUTO = |CFLAGS_AUTO = -U_FORTIFY_SOURCE |' config.mak
-
-    # Replace the libc.so link recipe with zig ld.lld to bypass zig cc's
-    # link-driver behavior (ubsan_rt injection demotes memcpy to LOCAL HIDDEN).
-    # Previous attempts patched musl-build/Makefile (the configure wrapper);
-    # the actual recipe is in ../Makefile (the source Makefile).
-    # Get compiler_rt for __subtf3 etc.; probe creates the archive in zig cache.
-    "$zig_bin" cc -v -shared -nostdlib -o /dev/null -x c /dev/null > /tmp/zig_cc_v.txt 2>&1 || true
-    var compiler_rt = ''
-    try {
-        setvar compiler_rt = $(tr ' ' '\n' < /tmp/zig_cc_v.txt | grep 'libcompiler_rt.a$' | head -1)
-    }
-    if (compiler_rt === '') {
-        try {
-            setvar compiler_rt = $(find /root/.cache/zig -name 'libcompiler_rt.a' 2>/dev/null | head -1)
-        }
-    }
-    if (compiler_rt === '') {
-        echo 'ERROR: could not locate libcompiler_rt.a' >&2
-        exit 1
-    }
-    var tab          = u'\u{09}'
-    var ldflags_lld  = '--sort-section=alignment --sort-common --hash-style=both --no-undefined --export-dynamic'
-    var libcc_arg    = "--as-needed ${compiler_rt}"
-    var recipe       = "${tab}${zig_bin} ld.lld --shared ${ldflags_lld} --entry _dlstart -o \$@ \$(LOBJS) \$(LDSO_OBJS) ${libcc_arg}"
-    # Target ../Makefile (the source Makefile with the recipe), not Makefile
-    # (the thin configure wrapper that only contains "include ../Makefile").
-    sed -i "s:${tab}.*-nostdlib -shared.*:${recipe}:" ../Makefile
 
     make
     make DESTDIR=$dest install
