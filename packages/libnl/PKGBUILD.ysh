@@ -2,8 +2,8 @@
 
 var name    = 'libnl'
 var ver     = '3.10.0'
-var rel     = '1'
-var deps    = ['glibc']
+var rel     = '2'
+var deps    = ['musl']
 var mkdeps  = ['zig', 'make']
 
 var sources   = ['https://github.com/thom311/libnl/releases/download/libnl3_10_0/libnl-VERSION.tar.gz']

@@ -2,8 +2,8 @@
 
 var name    = 'git'
 var ver     = '2.53.0'
-var rel     = '2'
-var deps    = ['glibc', 'curl', 'boringssl', 'zlib']
+var rel     = '3'
+var deps    = ['musl', 'curl', 'boringssl', 'zlib']
 var mkdeps  = ['zig', 'make']
 
 var sources = [

@@ -2,8 +2,8 @@
 
 var name    = 'wpa_supplicant'
 var ver     = '2.11'
-var rel     = '8'
-var deps    = ['glibc', 'libnl']
+var rel     = '9'
+var deps    = ['musl', 'libnl']
 var mkdeps  = ['zig', 'make']
 
 var sources = [
@@ -27,9 +27,8 @@ proc build(dest) {
     # lands at the root of the build directory (one level above wpa_supplicant/).
     cp -f ../.config .config
 
-    # Isolate libnl libs so -L doesn't pull in Kominka's glibc and shadow
-    # Debian's — the linker would find libc.so.6 in KOMINKA_ROOT first and
-    # try to resolve it from /usr/lib/libc.so.6 which doesn't exist on Debian.
+    # Isolate libnl into a temp dir so -L only pulls in libnl, not all of
+    # KOMINKA_ROOT/usr/lib (which would bring in musl's libc.so etc.).
     var _libnl_dir = "/tmp/wpa-libnl-$$"
     mkdir -p $_libnl_dir
     ln -sf "${_kr}/usr/lib/libnl-3.so"      "${_libnl_dir}/"

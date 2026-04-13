@@ -2,8 +2,8 @@
 
 var name    = 'make'
 var ver     = '4.4.1'
-var rel     = '2'
-var deps    = ['glibc']
+var rel     = '3'
+var deps    = ['musl']
 var mkdeps  = ['zig']
 
 var sources = ['https://ftp.gnu.org/gnu/make/make-VERSION.tar.gz']

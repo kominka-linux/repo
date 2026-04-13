@@ -2,8 +2,8 @@
 
 var name    = 'cargo'
 var ver     = '1.94.1'
-var rel     = '1'
-var deps    = ['glibc']
+var rel     = '2'
+var deps    = ['musl']
 var mkdeps  = []
 
 var sources = [
@@ -31,10 +31,10 @@ proc build(dest) {
     # Bundled from Debian bookworm's libgcc-s1 package (GCC 12).
     install -Dm755 "libgcc_s-${arch}.so.1" "${dest}/usr/lib/libgcc_s.so.1"
 
-    # Compat symlinks: libdl, libpthread, librt merged into libc in glibc 2.34+
-    # but the prebuilt rustc still links against them.
+    # Compat symlinks: rustc prebuilt links against libdl, libpthread, librt by
+    # name; with musl these are all part of libc.so.
     for lib in (:| libdl.so.2 libpthread.so.0 librt.so.1 |) {
-        ln -sf libc.so.6 "${dest}/usr/lib/${lib}"
+        ln -sf libc.so "${dest}/usr/lib/${lib}"
     }
 
     # Binaries

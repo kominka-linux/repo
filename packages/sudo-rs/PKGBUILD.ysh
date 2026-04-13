@@ -2,8 +2,8 @@
 
 var name    = 'sudo-rs'
 var ver     = '0.2.13'
-var rel     = '2'
-var deps    = ['glibc', 'linux-pam']
+var rel     = '3'
+var deps    = ['musl', 'linux-pam']
 var mkdeps  = ['cargo']
 
 var sources = ['https://github.com/trifectatechfoundation/sudo-rs/archive/refs/tags/vVERSION.tar.gz']

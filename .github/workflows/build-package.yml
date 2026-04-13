@@ -7,11 +7,6 @@ on:
         description: Package name
         required: true
         type: string
-      debian:
-        description: Use Debian GCC
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   build:
@@ -23,9 +18,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { arch: amd64, runner: ubuntu-latest,    debian: false }
-          # arm64: use kominka:core (zig cc) by default; debian input overrides.
-          - { arch: arm64, runner: ubuntu-24.04-arm, debian: false }
+          - { arch: amd64, runner: ubuntu-latest }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
     runs-on: ${{ matrix.runner }}
 
     steps:
@@ -44,18 +38,15 @@ jobs:
           repository: kominka-linux/pm
           path: pm
 
-      # ── zig cc path (arm64 default) ─────────────────────────────────────
-
       - name: Cache kominka:build-essential
         id: cache
-        if: ${{ !matrix.debian && !inputs.debian }}
         uses: actions/cache@v4
         with:
           path: /tmp/kominka-build-essential.tar.gz
           key: kominka-build-essential-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'Dockerfile.buildessential', 'pm/pm.ysh', 'packages/**/PKGBUILD.ysh') }}
 
       - name: Build kominka:build-essential
-        if: ${{ !matrix.debian && !inputs.debian && steps.cache.outputs.cache-hit != 'true' }}
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
         run: |
           docker build \
             --build-context packages=packages \
@@ -67,11 +58,10 @@ jobs:
           docker save kominka:build-essential | gzip > /tmp/kominka-build-essential.tar.gz
 
       - name: Load kominka:build-essential
-        if: ${{ !matrix.debian && !inputs.debian && steps.cache.outputs.cache-hit == 'true' }}
+        if: ${{ steps.cache.outputs.cache-hit == 'true' }}
         run: docker load < /tmp/kominka-build-essential.tar.gz
 
-      - name: Build ${{ inputs.package }} (zig cc)
-        if: ${{ !matrix.debian && !inputs.debian }}
+      - name: Build ${{ inputs.package }}
         run: |
           mkdir -p out
           docker run --rm \
@@ -90,57 +80,6 @@ jobs:
             -e LOGNAME=root \
             -e HOME=/root \
             kominka:build-essential /usr/local/bin/ysh -c '
-              pm b "${{ inputs.package }}"
-              for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
-                [ -f "$f" ] && cp "$f" /out/
-              done
-              pm p "${{ inputs.package }}"'
-
-      # ── Debian builder path (amd64 always, arm64 if debian=true) ────────
-
-      - name: Build Debian builder image
-        if: ${{ matrix.debian || inputs.debian }}
-        run: |
-          docker build \
-            --build-context packages=packages \
-            --build-context pm=pm \
-            -t kominka-debian-builder -f Dockerfile.glibc .
-
-      - name: Build ${{ inputs.package }} (Debian GCC)
-        if: ${{ matrix.debian || inputs.debian }}
-        run: |
-          mkdir -p out
-          docker run --rm \
-            -v "$PWD/packages:/packages:ro" \
-            -v "$PWD/pm/pm.ysh:/usr/bin/pm:ro" \
-            -v "$PWD/out:/out" \
-            -e KOMINKA_REPO='https://kominka.17166969.xyz' \
-            -e KOMINKA_TOKEN="$KOMINKA_TOKEN" \
-            -e KOMINKA_PATH=/packages \
-            -e KOMINKA_ROOT=/kominka-root \
-            -e KOMINKA_COMPRESS=gz \
-            -e KOMINKA_COLOR=0 \
-            -e KOMINKA_PROMPT=0 \
-            -e KOMINKA_FORCE=1 \
-            -e KOMINKA_GET=/usr/bin/curl \
-            -e LOGNAME=root \
-            -e HOME=/root \
-            kominka-debian-builder bash -ec '
-              DB=/kominka-root/var/db/kominka/installed
-              # Pre-register system tools so pm does not attempt to install
-              # Kominka packages over the Debian toolchain. glibc especially
-              # must not be overwritten. zig is NOT pre-registered so pm
-              # installs it from the server — this gives us real zig cc/c++
-              # wrappers and avoids libstdc++ in C++ packages like boringssl.
-              for tool in glibc make bison m4 flex bc perl cmake ninja go cargo muon samurai; do
-                mkdir -p "${DB}/${tool}"
-                printf "system 1\n" > "${DB}/${tool}/version"
-                printf "#!/bin/sh\n:\n" > "${DB}/${tool}/build"
-                chmod +x "${DB}/${tool}/build"
-                touch "${DB}/${tool}/manifest"
-              done
-              # Prepend KOMINKA_ROOT bin dirs so zig cc/c++ wrappers shadow gcc.
-              export PATH=/kominka-root/usr/local/bin:/kominka-root/usr/bin:$PATH
               pm b "${{ inputs.package }}"
               for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
                 [ -f "$f" ] && cp "$f" /out/

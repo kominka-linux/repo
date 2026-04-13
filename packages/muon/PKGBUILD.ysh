@@ -2,8 +2,8 @@
 
 var name    = 'muon'
 var ver     = '0.5.0'
-var rel     = '1'
-var deps    = ['glibc']
+var rel     = '2'
+var deps    = ['musl']
 var mkdeps  = ['zig']
 
 var sources = ['https://github.com/annacrombie/muon/archive/refs/tags/VERSION.tar.gz']

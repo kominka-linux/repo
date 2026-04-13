@@ -10,7 +10,7 @@ var sources    = ['https://matt.ucc.asn.au/dropbear/releases/dropbear-VERSION.ta
 var checksums  = ['0d1f7ca711cfc336dc8a85e672cab9cfd8223a02fe2da0a4a7aeb58c9e113634']
 
 proc build(dest) {
-    # Disable password auth — Kominka's glibc has no libcrypt.
+    # Disable password auth — musl has no libcrypt.
     # Key-based auth is sufficient and more secure anyway.
     printf '#define DROPBEAR_SVR_PASSWORD_AUTH 0\n' > localoptions.h
 

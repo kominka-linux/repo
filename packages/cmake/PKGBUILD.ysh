@@ -2,8 +2,8 @@
 
 var name    = 'cmake'
 var ver     = '4.3.1'
-var rel     = '2'
-var deps    = ['glibc']
+var rel     = '3'
+var deps    = ['musl']
 var mkdeps  = ['zig', 'make']
 
 var sources = [

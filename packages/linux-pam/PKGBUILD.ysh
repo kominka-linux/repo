@@ -2,8 +2,8 @@
 
 var name    = 'linux-pam'
 var ver     = '1.7.0'
-var rel     = '1'
-var deps    = ['glibc']
+var rel     = '2'
+var deps    = ['musl']
 var mkdeps  = ['zig', 'muon', 'samurai']
 
 var sources = [
@@ -22,8 +22,8 @@ proc build(dest) {
     # but PAM modules only implement the subset they need. Replace with a wildcard.
     cp modules.map modules/modules.map
 
-    # glibc's libcrypt.so uses GLIBC_PRIVATE symbols internally.
-    # lld rejects this by default; --allow-shlib-undefined permits it.
+    # lld is strict about undefined symbols in shared libs; needed for PAM
+    # modules that only implement a subset of the pam_sm_* interface.
     setglobal ENV.LDFLAGS = "-Wl,--allow-shlib-undefined"
 
     muon setup \

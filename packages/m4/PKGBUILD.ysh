@@ -2,8 +2,8 @@
 
 var name    = 'm4'
 var ver     = '1.4.21'
-var rel     = '2'
-var deps    = ['glibc']
+var rel     = '3'
+var deps    = ['musl']
 var mkdeps  = ['zig', 'make']
 
 var sources = ['https://ftp.gnu.org/gnu/m4/m4-VERSION.tar.xz']

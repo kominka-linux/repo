@@ -2,8 +2,8 @@
 
 var name    = 'samurai'
 var ver     = '1.2'
-var rel     = '1'
-var deps    = ['glibc']
+var rel     = '2'
+var deps    = ['musl']
 var mkdeps  = ['zig', 'make']
 
 var sources = ['https://github.com/michaelforney/samurai/releases/download/VERSION/samurai-VERSION.tar.gz']

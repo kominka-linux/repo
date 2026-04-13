@@ -2,8 +2,8 @@
 
 var name    = 'runit'
 var ver     = '2.3.1'
-var rel     = '1'
-var deps    = ['glibc']
+var rel     = '2'
+var deps    = ['musl']
 var mkdeps  = ['zig', 'make']
 
 var sources = ['http://smarden.org/runit/runit-VERSION.tar.gz']
@@ -15,7 +15,7 @@ proc build(dest) {
     cd runit-2.3.1
 
     # Override compiler and linker.
-    # -D_GNU_SOURCE exposes setgroups() in glibc headers.
+    # -D_GNU_SOURCE exposes setgroups() in the libc headers.
     # -Wno-implicit-function-declaration tolerates runit's old C style.
     write -- "${CC} -O2 -Wall -D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types" > src/conf-cc
     write -- "${CC} -s"        > src/conf-ld

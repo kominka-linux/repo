@@ -65,8 +65,8 @@ proc build(dest) {
 
     # CONFIG_USE_BB_CRYPT=y means busybox provides its own crypt — no libcrypt
     # dep at runtime. But make oldconfig re-adds -lcrypt to config.mak.autogen
-    # based on system detection even with USE_BB_CRYPT=y. glibc 2.43+ removed
-    # libcrypt, so the .so doesn't exist and zig's strict linker errors.
+    # based on system detection even with USE_BB_CRYPT=y. musl has no libcrypt,
+    # so the .so doesn't exist and zig's strict linker errors.
     # Create an empty static libcrypt.a so -lcrypt is satisfied at link time
     # without adding a NEEDED entry (static libs don't create NEEDED entries).
     touch /tmp/_crypt_empty.c
@@ -97,7 +97,7 @@ proc build(dest) {
         mv -f _ Makefile.flags
 
         # Strip linker flags unsupported by lld (zig's linker).
-        # Also strip -lcrypt: not bundled in glibc 2.43+, and USE_BB_CRYPT=y
+        # Also strip -lcrypt: musl has no libcrypt, and USE_BB_CRYPT=y
         # means busybox has its own crypt implementation.
         sed -e 's/-Wl,--warn-common//g' \
             -e 's/-Wl,-Map,[^ ]*//g' \
@@ -118,7 +118,7 @@ proc build(dest) {
     # olddefconfig resolves any new config options without interactive prompts.
     # Use yes to auto-answer new config prompts (busybox oldconfig may ask
     # about new options not in the saved .config).
-    # libcrypt is no longer bundled in glibc 2.43+; busybox uses its own
+    # musl has no libcrypt; busybox uses its own
     # crypt (USE_BB_CRYPT=y) so strip the -lcrypt link flag everywhere.
     try { grep -rl -- -lcrypt . 2>/dev/null | xargs sed -i 's/-lcrypt//g' }
     # Settle any new config symbols before the main build. Run oldconfig

@@ -2,8 +2,8 @@
 
 var name    = 'boringssl'
 var ver     = '0.20260327.0'
-var rel     = '7'
-var deps    = ['glibc']
+var rel     = '8'
+var deps    = ['musl']
 var mkdeps  = ['zig', 'cmake', 'go', 'samurai']
 
 var sources = [

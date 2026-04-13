@@ -2,8 +2,8 @@
 
 var name    = 'go'
 var ver     = '1.26.2'
-var rel     = '1'
-var deps    = ['glibc']
+var rel     = '2'
+var deps    = ['musl']
 var mkdeps  = []
 var nostrip = true  # ships race/*.syso files for foreign arches that strip can't handle
 

@@ -2,8 +2,8 @@
 
 var name    = 'strace'
 var ver     = '6.19'
-var rel     = '2'
-var deps    = ['glibc']
+var rel     = '3'
+var deps    = ['musl']
 var mkdeps  = ['zig', 'make', 'linux']
 
 var sources = ['https://strace.io/files/VERSION/strace-VERSION.tar.xz']

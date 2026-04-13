@@ -2,8 +2,8 @@
 
 var name    = 'pkgconf'
 var ver     = '2.5.1'
-var rel     = '2'
-var deps    = ['glibc']
+var rel     = '3'
+var deps    = ['musl']
 var mkdeps  = ['zig', 'make']
 
 var sources = ['https://distfiles.ariadne.space/pkgconf/pkgconf-VERSION.tar.xz']

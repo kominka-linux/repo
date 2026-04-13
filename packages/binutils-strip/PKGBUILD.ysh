@@ -2,8 +2,8 @@
 
 var name    = 'binutils-strip'
 var ver     = '2.44'
-var rel     = '1'
-var deps    = ['glibc']
+var rel     = '2'
+var deps    = ['musl']
 var mkdeps  = ['zig', 'make']
 
 var sources   = ['https://ftp.gnu.org/gnu/binutils/binutils-VERSION.tar.xz']

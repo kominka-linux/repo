@@ -2,8 +2,8 @@
 
 var name    = 'bison'
 var ver     = '3.8.2'
-var rel     = '1'
-var deps    = ['glibc']
+var rel     = '2'
+var deps    = ['musl']
 var mkdeps  = ['zig', 'make', 'm4']
 
 var sources = ['https://ftp.gnu.org/gnu/bison/bison-VERSION.tar.xz']

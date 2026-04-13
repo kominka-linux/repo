@@ -16,7 +16,7 @@ proc build(dest) {
 
     # BoringSSL ships openssl/time.h (a compat shim).  curl's configure adds
     # -isystem .../openssl which makes that file shadow the real <time.h>.
-    # Move it aside so struct tm / time() are found in glibc's header.
+    # Move it aside so struct tm / time() are found in the system libc header.
     if test -f "${_kr}/usr/include/openssl/time.h" {
         mv "${_kr}/usr/include/openssl/time.h" "${_kr}/usr/include/openssl/time.h.aside"
     }

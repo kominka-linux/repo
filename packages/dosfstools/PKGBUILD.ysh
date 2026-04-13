@@ -2,8 +2,8 @@
 
 var name    = 'dosfstools'
 var ver     = '4.2'
-var rel     = '1'
-var deps    = ['glibc']
+var rel     = '2'
+var deps    = ['musl']
 var mkdeps  = ['zig', 'make']
 
 var sources = ['https://github.com/dosfstools/dosfstools/releases/download/vVERSION/dosfstools-VERSION.tar.gz']

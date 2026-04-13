@@ -2,8 +2,8 @@
 
 var name    = 'e2fsprogs'
 var ver     = '1.47.4'
-var rel     = '4'
-var deps    = ['glibc']
+var rel     = '5'
+var deps    = ['musl']
 var mkdeps  = ['zig', 'make']
 
 var sources = ['https://mirrors.edge.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/vVERSION/e2fsprogs-VERSION.tar.xz']
