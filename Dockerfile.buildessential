@@ -1,14 +1,19 @@
-# Build environment: kominka:core + busybox (full utils) + binutils-strip.
+# Build environment: kominka:core + busybox (full utils) + binutils-strip + make.
 # Used by CI for all zig-cc package builds.
+#
+# Bootstrap note: our published busybox predates many applets (uname, date, ...).
+# Copy Alpine's full busybox (also musl-linked) so pm has everything it needs.
+# Once our busybox is rebuilt against musl this layer becomes a no-op.
 
+FROM alpine AS alpine
 FROM kominka:core
 
+COPY --from=alpine /bin/busybox /usr/bin/busybox
+RUN /usr/bin/busybox --install -s /usr/bin/
+
 ARG REPO_URL=https://kominka.17166969.xyz
-ARG TARGETARCH
 ENV LD_LIBRARY_PATH=/usr/lib \
     LOGNAME=root
-# KOMINKA_ARCH bypasses the uname call in pm — the published busybox predates CONFIG_UNAME=y.
-RUN KOMINKA_ARCH=$([ "$TARGETARCH" = "amd64" ] && echo "x86_64-linux-gnu" || echo "aarch64-linux-gnu") \
-    KOMINKA_REPO=${REPO_URL} \
+RUN KOMINKA_REPO=${REPO_URL} \
     R2_PUBLIC_URL=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev \
     /usr/local/bin/ysh -c 'pm i busybox binutils-strip make'
