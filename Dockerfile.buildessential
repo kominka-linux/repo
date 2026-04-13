@@ -4,7 +4,11 @@
 FROM kominka:core
 
 ARG REPO_URL=https://kominka.17166969.xyz
+ARG TARGETARCH
 ENV LD_LIBRARY_PATH=/usr/lib \
     LOGNAME=root
-RUN KOMINKA_REPO=${REPO_URL} R2_PUBLIC_URL=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev \
+# KOMINKA_ARCH bypasses the uname call in pm — the published busybox predates CONFIG_UNAME=y.
+RUN KOMINKA_ARCH=$([ "$TARGETARCH" = "amd64" ] && echo "x86_64-linux-gnu" || echo "aarch64-linux-gnu") \
+    KOMINKA_REPO=${REPO_URL} \
+    R2_PUBLIC_URL=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev \
     /usr/local/bin/ysh -c 'pm i busybox binutils-strip make'
