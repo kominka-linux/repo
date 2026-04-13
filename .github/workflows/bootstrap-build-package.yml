@@ -1,0 +1,104 @@
+name: Bootstrap build package
+
+# Builds packages using Alpine as the build environment.
+# Used for the initial bootstrap (musl, busybox) before our own
+# musl-linked build-essential image is available.
+# Alpine has musl at /lib/ — the path zig cc embeds — so zig-built
+# binaries run correctly here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package name
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build ${{ inputs.package }} (${{ matrix.arch }})
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-latest }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get OIDC token
+        run: |
+          TOKEN=$(curl -fsSL \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=kominka-repo" | jq -r .value)
+          echo "KOMINKA_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Checkout pm
+        uses: actions/checkout@v4
+        with:
+          repository: kominka-linux/pm
+          path: pm
+
+      - name: Cache kominka:bootstrap
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/kominka-bootstrap.tar.gz
+          key: kominka-bootstrap-${{ matrix.arch }}-${{ hashFiles('Dockerfile.bootstrap', 'pm/pm.ysh') }}
+
+      - name: Build kominka:bootstrap
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        run: |
+          docker build \
+            --build-context pm=pm \
+            -t kominka:bootstrap -f Dockerfile.bootstrap .
+          docker save kominka:bootstrap | gzip > /tmp/kominka-bootstrap.tar.gz
+
+      - name: Load kominka:bootstrap
+        if: ${{ steps.cache.outputs.cache-hit == 'true' }}
+        run: docker load < /tmp/kominka-bootstrap.tar.gz
+
+      - name: Build ${{ inputs.package }}
+        run: |
+          mkdir -p out
+          docker run --rm \
+            -v "$PWD/packages:/packages:ro" \
+            -v "$PWD/pm/pm.ysh:/usr/bin/pm:ro" \
+            -v "$PWD/out:/out" \
+            -e KOMINKA_REPO='https://kominka.17166969.xyz' \
+            -e KOMINKA_TOKEN="$KOMINKA_TOKEN" \
+            -e KOMINKA_PATH=/packages \
+            -e KOMINKA_COMPRESS=gz \
+            -e KOMINKA_COLOR=0 \
+            -e KOMINKA_PROMPT=0 \
+            -e KOMINKA_FORCE=1 \
+            -e KOMINKA_GET=/usr/bin/curl \
+            -e LOGNAME=root \
+            -e HOME=/root \
+            kominka:bootstrap /usr/local/bin/ysh -c '
+              # Pre-register Alpine system tools so pm skips them as makedeps.
+              # Alpine provides make, perl, linux-headers natively.
+              for tool in make perl linux {
+                mkdir -p "/var/db/kominka/installed/${tool}"
+                write -- "system 1" > "/var/db/kominka/installed/${tool}/version"
+                write -- "#!/bin/sh" ":" > "/var/db/kominka/installed/${tool}/build"
+                chmod +x "/var/db/kominka/installed/${tool}/build"
+                touch "/var/db/kominka/installed/${tool}/manifest"
+              }
+              pm b "${{ inputs.package }}"
+              for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
+                [ -f "$f" ] && cp "$f" /out/
+              done
+              pm p "${{ inputs.package }}"'
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.package }}-${{ matrix.arch }}
+          path: out/*.tar.*
+          if-no-files-found: warn
