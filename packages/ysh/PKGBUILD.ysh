@@ -15,7 +15,7 @@ proc build(dest) {
     # Detect musl target triple from architecture.
     var MUSL_TARGET = "$(uname -m)-linux-musl"
 
-    # Static build targeting musl — no glibc/libstdc++ runtime deps.
+    # Static build targeting musl — no runtime library dependencies.
     # oils passes -std=c++11 to CC on .c files. The wrapper adds -xc++
     # only when compiling (-c flag present), not when linking.
     var CC_PATH = $(command -v cc)

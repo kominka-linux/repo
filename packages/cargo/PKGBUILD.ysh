@@ -2,40 +2,23 @@
 
 var name    = 'cargo'
 var ver     = '1.94.1'
-var rel     = '2'
+var rel     = '3'
 var deps    = ['musl']
 var mkdeps  = []
 
+# musl-linked toolchain — no glibc, no libgcc_s needed.
 var sources = [
-    'https://static.rust-lang.org/dist/rust-VERSION-ARCH-unknown-linux-gnu.tar.gz',
-    'files/libgcc_s-aarch64.so.1',
-    'files/libgcc_s-x86_64.so.1',
+    'https://static.rust-lang.org/dist/rust-VERSION-ARCH-unknown-linux-musl.tar.gz',
 ]
 var checksums_aarch64 = [
-    '99dba6decb780158b2b94f0054ec15c8cd4a04a497c84349fb86fb7a70722c78',
-    '046856f95f4636f1fc7c3a12bf4f3cd5634c2fc5145c3fdf7395d4f349fa69c7',
-    '2bd1552c47799ef67e701e81d4383061fd76059868e446e63560f0dd0d5ec14e',
+    'caa1d50676518532cc9b4c4c491f219edbdcb9ebf9e6624432b5b43b87d8cc0a',
 ]
 var checksums_x86_64  = [
-    'ea7866c5cab0d8c99e7416bcc5f9ecf0e122d396b85c7e7dee5669f10ee80194',
-    '046856f95f4636f1fc7c3a12bf4f3cd5634c2fc5145c3fdf7395d4f349fa69c7',
-    '2bd1552c47799ef67e701e81d4383061fd76059868e446e63560f0dd0d5ec14e',
+    '5568d1b7992dcb0cabc9936476a0569ff314a3f1322886b4f414eb2d07b0ffd6',
 ]
 
 proc build(dest) {
     # cargo — precompiled Rust toolchain (rustc, cargo, std) from rust-lang.org.
-
-    var arch = $(uname -m)
-
-    # Install libgcc_s.so.1 — the prebuilt rustc needs GCC's unwinding runtime.
-    # Bundled from Debian bookworm's libgcc-s1 package (GCC 12).
-    install -Dm755 "libgcc_s-${arch}.so.1" "${dest}/usr/lib/libgcc_s.so.1"
-
-    # Compat symlinks: rustc prebuilt links against libdl, libpthread, librt by
-    # name; with musl these are all part of libc.so.
-    for lib in (:| libdl.so.2 libpthread.so.0 librt.so.1 |) {
-        ln -sf libc.so "${dest}/usr/lib/${lib}"
-    }
 
     # Binaries
     mkdir -p "${dest}/usr/bin"
