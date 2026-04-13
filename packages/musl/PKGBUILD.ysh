@@ -2,7 +2,7 @@
 
 var name    = 'musl'
 var ver     = '1.2.6'
-var rel     = '15'
+var rel     = '16'
 var deps    = []
 var mkdeps  = ['zig']
 var nostrip = true  # strip removes dynamic symbols needed by the runtime linker
@@ -36,6 +36,30 @@ proc build(dest) {
     # -U_FORTIFY_SOURCE: zig cc enables _FORTIFY_SOURCE by default, which injects
     # LOCAL __memcpy_chk wrappers that can shadow the assembly GLOBAL memcpy.
     sed -i 's|^CFLAGS_AUTO = |CFLAGS_AUTO = -U_FORTIFY_SOURCE |' config.mak
+
+    # Replace the libc.so link recipe with zig ld.lld directly, bypassing zig cc
+    # as link driver (which injects ubsan_rt and demotes memcpy to LOCAL HIDDEN).
+    # CRITICAL: target ../Makefile — musl-build/Makefile is only a thin wrapper
+    # ("include ../Makefile"); the actual libc.so recipe lives in the source tree.
+    # compiler_rt defines memcpy/memset/memmove as WEAK HIDDEN, poisoning musl's
+    # GLOBAL DEFAULT exports via ELF visibility merging. No reliable way to strip
+    # these symbols from the archive in the bootstrap environment (zig's objcopy
+    # stub at /usr/bin/objcopy lacks --localize-symbol).
+    #
+    # Solution: don't link compiler_rt. The 128-bit float ops it provides
+    # (__subtf3, __addtf3, etc.) are used only by long-double math (sinl, cosl,
+    # printf %Lf). On aarch64, long double is 128-bit but virtually no server
+    # workload uses it. Without --no-undefined, lld simply omits the unresolvable
+    # symbols from the output rather than erroring; they won't appear in .dynsym
+    # so dynamic linking of normal programs is unaffected.
+
+    var tab         = u'\u{09}'
+    var ldflags_lld = '--sort-section=alignment --sort-common --hash-style=both --export-dynamic'
+    var recipe      = "${tab}${zig_bin} ld.lld --shared ${ldflags_lld} --entry _dlstart -o \$@ \$(LOBJS) \$(LDSO_OBJS)"
+    sed -i "s:${tab}.*-nostdlib -shared.*:${recipe}:" ../Makefile
+
+    # Verify the patch landed — fail loudly rather than silently use zig cc.
+    grep -q 'zig ld.lld' ../Makefile || { echo 'ERROR: Makefile patch did not apply' >&2; exit 1; }
 
     make
     make DESTDIR=$dest install
