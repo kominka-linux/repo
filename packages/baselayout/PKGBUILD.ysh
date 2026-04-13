@@ -2,7 +2,7 @@
 
 var name    = 'baselayout'
 var ver     = '1'
-var rel     = '8'
+var rel     = '9'
 var deps    = []
 var mkdeps  = []
 
@@ -20,6 +20,7 @@ var sources = [
     'files/securetty',
     'files/shadow',
     'files/shells',
+    'files/resolv.conf',
 ]
 var checksums = [
     '3698c87cc3af757f0302f6d7f034350b1b22a7f25b2f71944292d0fb3de67cd7',
@@ -35,6 +36,7 @@ var checksums = [
     '570c91b8f001f322d91fe4dcf73952d7c72179f01ae3776ff1a4b8317d65ca64',
     '8ce994663d7588143ad7ed4441b07f468f4f7d3590164dd73ddfa3ea307ece8e',
     '8782af2bf81ca1e81b59d1be531565882d4e0c9a89d189706ed358375f67ca04',
+    'd75d43cc957b92bf2f8084302b0e4923d056d9fb53783fb480baf06ccbf2172d',
 ]
 
 proc build(dest) {

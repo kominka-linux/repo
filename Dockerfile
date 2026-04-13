@@ -23,7 +23,7 @@ ARG KARCH=aarch64-linux-gnu
 # wget uses external openssl which isn't present in the bootstrap environment).
 RUN mkdir -p /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/musl/1.2.6-16.tar.gz"             | tar xzf - -C /pkg && \
-    wget --no-check-certificate -qO- "$R2/$KARCH/baselayout/1-8.tar.gz"            | tar xzf - -C /pkg && \
+    wget --no-check-certificate -qO- "$R2/$KARCH/baselayout/1-9.tar.gz"            | tar xzf - -C /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/busybox/1.36.1-12.tar.gz"         | tar xzf - -C /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/ysh/0.37.0-4.tar.gz"              | tar xzf - -C /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/zlib/1.3.2-4.tar.gz"              | tar xzf - -C /pkg && \
