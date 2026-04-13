@@ -85,8 +85,8 @@ jobs:
               # Alpine provides make, perl, linux-headers natively.
               for tool in make perl linux {
                 mkdir -p "/var/db/kominka/installed/${tool}"
-                write -- 'system 1' > "/var/db/kominka/installed/${tool}/version"
-                write -- '#!/bin/sh' ':' > "/var/db/kominka/installed/${tool}/build"
+                write -- "system 1" > "/var/db/kominka/installed/${tool}/version"
+                write -- "#!/bin/sh" ":" > "/var/db/kominka/installed/${tool}/build"
                 chmod +x "/var/db/kominka/installed/${tool}/build"
                 touch "/var/db/kominka/installed/${tool}/manifest"
               }
