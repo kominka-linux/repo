@@ -94,7 +94,26 @@ To actually solve musl+mimalloc-in-libc, the path forward is:
    invocation to get lld's definitive account of which input introduced the
    HIDDEN visibility.
 
-### Current workaround (rel=14 / mimalloc rel=1)
+### Resolution (rel=16)
+
+**Root cause confirmed**: zig's bundled `compiler_rt.a` (LLVM upstream, not zig-specific)
+defines `memcpy`, `memset`, `memmove`, `__memcpy_chk` etc. as **WEAK HIDDEN** for
+internal use. ELF visibility merging takes the most restrictive — HIDDEN beats DEFAULT —
+so musl's GLOBAL DEFAULT assembly memcpy became GLOBAL HIDDEN, then lld demoted it to
+LOCAL HIDDEN in the final .so.
+
+No linker flag can recover from LOCAL once it's set. `--export-dynamic`,
+`--version-script`, `--export-dynamic-symbol` all failed because they can only
+export GLOBAL symbols, not LOCAL ones (ELF spec constraint).
+
+**Fix**: don't link `compiler_rt` at all; drop `--no-undefined`. The 128-bit float ops
+it provides (`__subtf3`, `__addtf3`, etc.) are only used by `long double` math
+(sinl/cosl/printf %Lf). Virtually no server workload uses this. The ops are simply
+absent from libc.so's .dynsym — programs that don't call them are unaffected.
+
+**Confirmed**: `nm -D libc.so | grep memcpy` → `T memcpy` (GLOBAL DEFAULT). ✓
+
+### Replaced workaround (rel=14–15 / mimalloc rel=1)
 
 musl uses its built-in **mallocng** allocator. mimalloc is shipped as a
 **separate shared library** (`libmimalloc.so.2`) and loaded via
