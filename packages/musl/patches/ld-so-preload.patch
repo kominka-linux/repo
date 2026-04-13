@@ -1,0 +1,38 @@
+--- a/ldso/dynlink.c	2026-04-13 08:33:25
++++ b/ldso/dynlink.c	2026-04-13 08:33:25
+@@ -1959,6 +1959,35 @@
+ 	/* Load preload/needed libraries, add symbols to global namespace. */
+ 	ldso.deps = (struct dso **)no_deps;
+ 	if (env_preload) load_preload(env_preload);
++	/* Load libraries listed in /etc/ld.so.preload (one path per line). */
++	{
++		int fd = __syscall(SYS_openat, AT_FDCWD,
++		                   "/etc/ld.so.preload", O_RDONLY|O_CLOEXEC, 0);
++		if (fd >= 0) {
++			char buf[4096];
++			ssize_t n = __syscall(SYS_read, fd, buf, sizeof(buf)-1);
++			__syscall(SYS_close, fd);
++			if (n > 0) {
++				buf[n] = 0;
++				char *p = buf;
++				while (*p) {
++					while (*p == ' ' || *p == '\t' || *p == '\r') p++;
++					if (*p == '\n') { p++; continue; }
++					if (*p == '#') {
++						while (*p && *p != '\n') p++;
++						continue;
++					}
++					char *e = p;
++					while (*e && *e != '\n') e++;
++					char save = *e;
++					*e = 0;
++					load_preload(p);
++					*e = save;
++					p = e + (save ? 1 : 0);
++				}
++			}
++		}
++	}
+  	load_deps(&app);
+ 	for (struct dso *p=head; p; p=p->next)
+ 		add_syms(p);

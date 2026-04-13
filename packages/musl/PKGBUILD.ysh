@@ -2,16 +2,18 @@
 
 var name    = 'musl'
 var ver     = '1.2.6'
-var rel     = '14'
+var rel     = '15'
 var deps    = []
 var mkdeps  = ['zig']
 var nostrip = true  # strip removes dynamic symbols needed by the runtime linker
 
 var sources = [
     'https://musl.libc.org/releases/musl-VERSION.tar.gz',
+    'patches/ld-so-preload.patch patch',
 ]
 var checksums = [
     'd585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a',
+    'af99fd5b5861cb1aa65e2af14419a321118365d776206171764c5a01310082b1',
 ]
 
 proc build(dest) {
@@ -20,6 +22,9 @@ proc build(dest) {
 
     mkdir -p musl-build
     cd musl-build
+
+    # Add /etc/ld.so.preload support to the dynamic linker.
+    patch -p1 < patch/ld-so-preload.patch
 
     env CC="$zig_bin cc" ../configure \
         --prefix=/usr \
