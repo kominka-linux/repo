@@ -2,7 +2,7 @@
 
 var name    = 'musl'
 var ver     = '1.2.6'
-var rel     = '3'
+var rel     = '4'
 var deps    = []
 var mkdeps  = ['zig']
 
@@ -68,12 +68,16 @@ proc build(dest) {
         --disable-gcc-wrapper \
         $malloc_opt
 
-    # lld supports --gc-sections but NOT --dynamic-list. musl uses both together:
-    # gc-sections removes "dead" asm string functions (memcpy/memset — inlined by
-    # zig cc) and dynamic-list would keep them exported. Without dynamic-list the
-    # asm impls get GC'd and aren't exported from libc.so. Remove --gc-sections
-    # from the link flags so the symbols survive.
+    # lld supports --gc-sections and -fvisibility=hidden but NOT --dynamic-list.
+    # musl uses all three: hidden visibility hides everything, --dynamic-list
+    # explicitly exports the public API, and --gc-sections removes dead sections.
+    # Without --dynamic-list (lld limitation): -fvisibility=hidden hides ALL
+    # functions (including memcpy/memset), and --gc-sections removes sections
+    # whose only callers are internal (zig cc inlines memcpy so musl's copy has
+    # no callers). Result: memcpy etc. neither present nor exported in libc.so.
+    # Fix: strip both flags so all global symbols are exported and present.
     sed -i 's/-Wl,--gc-sections//' config.mak
+    sed -i 's/-fvisibility=hidden//' config.mak
 
     # EXTRA_OBJ: musl links this into libc.so via MALLOC_OBJS wildcard.
     # Make's wildcard caches the result from prerequisite-tracking time (before
