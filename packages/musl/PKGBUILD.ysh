@@ -20,11 +20,11 @@ proc build(dest) {
     var ARCH   = $(uname -m)
     var zig_bin = $(command -v zig)
 
-    mkdir -p musl-build
-    cd musl-build
-
     # Add /etc/ld.so.preload support to the dynamic linker.
     patch -p1 < patch/ld-so-preload.patch
+
+    mkdir -p musl-build
+    cd musl-build
 
     env CC="$zig_bin cc" ../configure \
         --prefix=/usr \
