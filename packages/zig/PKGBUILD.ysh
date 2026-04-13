@@ -2,7 +2,7 @@
 
 var name    = 'zig'
 var ver     = '0.15.2'
-var rel     = '9'
+var rel     = '10'
 var deps    = []
 var mkdeps  = []
 
@@ -43,7 +43,8 @@ proc build(dest) {
     write -- '#!/bin/sh' 'exec zig ranlib "$@"' > "${dest}/usr/bin/ranlib"
     # objcopy wrapper.
     write -- '#!/bin/sh' 'exec zig objcopy "$@"' > "${dest}/usr/bin/objcopy"
-    # nm — minimal ELF symbol lister (needed by libtool).
+    # nm — minimal ELF symbol lister (produces GNU nm output for libtool).
+    # Compiled with zig cc targeting the native musl system.
     "${dest}/usr/bin/zig" cc -o "${dest}/usr/bin/nm" nm.c
     chmod +x "${dest}/usr/bin/cc" "${dest}/usr/bin/c++" "${dest}/usr/bin/ld" \
              "${dest}/usr/bin/ar" "${dest}/usr/bin/ranlib" "${dest}/usr/bin/objcopy"

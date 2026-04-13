@@ -20,16 +20,19 @@ proc build(dest) {
         mv "${_kr}/usr/include/openssl/time.h" "${_kr}/usr/include/openssl/time.h.aside"
     }
 
-    var _cflags = ENV => get("CFLAGS", "-O2 -DNDEBUG") ++ " -Wno-error"
+    var _cflags = ENV => get("CFLAGS", "-O2 -DNDEBUG") ++ " -Wno-error -I${_kr}/usr/include"
     var _ldflags = ENV => get("LDFLAGS", "") ++ " -L${_kr}/usr/lib"
 
+    var zig_bin = $(command -v zig)
+    # Use zig nm — our custom nm.c doesn't produce GNU nm output which
+    # libtool needs to build the global symbol pipe for libcurl.so.
+    NM="$zig_bin nm" \
     CFLAGS=$_cflags LDFLAGS=$_ldflags \
         PKG_CONFIG_PATH="${_kr}/usr/lib/pkgconfig" \
         LD_LIBRARY_PATH="${_kr}/usr/lib" \
         ./configure \
         --prefix=/usr \
         --enable-ipv6 \
-        --enable-hidden-symbols \
         --disable-manual \
         --disable-ldap \
         --disable-ares \
