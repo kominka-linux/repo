@@ -2,7 +2,7 @@
 
 var name    = 'busybox'
 var ver     = '1.36.1'
-var rel     = '11'
+var rel     = '12'
 var deps    = []
 var mkdeps  = ['zig', 'make', 'linux', 'perl']
 
@@ -19,7 +19,6 @@ var sources = [
     'patches/fix-UB.patch patch-clang',
     'patches/awk-fix-CVE-2023-42366.patch patch',
     'files/.config',
-    'files/.config-suid',
     'files/acpid.run',
     'files/syslogd.run',
     'files/mdev.run',
@@ -43,7 +42,6 @@ var checksums = [
     'c8a6fc95a75fa355d570c14e214d68a618e060a486b824b83b5140b9c6a894a7',
     '34a52455ba3866c43d53558047fa40edba5118218930a3f860d1d343dc7d09a8',
     '96d8847221f71b4100cfb94a1e98307651cd6386acb473768383273cf1e56f26',
-    '9e21039ef69464ab4abd4aa81953ea67c75511fe624b9a4e0ce4767741110512',
     '2734d31e2ec590b9a5be4a7330ad9b512b60fcf3e9ff58d6fbea13f28f01717e',
     'eb1bd80eff850dc469c6b89019352c4026397dd263b9d86834c34df295a7fd47',
     'f1de219edef2cfcd04ccf3482a93d9c2bca9afd844e5f1f125d19fc791ee1dab',
@@ -140,40 +138,11 @@ proc build(dest) {
     make HOSTCC=$HOSTCC SKIP_STRIP=y
     make HOSTCC=$HOSTCC CONFIG_PREFIX="${dest}/usr" install
 
-    # Rename the binary temporarily.
-    mv "${dest}/usr/bin/busybox" "${dest}/usr/bin/busybox-nosuid"
-
-    # Build and install suid busybox.
-    cp -f .config-suid .config
-    var _oc_tmp2 = "/tmp/busybox-oc2-${KOMINKA_PID}"
-    while true {
-        try { yes '' | make HOSTCC=$HOSTCC oldconfig >$_oc_tmp2 2>&1 }
-        grep -q '(NEW)' $_oc_tmp2 || break
-    }
-    rm -f $_oc_tmp2
-    try { grep -rl -- -lcrypt . 2>/dev/null | xargs sed -i 's/-lcrypt//g' }
-    make HOSTCC=$HOSTCC SKIP_STRIP=y
-    make HOSTCC=$HOSTCC CONFIG_PREFIX="${dest}/usr" install
-
-    # Aptly name the busybox binaries.
-    mv -f "${dest}/usr/bin/busybox"        "${dest}/usr/bin/busybox-suid"
-    mv -f "${dest}/usr/bin/busybox-nosuid" "${dest}/usr/bin/busybox"
-
-    # Install the non-suid symlinks.
     try {
         "${dest}/usr/bin/busybox" --list | while read -r bin {
             ln -s busybox "${dest}/usr/bin/${bin}" 2>/dev/null
         }
     }
-
-    # Install the suid symlinks.
-    try {
-        "${dest}/usr/bin/busybox-suid" --list | while read -r bin {
-            ln -s busybox-suid "${dest}/usr/bin/${bin}" 2>/dev/null
-        }
-    }
-
-    chmod u+s "${dest}/usr/bin/busybox-suid"
 
     mkdir -p "${dest}/etc/acpi"
 
