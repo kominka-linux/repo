@@ -2,7 +2,7 @@
 
 var name    = 'xz'
 var ver     = '5.8.3'
-var rel     = '2'
+var rel     = '3'
 var deps    = []
 var mkdeps  = ['zig', 'make']
 
@@ -10,8 +10,9 @@ var sources = ['https://github.com/tukaani-project/xz/releases/download/vVERSION
 var checksums = ['fff1ffcf2b0da84d308a14de513a1aa23d4e9aa3464d17e64b9714bfdd0bbfb6']
 
 proc build(dest) {
+    var zig_bin = $(command -v zig)
 
-    ./configure \
+    env CC="$zig_bin cc" ./configure \
         --prefix=/usr \
         --disable-doc \
         --disable-nls
