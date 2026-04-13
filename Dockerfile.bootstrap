@@ -7,7 +7,7 @@ FROM alpine:latest
 
 ARG R2_BASE=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
 
-RUN apk add --no-cache curl xz patch
+RUN apk add --no-cache curl xz patch make
 
 # ysh is a static musl binary — runs on any Linux.
 RUN ARCH=$(uname -m) && \
