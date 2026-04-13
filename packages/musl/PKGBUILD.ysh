@@ -2,7 +2,7 @@
 
 var name    = 'musl'
 var ver     = '1.2.6'
-var rel     = '16'
+var rel     = '17'
 var deps    = []
 var mkdeps  = ['zig']
 var nostrip = true  # strip removes dynamic symbols needed by the runtime linker
@@ -10,10 +10,12 @@ var nostrip = true  # strip removes dynamic symbols needed by the runtime linker
 var sources = [
     'https://musl.libc.org/releases/musl-VERSION.tar.gz',
     'patches/ld-so-preload.patch patch',
+    'files/float128_shim.c',
 ]
 var checksums = [
     'd585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a',
     'af99fd5b5861cb1aa65e2af14419a321118365d776206171764c5a01310082b1',
+    '8b7a77a46f59ea4dc2ec5d9a948b07a4fad2b5001b7473614f271bba20dafb44',
 ]
 
 proc build(dest) {
@@ -42,20 +44,25 @@ proc build(dest) {
     # CRITICAL: target ../Makefile — musl-build/Makefile is only a thin wrapper
     # ("include ../Makefile"); the actual libc.so recipe lives in the source tree.
     # compiler_rt defines memcpy/memset/memmove as WEAK HIDDEN, poisoning musl's
-    # GLOBAL DEFAULT exports via ELF visibility merging. No reliable way to strip
-    # these symbols from the archive in the bootstrap environment (zig's objcopy
-    # stub at /usr/bin/objcopy lacks --localize-symbol).
-    #
-    # Solution: don't link compiler_rt. The 128-bit float ops it provides
-    # (__subtf3, __addtf3, etc.) are used only by long-double math (sinl, cosl,
-    # printf %Lf). On aarch64, long double is 128-bit but virtually no server
-    # workload uses it. Without --no-undefined, lld simply omits the unresolvable
-    # symbols from the output rather than erroring; they won't appear in .dynsym
-    # so dynamic linking of normal programs is unaffected.
+    # GLOBAL DEFAULT exports via ELF visibility merging. We don't link compiler_rt.
+    # Instead, float128_shim.c provides the 128-bit float ops (__addtf3 etc.) with
+    # HIDDEN visibility — satisfying internal PLT references without polluting .dynsym.
+
+    # Compile the float128 shim: provides __addtf3 etc. with HIDDEN visibility
+    # so they satisfy internal PLT references without appearing in .dynsym.
+    # Only needed on aarch64 (where long double = __float128 = 128-bit quad);
+    # on x86_64, long double is 80-bit and __subtf3 etc. are not needed by musl.
+    var float_shim_obj = ''
+    if (ARCH === 'aarch64') {
+        "$zig_bin" cc -c -fPIC -fvisibility=hidden \
+            -target aarch64-linux-musl \
+            -o /tmp/float128_shim.o ../float128_shim.c
+        setvar float_shim_obj = '/tmp/float128_shim.o'
+    }
 
     var tab         = u'\u{09}'
     var ldflags_lld = '--sort-section=alignment --sort-common --hash-style=both --export-dynamic'
-    var recipe      = "${tab}${zig_bin} ld.lld --shared ${ldflags_lld} --entry _dlstart -o \$@ \$(LOBJS) \$(LDSO_OBJS)"
+    var recipe      = "${tab}${zig_bin} ld.lld --shared ${ldflags_lld} --entry _dlstart -o \$@ \$(LOBJS) \$(LDSO_OBJS) ${float_shim_obj}"
     sed -i "s:${tab}.*-nostdlib -shared.*:${recipe}:" ../Makefile
 
     # Verify the patch landed — fail loudly rather than silently use zig cc.
