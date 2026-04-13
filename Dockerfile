@@ -27,8 +27,8 @@ RUN mkdir -p /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/busybox/1.36.1-12.tar.gz"         | tar xzf - -C /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/ysh/0.37.0-4.tar.gz"              | tar xzf - -C /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/zlib/1.3.2-4.tar.gz"              | tar xzf - -C /pkg && \
-    wget --no-check-certificate -qO- "$R2/$KARCH/boringssl/0.20260327.0-7.tar.gz"  | tar xzf - -C /pkg && \
-    wget --no-check-certificate -qO- "$R2/$KARCH/curl/8.19.0-7.tar.gz"             | tar xzf - -C /pkg
+    wget --no-check-certificate -qO- "$R2/$KARCH/boringssl/0.20260327.0-8.tar.gz"  | tar xzf - -C /pkg && \
+    wget --no-check-certificate -qO- "$R2/$KARCH/curl/8.19.0-8.tar.gz"             | tar xzf - -C /pkg
 
 FROM scratch AS bootstrap
 
