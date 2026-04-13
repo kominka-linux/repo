@@ -2,7 +2,7 @@
 
 var name    = 'curl'
 var ver     = '8.19.0'
-var rel     = '7'
+var rel     = '8'
 var deps    = ['boringssl', 'zlib']
 var mkdeps  = ['zig', 'make']
 
@@ -40,13 +40,25 @@ proc build(dest) {
         ./configure \
         --prefix=/usr \
         --enable-ipv6 \
-        --enable-unix-sockets \
         --enable-hidden-symbols \
         --disable-manual \
         --disable-ldap \
         --disable-ares \
+        --disable-ftp \
+        --disable-file \
+        --disable-dict \
+        --disable-telnet \
+        --disable-tftp \
+        --disable-pop3 \
+        --disable-imap \
+        --disable-smb \
+        --disable-smtp \
+        --disable-gopher \
+        --disable-mqtt \
+        --disable-rtsp \
+        --disable-unix-sockets \
+        --disable-docs \
         --with-openssl=$ssl_prefix \
-        --with-pic \
         --with-ca-fallback \
         --without-librtmp \
         --without-icu \
