@@ -82,10 +82,9 @@ jobs:
             -e HOME=/root \
             kominka:bootstrap /usr/local/bin/ysh -c '
               # Pre-register Alpine system tools so pm skips them as makedeps.
-              # musl is also registered here: installing our musl into KOMINKA_ROOT=/
-              # overwrites Alpine's /usr/lib/libc.so and breaks Alpine's gcc/ld.
-              # Packages that actually need our musl are built with CC=zig cc which
-              # uses its own bundled musl headers and doesn't depend on the system one.
+              # musl is also registered: our musl installed to KOMINKA_ROOT=/
+              # overwrites /usr/lib/libc.so and breaks Alpine gcc+ld.
+              # zig-cc packages use zig bundled musl and skip system libc.
               for tool in make perl linux cmake go samurai muon pkgconf musl {
                 mkdir -p "/var/db/kominka/installed/${tool}"
                 write -- "system 1" > "/var/db/kominka/installed/${tool}/version"
