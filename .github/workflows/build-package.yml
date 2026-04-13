@@ -43,7 +43,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /tmp/kominka-build-essential.tar.gz
-          key: kominka-build-essential-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'Dockerfile.buildessential', 'pm/pm.ysh', 'packages/**/PKGBUILD.ysh') }}
+          key: kominka-build-essential-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'Dockerfile.buildessential', 'pm/pm.ysh') }}
 
       - name: Build kominka:build-essential
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}
