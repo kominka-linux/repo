@@ -2,9 +2,9 @@
 
 var name    = 'linux'
 var ver     = '6.19.12'
-var rel     = '8'
+var rel     = '9'
 var deps    = []
-var mkdeps  = ['make', 'bison', 'perl']
+var mkdeps  = ['make', 'bison', 'perl', 'binutils-nm']
 
 var sources = [
     'https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-VERSION.tar.xz',
@@ -34,13 +34,6 @@ proc build(dest) {
     var OBJCOPY = '/usr/local/bin/gnu-objcopy'
     if ! test -f $OBJCOPY { setvar OBJCOPY = $(command -v objcopy) }
 
-    # The kernel's PASYMS step runs $(NM) on realmode objects to generate
-    # pasyms.h. Our custom zig-package nm is minimal (libtool-only) and
-    # produces incomplete output, so pasyms.h is incomplete and the linker
-    # can't resolve pa_* symbols. Use Alpine's real binutils nm.
-    var NM = '/usr/local/bin/gnu-nm'
-    if ! test -f $NM { setvar NM = $(command -v nm) }
-
     # x86 realmode trampoline (arch/x86/realmode/rm/) uses a linker script
     # that lld can't handle (pa_* physical-address symbols). GNU ld required.
     # arm64 works fine with lld; no LD override needed there.
@@ -58,26 +51,26 @@ proc build(dest) {
         *       { scripts/kconfig/merge_config.sh -m .config kernel.config }
     }
 
-    make ARCH=$ARCH NM=$NM OBJCOPY=$OBJCOPY @ld_args olddefconfig
+    make ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args olddefconfig
 
     var _nproc = $(nproc 2>/dev/null || echo 4)
 
     # Build the kernel image.
     case (MACH) {
         x86_64 {
-            make -j$_nproc ARCH=$ARCH NM=$NM OBJCOPY=$OBJCOPY @ld_args bzImage
+            make -j$_nproc ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args bzImage
             mkdir -p "${dest}/usr/share/kominka"
             cp arch/x86/boot/bzImage "${dest}/usr/share/kominka/Image"
         }
         * {
-            make -j$_nproc ARCH=$ARCH NM=$NM OBJCOPY=$OBJCOPY Image
+            make -j$_nproc ARCH=$ARCH OBJCOPY=$OBJCOPY Image
             mkdir -p "${dest}/usr/share/kominka"
             cp arch/arm64/boot/Image "${dest}/usr/share/kominka/Image"
         }
     }
 
     # Install kernel headers.
-    make ARCH=$ARCH NM=$NM OBJCOPY=$OBJCOPY @ld_args headers
+    make ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args headers
 
     find usr/include -name '*.h' -type f | while read -r file {
         mkdir -p "${dest}/${file%/*}"
