@@ -4,7 +4,7 @@ var name    = 'linux'
 var ver     = '6.19.12'
 var rel     = '9'
 var deps    = []
-var mkdeps  = ['make', 'bison', 'perl', 'binutils-nm']
+var mkdeps  = ['make', 'bison', 'perl', 'binutils']
 
 var sources = [
     'https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-VERSION.tar.xz',

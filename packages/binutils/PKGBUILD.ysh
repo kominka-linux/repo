@@ -1,8 +1,8 @@
 #!/usr/local/bin/ysh
 
-var name    = 'binutils-strip'
+var name    = 'binutils'
 var ver     = '2.44'
-var rel     = '2'
+var rel     = '1'
 var deps    = ['musl']
 var mkdeps  = ['zig', 'make']
 
@@ -21,8 +21,8 @@ proc build(dest) {
         --disable-gold \
         --disable-gprof
 
-    # Full make (skipping ld/gold/gprof); libiberty/bfd are built as deps.
     make -j$(nproc)
 
     install -Dm755 binutils/strip-new "${dest}/usr/bin/strip"
+    install -Dm755 binutils/nm-new    "${dest}/usr/bin/nm"
 }
