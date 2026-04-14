@@ -2,7 +2,7 @@
 
 var name    = 'git'
 var ver     = '2.53.0'
-var rel     = '6'
+var rel     = '7'
 var deps    = ['musl', 'curl', 'boringssl', 'zlib']
 var mkdeps  = ['zig', 'make']
 
@@ -43,7 +43,7 @@ proc build(dest) {
         NO_REGEX=NeedsStartEnd \
         prefix=/usr \
         libexecdir=/usr/lib \
-        CFLAGS="-Wall -O2 -DNO_REGEX ${_inc}" \
+        CFLAGS="-Wall -O2 -DNO_REGEX -DREGEX_UNDEF_STARTEND ${_inc}" \
         LDFLAGS="${_libs}" \
         FUZZ_PROGRAMS= \
         all
