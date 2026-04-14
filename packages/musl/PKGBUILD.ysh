@@ -2,7 +2,7 @@
 
 var name    = 'musl'
 var ver     = '1.2.6'
-var rel     = '23'
+var rel     = '24'
 var deps    = []
 var mkdeps  = ['zig']
 var nostrip = true  # strip removes dynamic symbols needed by the runtime linker
@@ -90,6 +90,9 @@ proc build(dest) {
 
     make
     make DESTDIR=$dest install
+    # Install C library headers so packages can use our musl headers
+    # instead of zig's bundled musl headers (which can drift from our version).
+    make DESTDIR=$dest install-headers
 
     # ldd symlink.
     var ldso = ''

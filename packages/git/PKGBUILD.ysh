@@ -2,9 +2,9 @@
 
 var name    = 'git'
 var ver     = '2.53.0'
-var rel     = '17'
+var rel     = '18'
 var deps    = ['musl', 'curl', 'zlib']
-var mkdeps  = ['zig', 'make']
+var mkdeps  = ['zig', 'make', 'musl']
 
 var sources = [
     'https://mirrors.edge.kernel.org/pub/software/scm/git/git-VERSION.tar.xz',
@@ -20,23 +20,14 @@ proc build(dest) {
     if (_kr === '/') { setvar _kr = '' }
 
     var CC = $(command -v cc)
+    var _libs = "-L${_kr}/usr/lib -lcurl -lz"
 
-    # Include ordering for musl/zig cc:
-    # - -Icompat/regex before -I/usr/include: NO_REGEX=NeedsStartEnd adds
-    #   -Icompat/regex via COMPAT_CFLAGS. musl lacks REG_STARTEND; with
-    #   -Icompat/regex first, #include <regex.h> finds git's bundled
-    #   compat/regex/regex.h (which defines REG_STARTEND) not musl's.
-    # - -I. before -I/usr/include: git's own tar.h etc. take precedence
-    #   over /usr/include/tar.h (which Alpine's musl-dev provides and
-    #   lacks TYPEFLAG_GLOBAL_HEADER). -I. is also added by BASIC_CFLAGS
-    #   but we need it here first.
-    var _inc = "-I${_kr}/usr/include"
-    # NO_OPENSSL: git uses curl for HTTPS transport (which has its own TLS).
-    # No need for git's own OpenSSL integration — avoids needing boringssl
-    # headers at build time (they may not be consistently installed yet).
-    # libssl/libcrypto still provided transitively via libcurl.so.
-    var _libs = "-L${_kr}/usr/lib"
-
+    # Include ordering for musl/zig cc (zig rel=11+ appends -I/usr/include):
+    # - -Icompat/regex first: finds compat/regex/regex.h (defines REG_STARTEND)
+    #   before musl's /usr/include/regex.h (which lacks REG_STARTEND)
+    # - -I. before wrapper's appended -I/usr/include: git's own tar.h takes
+    #   precedence over /usr/include/tar.h (musl's lacks TYPEFLAG_GLOBAL_HEADER)
+    # NO_OPENSSL: git uses curl for HTTPS transport (curl has its own TLS).
     make \
         CC="$CC" \
         NO_REGEX=NeedsStartEnd \
@@ -53,8 +44,8 @@ proc build(dest) {
         NO_INSTALL_HARDLINKS=1 \
         prefix=/usr \
         libexecdir=/usr/lib \
-        CFLAGS="-Wall -O2 -DNO_REGEX -DNO_OPENSSL -Icompat/regex -I. ${_inc}" \
-        LDFLAGS="${_libs} -lcurl -lz" \
+        CFLAGS="-Wall -O2 -DNO_REGEX -DNO_OPENSSL -Icompat/regex -I." \
+        LDFLAGS="${_libs}" \
         FUZZ_PROGRAMS= \
         all
 

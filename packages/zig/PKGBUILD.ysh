@@ -2,7 +2,7 @@
 
 var name    = 'zig'
 var ver     = '0.15.2'
-var rel     = '10'
+var rel     = '11'
 var deps    = []
 var mkdeps  = []
 
@@ -30,11 +30,15 @@ proc build(dest) {
     # Some build systems (oils) pass -std=c++11 to CC instead of CXX.
     var ARCH = $(uname -m)
     var MUSL_TRIPLE = "${ARCH}-linux-musl"
+    # Append -I/usr/include AFTER user args so zig cc uses installed system
+    # headers (musl-dev, boringssl, etc.) instead of zig's bundled musl headers.
+    # Appending (not prepending) preserves user include priority: packages can
+    # still put -Icompat/etc before -I/usr/include by ordering their own flags.
     write -- "#!/bin/sh
     mode=cc
     for a in \"\$@\"; do case \"\$a\" in -std=c++*) mode=\"c++\";; esac; done
-    exec zig \$mode -target $MUSL_TRIPLE \"\$@\"" > "${dest}/usr/bin/cc"
-    write -- "#!/bin/sh" "exec zig c++ -target $MUSL_TRIPLE \"\$@\"" > "${dest}/usr/bin/c++"
+    exec zig \$mode -target $MUSL_TRIPLE \"\$@\" -I/usr/include" > "${dest}/usr/bin/cc"
+    write -- "#!/bin/sh" "exec zig c++ -target $MUSL_TRIPLE \"\$@\" -I/usr/include" > "${dest}/usr/bin/c++"
     # ld — zig's bundled lld, exposed directly.
     write -- '#!/bin/sh' 'exec zig ld.lld "$@"' > "${dest}/usr/bin/ld"
     # ar wrapper — autotools and make need it.

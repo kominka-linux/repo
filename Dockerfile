@@ -21,7 +21,7 @@ ARG KARCH=aarch64-linux-gnu
 # Minimal bootstrap environment: only musl + baselayout + busybox + ysh needed
 # to run pm. All other packages are pre-cached below so pm never calls curl.
 RUN mkdir -p /pkg && \
-    wget --no-check-certificate -qO- "$R2/$KARCH/musl/1.2.6-23.tar.gz"      | tar xzf - -C /pkg && \
+    wget --no-check-certificate -qO- "$R2/$KARCH/musl/1.2.6-24.tar.gz"      | tar xzf - -C /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/baselayout/1-9.tar.gz"       | tar xzf - -C /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/busybox/1.36.1-12.tar.gz"    | tar xzf - -C /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/ysh/0.37.0-4.tar.gz"         | tar xzf - -C /pkg
@@ -34,7 +34,7 @@ RUN mkdir -p /pkg && \
 # boringssl crashes with SIGSEGV during SSL_library_init() (zig cc x86_64 bug).
 # Update versions here whenever any of these packages change.
 RUN mkdir -p /cache && \
-    wget --no-check-certificate -qO "/cache/musl@1.2.6-23.tar.gz"               "$R2/$KARCH/musl/1.2.6-23.tar.gz" && \
+    wget --no-check-certificate -qO "/cache/musl@1.2.6-24.tar.gz"               "$R2/$KARCH/musl/1.2.6-24.tar.gz" && \
     wget --no-check-certificate -qO "/cache/baselayout@1-9.tar.gz"               "$R2/$KARCH/baselayout/1-9.tar.gz" && \
     wget --no-check-certificate -qO "/cache/busybox@1.36.1-12.tar.gz"            "$R2/$KARCH/busybox/1.36.1-12.tar.gz" && \
     wget --no-check-certificate -qO "/cache/ysh@0.37.0-4.tar.gz"                 "$R2/$KARCH/ysh/0.37.0-4.tar.gz" && \
@@ -45,7 +45,7 @@ RUN mkdir -p /cache && \
     wget --no-check-certificate -qO "/cache/baseinit@2.0.0-1.tar.gz"             "$R2/$KARCH/baseinit/2.0.0-1.tar.gz" && \
     wget --no-check-certificate -qO "/cache/runit@2.3.1-2.tar.gz"                "$R2/$KARCH/runit/2.3.1-2.tar.gz" && \
     wget --no-check-certificate -qO "/cache/ca-certificates@2026.03.19-1.tar.gz" "$R2/$KARCH/ca-certificates/2026.03.19-1.tar.gz" && \
-    wget --no-check-certificate -qO "/cache/zig@0.15.2-10.tar.gz"                "$R2/$KARCH/zig/0.15.2-10.tar.gz" && \
+    wget --no-check-certificate -qO "/cache/zig@0.15.2-11.tar.gz"                "$R2/$KARCH/zig/0.15.2-11.tar.gz" && \
     wget --no-check-certificate -qO "/cache/make@4.4.1-3.tar.gz"                 "$R2/$KARCH/make/4.4.1-3.tar.gz" && \
     wget --no-check-certificate -qO "/cache/binutils-strip@2.44-2.tar.gz"        "$R2/$KARCH/binutils-strip/2.44-2.tar.gz"
 
