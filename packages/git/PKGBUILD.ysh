@@ -2,9 +2,9 @@
 
 var name    = 'git'
 var ver     = '2.53.0'
-var rel     = '9'
+var rel     = '10'
 var deps    = ['musl', 'curl', 'boringssl', 'zlib']
-var mkdeps  = ['make']
+var mkdeps  = ['zig', 'make']
 
 var sources = [
     'https://mirrors.edge.kernel.org/pub/software/scm/git/git-VERSION.tar.xz',
@@ -19,33 +19,33 @@ proc build(dest) {
     var _kr = ENV => get("KOMINKA_ROOT", "")
     if (_kr === '/') { setvar _kr = '' }
 
-    # Build WITHOUT ./configure — like Alpine. Remove zig from mkdeps so
-    # Alpine's gcc is used: zig cc silently ignores -DNO_REGEX in some
-    # versions, but Alpine's gcc handles it correctly. Alpine uses musl
-    # so the resulting binary is correctly musl-linked.
-    var CC = $(command -v gcc 2>/dev/null || command -v cc)
+    # Build WITHOUT ./configure — like Alpine.
+    # IMPORTANT: do NOT override CFLAGS/LDFLAGS on the make command line.
+    # Command-line variables prevent the Makefile from appending COMPAT_CFLAGS
+    # (which contains -DREGEX_UNDEF_STARTEND). Instead, put CFLAGS in config.mak
+    # so the Makefile can ADD its own flags on top via +=.
+    var CC = $(command -v cc)
     var _inc = "-I${_kr}/usr/include"
     var _libs = "-L${_kr}/usr/lib -lssl -lcrypto"
 
-    make \
-        CC="$CC" \
-        NO_GETTEXT=YesPlease \
-        NO_SVN_TESTS=YesPlease \
-        NO_TCLTK=YesPlease \
-        NO_EXPAT=YesPlease \
-        NO_NSEC=YesPlease \
-        NO_PYTHON=YesPlease \
-        NO_PERL=YesPlease \
-        NO_SYS_POLL_H=1 \
-        NO_CROSS_DIRECTORY_HARDLINKS=1 \
-        NO_INSTALL_HARDLINKS=1 \
-        NO_REGEX=NeedsStartEnd \
-        prefix=/usr \
-        libexecdir=/usr/lib \
-        CFLAGS="-Wall -O2 -DNO_REGEX -DREGEX_UNDEF_STARTEND ${_inc}" \
-        LDFLAGS="${_libs}" \
-        FUZZ_PROGRAMS= \
-        all
+    write -- \
+        "CC = ${CC}" \
+        "CFLAGS = -Wall -O2 ${_inc}" \
+        "LDFLAGS = ${_libs}" \
+        "NO_GETTEXT = YesPlease" \
+        "NO_SVN_TESTS = YesPlease" \
+        "NO_TCLTK = YesPlease" \
+        "NO_EXPAT = YesPlease" \
+        "NO_NSEC = YesPlease" \
+        "NO_PYTHON = YesPlease" \
+        "NO_PERL = YesPlease" \
+        "NO_SYS_POLL_H = 1" \
+        "NO_CROSS_DIRECTORY_HARDLINKS = 1" \
+        "NO_INSTALL_HARDLINKS = 1" \
+        "NO_REGEX = NeedsStartEnd" \
+        > config.mak
+
+    make prefix=/usr libexecdir=/usr/lib FUZZ_PROGRAMS= all
 
     make DESTDIR=$dest prefix=/usr libexecdir=/usr/lib install
 
