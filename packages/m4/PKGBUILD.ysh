@@ -14,8 +14,11 @@ proc build(dest) {
 
     # EGREP_TRADITIONAL and GREP: if these env vars are non-empty, configure
     # skips the tool-detection tests entirely. Avoids busybox egrep -Ee failure.
+    # --disable-dependency-tracking: reduces Makefile substitutions in config.status
+    # which otherwise exceed busybox sed's capacity.
     env CC="$zig_bin cc" EGREP_TRADITIONAL=egrep GREP=grep ./configure \
-        --prefix=/usr
+        --prefix=/usr \
+        --disable-dependency-tracking
 
     # Fix gnulib _GL_ATTRIBUTE_NODISCARD incompatibility with newer GCC.
     find lib -name '*.h' -exec sed -i \
