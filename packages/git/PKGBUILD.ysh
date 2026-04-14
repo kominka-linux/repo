@@ -32,14 +32,12 @@ NO_CROSS_DIRECTORY_HARDLINKS=1
 NO_INSTALL_HARDLINKS=1
 EOF
 
-    var _cppflags = ''
-    var _ldflags = ''
-    if (_kr !== '') {
-        setvar _cppflags = "-I${_kr}/usr/include"
-        # Explicitly include BoringSSL: libcurl.so links against it as a shared
-        # library, but GNU ld doesn't follow transitive DT_NEEDED entries.
-        setvar _ldflags = "-L${_kr}/usr/lib -lssl -lcrypto"
-    }
+    # zig cc -target musl doesn't search /usr/include by default — set it
+    # explicitly so deps (zlib, boringssl headers) are found in all contexts.
+    var _cppflags = "-I${_kr}/usr/include"
+    # Explicitly include BoringSSL: libcurl.so links against it as a shared
+    # library, but GNU ld doesn't follow transitive DT_NEEDED entries.
+    var _ldflags = "-L${_kr}/usr/lib -lssl -lcrypto"
 
     CPPFLAGS=$_cppflags LDFLAGS=$_ldflags \
     ./configure \
