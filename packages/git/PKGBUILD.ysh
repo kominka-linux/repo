@@ -2,7 +2,7 @@
 
 var name    = 'git'
 var ver     = '2.53.0'
-var rel     = '5'
+var rel     = '6'
 var deps    = ['musl', 'curl', 'boringssl', 'zlib']
 var mkdeps  = ['zig', 'make']
 
@@ -22,8 +22,9 @@ proc build(dest) {
     # Build WITHOUT ./configure — like Alpine. configure's regex detection
     # sets HAVE_REGEX_H but doesn't properly suppress the REG_STARTEND check.
     # Passing everything directly to make avoids the config.mak.autogen issue.
-    var zig_bin = $(command -v zig)
-    var CC = "${zig_bin} cc"
+    # Use the zig cc wrapper (/usr/bin/cc) which includes -target ARCH-linux-musl
+    # so zig correctly resolves system vs user include paths.
+    var CC = $(command -v cc)
     var _inc = "-I${_kr}/usr/include"
     var _libs = "-L${_kr}/usr/lib -lssl -lcrypto"
 
