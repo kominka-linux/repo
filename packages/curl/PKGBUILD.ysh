@@ -2,7 +2,7 @@
 
 var name    = 'curl'
 var ver     = '8.19.0'
-var rel     = '8'
+var rel     = '9'
 var deps    = ['boringssl', 'zlib']
 var mkdeps  = ['zig', 'make']
 
