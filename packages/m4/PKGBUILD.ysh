@@ -13,9 +13,12 @@ proc build(dest) {
     var zig_bin = $(command -v zig)
 
     # EGREP: busybox egrep may not accept -e flag that autoconf checks for.
-    # busybox egrep rejects -e/-E; autoconf's AC_PROG_EGREP tests egrep -Ee.
-    # Use a config.cache file to pre-set the cache variable, bypassing the check.
-    write -- 'ac_cv_prog_egrep=egrep' > config.cache
+    # busybox egrep rejects -e/-E flags; autoconf/gnulib tests "egrep -Ee".
+    # Set all candidate cache variables (gnulib uses gl_cv_ prefix).
+    grep -r "checking for egrep" ../configure 2>/dev/null | head -3
+    var=$(grep -o 'ac_cv_prog_egrep\|gl_cv_prog_egrep\|gl_cv_path_EGREP\|ac_cv_path_EGREP' ../configure 2>/dev/null | sort -u | head -1)
+    echo "egrep cache var: $var"
+    printf 'ac_cv_prog_egrep=egrep\ngl_cv_prog_egrep=egrep\ngl_cv_path_EGREP=egrep\nac_cv_path_EGREP=egrep\n' > config.cache
     env CC="$zig_bin cc" ./configure \
         --cache-file=config.cache \
         --prefix=/usr
