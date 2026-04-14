@@ -27,8 +27,8 @@ RUN mkdir -p /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/busybox/1.36.1-12.tar.gz"         | tar xzf - -C /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/ysh/0.37.0-4.tar.gz"              | tar xzf - -C /pkg && \
     wget --no-check-certificate -qO- "$R2/$KARCH/zlib/1.3.2-4.tar.gz"              | tar xzf - -C /pkg && \
-    wget --no-check-certificate -qO- "$R2/$KARCH/boringssl/0.20260327.0-10.tar.gz" | tar xzf - -C /pkg && \
-    wget --no-check-certificate -qO- "$R2/$KARCH/curl/8.19.0-10.tar.gz"            | tar xzf - -C /pkg
+    wget --no-check-certificate -qO- "$R2/$KARCH/boringssl/0.20260327.0-9.tar.gz"  | tar xzf - -C /pkg && \
+    wget --no-check-certificate -qO- "$R2/$KARCH/curl/8.19.0-9.tar.gz"             | tar xzf - -C /pkg
 
 FROM scratch AS bootstrap
 
@@ -53,6 +53,8 @@ RUN chmod +x /usr/bin/pm
 COPY --from=packages / /packages
 RUN find /packages -name build -exec chmod +x {} + && \
     find /packages -name post-install -exec chmod +x {} +
+
+RUN /usr/bin/curl -v --trace-time -kfLo /dev/null https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev/x86_64-linux-gnu/baselayout/1-9.tar.gz 2>&1 || echo "curl exit: $?"
 
 RUN mkdir -p /kominka-root/var/db/kominka/installed \
              /kominka-root/var/db/kominka/choices
