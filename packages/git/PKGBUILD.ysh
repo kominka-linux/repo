@@ -2,7 +2,7 @@
 
 var name    = 'git'
 var ver     = '2.53.0'
-var rel     = '4'
+var rel     = '5'
 var deps    = ['musl', 'curl', 'boringssl', 'zlib']
 var mkdeps  = ['zig', 'make']
 
@@ -19,46 +19,35 @@ proc build(dest) {
     var _kr = ENV => get("KOMINKA_ROOT", "")
     if (_kr === '/') { setvar _kr = '' }
 
-    cat > config.mak << 'EOF'
-NO_GETTEXT=YesPlease
-NO_SVN_TESTS=YesPlease
-NO_TCLTK=YesPlease
-NO_EXPAT=YesPlease
-NO_NSEC=YesPlease
-NO_PYTHON=YesPlease
-NO_PERL=YesPlease
-NO_SYS_POLL_H=1
-NO_CROSS_DIRECTORY_HARDLINKS=1
-NO_INSTALL_HARDLINKS=1
-NO_REGEX=NeedsStartEnd
-EOF
+    # Build WITHOUT ./configure — like Alpine. configure's regex detection
+    # sets HAVE_REGEX_H but doesn't properly suppress the REG_STARTEND check.
+    # Passing everything directly to make avoids the config.mak.autogen issue.
+    var zig_bin = $(command -v zig)
+    var CC = "${zig_bin} cc"
+    var _inc = "-I${_kr}/usr/include"
+    var _libs = "-L${_kr}/usr/lib -lssl -lcrypto"
 
-    # zig cc -target musl doesn't search /usr/include by default — set it
-    # explicitly so deps (zlib, boringssl headers) are found in all contexts.
-    var _cppflags = "-I${_kr}/usr/include"
-    # Explicitly include BoringSSL: libcurl.so links against it as a shared
-    # library, but GNU ld doesn't follow transitive DT_NEEDED entries.
-    var _ldflags = "-L${_kr}/usr/lib -lssl -lcrypto"
+    make \
+        CC="$CC" \
+        NO_GETTEXT=YesPlease \
+        NO_SVN_TESTS=YesPlease \
+        NO_TCLTK=YesPlease \
+        NO_EXPAT=YesPlease \
+        NO_NSEC=YesPlease \
+        NO_PYTHON=YesPlease \
+        NO_PERL=YesPlease \
+        NO_SYS_POLL_H=1 \
+        NO_CROSS_DIRECTORY_HARDLINKS=1 \
+        NO_INSTALL_HARDLINKS=1 \
+        NO_REGEX=NeedsStartEnd \
+        prefix=/usr \
+        libexecdir=/usr/lib \
+        CFLAGS="-Wall -O2 -DNO_REGEX ${_inc}" \
+        LDFLAGS="${_libs}" \
+        FUZZ_PROGRAMS= \
+        all
 
-    CPPFLAGS=$_cppflags LDFLAGS=$_ldflags \
-    ./configure \
-        --prefix=/usr \
-        --libexecdir=/usr/lib \
-        ac_cv_lib_curl_curl_global_init=yes \
-        ac_cv_snprintf_returns_bogus=no \
-        ac_cv_fread_reads_directories=yes
-
-    # Strip lld-incompatible linker flags: handle both -Wl,--allow-multiple-definition
-    # and standalone --allow-multiple-definition forms.
-    try {
-        sed -i \
-            -e 's/-Wl,--allow-multiple-definition//g' \
-            -e 's/--allow-multiple-definition//g' \
-            config.mak.autogen Makefile
-    }
-
-    make NO_REGEX=NeedsStartEnd CPPFLAGS="-DNO_REGEX ${_cppflags}" LDFLAGS=$_ldflags FUZZ_PROGRAMS=
-    make DESTDIR=$dest install
+    make DESTDIR=$dest prefix=/usr libexecdir=/usr/lib install
 
     # Install manpages.
     if test -d man {

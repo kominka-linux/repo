@@ -93,7 +93,7 @@ jobs:
               }
               pm b "${{ inputs.package }}"
               for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
-                [ -f "$f" ] && cp "$f" /out/
+                test -f "$f" && cp "$f" /out/
               done'
 
       - name: Get fresh OIDC token for upload
