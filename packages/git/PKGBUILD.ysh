@@ -2,8 +2,8 @@
 
 var name    = 'git'
 var ver     = '2.53.0'
-var rel     = '15'
-var deps    = ['musl', 'curl', 'boringssl', 'zlib']
+var rel     = '16'
+var deps    = ['musl', 'curl', 'zlib']
 var mkdeps  = ['zig', 'make']
 
 var sources = [
@@ -31,11 +31,16 @@ proc build(dest) {
     #   lacks TYPEFLAG_GLOBAL_HEADER). -I. is also added by BASIC_CFLAGS
     #   but we need it here first.
     var _inc = "-I${_kr}/usr/include"
-    var _libs = "-L${_kr}/usr/lib -lssl -lcrypto"
+    # NO_OPENSSL: git uses curl for HTTPS transport (which has its own TLS).
+    # No need for git's own OpenSSL integration — avoids needing boringssl
+    # headers at build time (they may not be consistently installed yet).
+    # libssl/libcrypto still provided transitively via libcurl.so.
+    var _libs = "-L${_kr}/usr/lib"
 
     make \
         CC="$CC" \
         NO_REGEX=NeedsStartEnd \
+        NO_OPENSSL=YesPlease \
         NO_GETTEXT=YesPlease \
         NO_SVN_TESTS=YesPlease \
         NO_TCLTK=YesPlease \
@@ -49,7 +54,7 @@ proc build(dest) {
         prefix=/usr \
         libexecdir=/usr/lib \
         CFLAGS="-Wall -O2 -DNO_REGEX -Icompat/regex -I. ${_inc}" \
-        LDFLAGS="${_libs}" \
+        LDFLAGS="${_libs} -lcurl -lz" \
         FUZZ_PROGRAMS= \
         all
 
