@@ -13,12 +13,11 @@ proc build(dest) {
     var zig_bin = $(command -v zig)
 
     # EGREP: busybox egrep may not accept -e flag that autoconf checks for.
-    # busybox egrep rejects -e/-E flags; autoconf tests "egrep -Ee pattern".
-    # Wrapper strips any arg starting with -e or -E (redundant since grep -E
-    # is already extended regex), keeps everything else including bare -.
-    printf '#!/bin/sh\nargs=\nfor a in "$@"; do\n  case "$a" in -[eE]*) ;; *) args="$args $a";; esac\ndone\nexec grep -E $args\n' > /tmp/egrep
-    chmod +x /tmp/egrep
-    env CC="$zig_bin cc" PATH="/tmp:$PATH" ./configure \
+    # busybox egrep rejects -e/-E; autoconf's AC_PROG_EGREP tests egrep -Ee.
+    # Use a config.cache file to pre-set the cache variable, bypassing the check.
+    write -- 'ac_cv_prog_egrep=egrep' > config.cache
+    env CC="$zig_bin cc" ./configure \
+        --cache-file=config.cache \
         --prefix=/usr
 
     # Fix gnulib _GL_ATTRIBUTE_NODISCARD incompatibility with newer GCC.
