@@ -13,10 +13,11 @@ proc build(dest) {
     var zig_bin = $(command -v zig)
 
     # EGREP: busybox egrep may not accept -e flag that autoconf checks for.
-    # ac_cv_prog_egrep=egrep: bypass autoconf's egrep -e test which fails on
-    # busybox egrep (it doesn't accept -e flag). Busybox egrep works fine for
-    # actual use in the build system; we just need to skip the compatibility check.
-    env CC="$zig_bin cc" ac_cv_prog_egrep=egrep ./configure \
+    # busybox egrep rejects -e; autoconf's AC_PROG_EGREP requires egrep -e to work.
+    # Create a wrapper that accepts -e by forwarding to grep -E.
+    printf '#!/bin/sh\nexec grep -E "$@"\n' > /tmp/egrep_wrap
+    chmod +x /tmp/egrep_wrap
+    env CC="$zig_bin cc" PATH="/tmp:$PATH" EGREP=/tmp/egrep_wrap ./configure \
         --prefix=/usr
 
     # Fix gnulib _GL_ATTRIBUTE_NODISCARD incompatibility with newer GCC.
