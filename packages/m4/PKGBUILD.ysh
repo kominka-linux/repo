@@ -15,10 +15,8 @@ proc build(dest) {
     # EGREP: busybox egrep may not accept -e flag that autoconf checks for.
     # busybox egrep rejects -e/-E flags; autoconf/gnulib tests "egrep -Ee".
     # Set all plausible cache variable names (autoconf and gnulib use different prefixes).
-    write -- "ac_cv_prog_egrep=egrep
-gl_cv_prog_egrep=egrep
-gl_cv_path_EGREP=egrep
-ac_cv_path_EGREP=egrep" > config.cache
+    # ac_cv_path_EGREP_TRADITIONAL: the actual cache var used by m4 1.4.21 configure.
+    write -- 'ac_cv_path_EGREP_TRADITIONAL=egrep' > config.cache
     env CC="$zig_bin cc" ./configure \
         --cache-file=config.cache \
         --prefix=/usr
