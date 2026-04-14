@@ -12,14 +12,9 @@ var checksums = ['f25c6ab51548a73a75558742fb031e0625d6485fe5f9155949d6486a2408ab
 proc build(dest) {
     var zig_bin = $(command -v zig)
 
-    # EGREP: busybox egrep may not accept -e flag that autoconf checks for.
-    # busybox egrep rejects -e/-E flags; autoconf/gnulib tests "egrep -Ee".
-    # Set all plausible cache variable names (autoconf and gnulib use different prefixes).
-    # Cache vars from m4 1.4.21 configure (grep/egrep checks fail on busybox).
-    write -- 'ac_cv_path_EGREP_TRADITIONAL=egrep
-ac_cv_path_GREP=grep' > config.cache
-    env CC="$zig_bin cc" ./configure \
-        --cache-file=config.cache \
+    # EGREP_TRADITIONAL and GREP: if these env vars are non-empty, configure
+    # skips the tool-detection tests entirely. Avoids busybox egrep -Ee failure.
+    env CC="$zig_bin cc" EGREP_TRADITIONAL=egrep GREP=grep ./configure \
         --prefix=/usr
 
     # Fix gnulib _GL_ATTRIBUTE_NODISCARD incompatibility with newer GCC.
