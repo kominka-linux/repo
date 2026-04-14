@@ -2,7 +2,7 @@
 
 var name    = 'git'
 var ver     = '2.53.0'
-var rel     = '18'
+var rel     = '19'
 var deps    = ['musl', 'curl', 'zlib']
 var mkdeps  = ['zig', 'make', 'musl']
 
@@ -44,7 +44,7 @@ proc build(dest) {
         NO_INSTALL_HARDLINKS=1 \
         prefix=/usr \
         libexecdir=/usr/lib \
-        CFLAGS="-Wall -O2 -DNO_REGEX -DNO_OPENSSL -Icompat/regex -I." \
+        CFLAGS="-Wall -O2 -DNO_REGEX -DNO_OPENSSL -DNO_EXPAT -Icompat/regex -I." \
         LDFLAGS="${_libs}" \
         FUZZ_PROGRAMS= \
         all
