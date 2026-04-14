@@ -57,6 +57,9 @@ RUN find /packages -name build -exec chmod +x {} + && \
 RUN mkdir -p /kominka-root/var/db/kominka/installed \
              /kominka-root/var/db/kominka/choices
 
+RUN /usr/bin/curl --version || true
+RUN /usr/bin/curl -ksfLo /dev/null https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev/x86_64-linux-gnu/baselayout/1-9.tar.gz || echo "curl exit: $?"
+
 RUN KOMINKA_PATH=/packages \
     KOMINKA_ROOT=/kominka-root \
     KOMINKA_COMPRESS=gz \
