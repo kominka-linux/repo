@@ -9,7 +9,8 @@ ARG R2_BASE=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
 
 RUN apk add --no-cache curl xz bzip2 patch make perl linux-headers binutils \
     cmake samurai go git ninja pkgconf bash m4 flex elfutils-dev && \
-    cp /usr/bin/nm /usr/local/bin/gnu-nm
+    cp /usr/bin/nm /usr/local/bin/gnu-nm && \
+    cp /usr/bin/objcopy /usr/local/bin/gnu-objcopy
 
 # ysh is a static musl binary — runs on any Linux.
 RUN ARCH=$(uname -m) && \

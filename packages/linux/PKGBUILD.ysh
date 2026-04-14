@@ -2,7 +2,7 @@
 
 var name    = 'linux'
 var ver     = '6.19.12'
-var rel     = '4'
+var rel     = '5'
 var deps    = []
 var mkdeps  = ['make', 'bison', 'perl']
 
@@ -33,38 +33,42 @@ proc build(dest) {
     # The wrapper adds -target ARCH-linux-musl which conflicts with the kernel's
     # own -march/ABI flags and breaks the arm64 vdso build (BTI/PAC sections).
     # zig cc without -target auto-detects from the running host.
-    var ZIG = $(command -v zig)
-    var CC  = "$ZIG cc"
-    var LD  = "$ZIG ld.lld"
+    var ZIG    = $(command -v zig)
+    var CC     = "$ZIG cc"
+    var LD     = "$ZIG ld.lld"
+    # zig objcopy doesn't implement -S (strip-all) used by the arm64 vdso strip
+    # step. Use Alpine's binutils objcopy saved during bootstrap image build.
+    var OBJCOPY = '/usr/local/bin/gnu-objcopy'
+    if ! test -f $OBJCOPY { setvar OBJCOPY = $(command -v objcopy) }
 
     # Merge tinyconfig with our arch-specific fragment.
-    make ARCH=$ARCH CC=$CC LD=$LD tinyconfig
+    make ARCH=$ARCH CC=$CC LD=$LD OBJCOPY=$OBJCOPY tinyconfig
 
     case (MACH) {
         x86_64  { scripts/kconfig/merge_config.sh -m .config kernel-x86_64.config }
         *       { scripts/kconfig/merge_config.sh -m .config kernel.config }
     }
 
-    make ARCH=$ARCH CC=$CC LD=$LD olddefconfig
+    make ARCH=$ARCH CC=$CC LD=$LD OBJCOPY=$OBJCOPY olddefconfig
 
     var _nproc = $(nproc 2>/dev/null || echo 4)
 
     # Build the kernel image.
     case (MACH) {
         x86_64 {
-            make -j$_nproc ARCH=$ARCH CC=$CC LD=$LD bzImage
+            make -j$_nproc ARCH=$ARCH CC=$CC LD=$LD OBJCOPY=$OBJCOPY bzImage
             mkdir -p "${dest}/usr/share/kominka"
             cp arch/x86/boot/bzImage "${dest}/usr/share/kominka/Image"
         }
         * {
-            make -j$_nproc ARCH=$ARCH CC=$CC LD=$LD Image
+            make -j$_nproc ARCH=$ARCH CC=$CC LD=$LD OBJCOPY=$OBJCOPY Image
             mkdir -p "${dest}/usr/share/kominka"
             cp arch/arm64/boot/Image "${dest}/usr/share/kominka/Image"
         }
     }
 
     # Install kernel headers.
-    make ARCH=$ARCH CC=$CC LD=$LD headers
+    make ARCH=$ARCH CC=$CC LD=$LD OBJCOPY=$OBJCOPY headers
 
     find usr/include -name '*.h' -type f | while read -r file {
         mkdir -p "${dest}/${file%/*}"
