@@ -2,50 +2,47 @@
 
 var name    = 'git'
 var ver     = '2.53.0'
-var rel     = '10'
+var rel     = '11'
 var deps    = ['musl', 'curl', 'boringssl', 'zlib']
 var mkdeps  = ['zig', 'make']
 
 var sources = [
     'https://mirrors.edge.kernel.org/pub/software/scm/git/git-VERSION.tar.xz',
     'https://mirrors.edge.kernel.org/pub/software/scm/git/git-manpages-VERSION.tar.xz man',
+    'patches/0001-musl-use-bundled-regex.patch patch',
 ]
 var checksums = [
     '5818bd7d80b061bbbdfec8a433d609dc8818a05991f731ffc4a561e2ca18c653',
     '957ffe4409eeb90c7332bff4abee8d5169d28ef5c7c3bf08419f4239be13f77f',
+    '5856f4750ebea6494a2b03a37ea5f2c8f817f1520ff4fd97a7f065c573bbf75b',
 ]
 
 proc build(dest) {
     var _kr = ENV => get("KOMINKA_ROOT", "")
     if (_kr === '/') { setvar _kr = '' }
 
-    # Build WITHOUT ./configure — like Alpine.
-    # IMPORTANT: do NOT override CFLAGS/LDFLAGS on the make command line.
-    # Command-line variables prevent the Makefile from appending COMPAT_CFLAGS
-    # (which contains -DREGEX_UNDEF_STARTEND). Instead, put CFLAGS in config.mak
-    # so the Makefile can ADD its own flags on top via +=.
-    var CC = $(command -v cc)
+    # Patch adds #define NO_REGEX at top of git-compat-util.h when __musl__
+    # is defined. This is applied via 'patch -p1' in sources processing.
     var _inc = "-I${_kr}/usr/include"
     var _libs = "-L${_kr}/usr/lib -lssl -lcrypto"
 
-    write -- \
-        "CC = ${CC}" \
-        "CFLAGS = -Wall -O2 ${_inc}" \
-        "LDFLAGS = ${_libs}" \
-        "NO_GETTEXT = YesPlease" \
-        "NO_SVN_TESTS = YesPlease" \
-        "NO_TCLTK = YesPlease" \
-        "NO_EXPAT = YesPlease" \
-        "NO_NSEC = YesPlease" \
-        "NO_PYTHON = YesPlease" \
-        "NO_PERL = YesPlease" \
-        "NO_SYS_POLL_H = 1" \
-        "NO_CROSS_DIRECTORY_HARDLINKS = 1" \
-        "NO_INSTALL_HARDLINKS = 1" \
-        "NO_REGEX = NeedsStartEnd" \
-        > config.mak
+    CPPFLAGS=$_inc LDFLAGS=$_libs \
+    ./configure \
+        --prefix=/usr \
+        --libexecdir=/usr/lib \
+        ac_cv_lib_curl_curl_global_init=yes \
+        ac_cv_snprintf_returns_bogus=no \
+        ac_cv_fread_reads_directories=yes
 
-    make prefix=/usr libexecdir=/usr/lib FUZZ_PROGRAMS= all
+    try {
+        sed -i \
+            -e 's/-Wl,--allow-multiple-definition//g' \
+            -e 's/--allow-multiple-definition//g' \
+            config.mak.autogen Makefile
+    }
+
+    make LDFLAGS=$_libs FUZZ_PROGRAMS=
+    make DESTDIR=$dest install
 
     make DESTDIR=$dest prefix=/usr libexecdir=/usr/lib install
 
