@@ -2,7 +2,7 @@
 
 var name    = 'git'
 var ver     = '2.53.0'
-var rel     = '3'
+var rel     = '4'
 var deps    = ['musl', 'curl', 'boringssl', 'zlib']
 var mkdeps  = ['zig', 'make']
 
@@ -57,7 +57,7 @@ EOF
             config.mak.autogen Makefile
     }
 
-    make LDFLAGS=$_ldflags FUZZ_PROGRAMS=
+    make NO_REGEX=NeedsStartEnd LDFLAGS=$_ldflags FUZZ_PROGRAMS=
     make DESTDIR=$dest install
 
     # Install manpages.

@@ -2,7 +2,7 @@
 
 var name    = 'perl'
 var ver     = '5.42.2'
-var rel     = '3'
+var rel     = '4'
 var deps    = ['bzip2', 'zlib']
 var mkdeps  = ['zig', 'make']
 
@@ -37,7 +37,7 @@ proc build(dest) {
         -Dcc="${CC}" \
         -Dccflags="-DNO_POSIX_2008_LOCALE -D_GNU_SOURCE ${extra_inc}" \
         -Dldflags="${extra_lib} -lpthread" \
-        -Dlibs="-lm -lz -lbz2 -lpthread -lutil -lcrypt" \
+        -Dlibs="-lm -lz -lbz2 -lpthread" \
         -Dman1dir=/usr/share/man/man1 \
         -Dman3dir=/usr/share/man/man3 \
         -Dman1ext=1 \
