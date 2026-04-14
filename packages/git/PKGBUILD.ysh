@@ -2,7 +2,7 @@
 
 var name    = 'git'
 var ver     = '2.53.0'
-var rel     = '14'
+var rel     = '15'
 var deps    = ['musl', 'curl', 'boringssl', 'zlib']
 var mkdeps  = ['zig', 'make']
 
@@ -21,17 +21,16 @@ proc build(dest) {
 
     var CC = $(command -v cc)
 
-    # Include order matters for two reasons:
-    # 1. NO_REGEX=NeedsStartEnd causes git's Makefile to add -Icompat/regex to
-    #    COMPAT_CFLAGS → BASIC_CFLAGS. musl lacks REG_STARTEND; with
-    #    -Icompat/regex as a user include (-I), #include <regex.h> finds
-    #    git's bundled compat/regex/regex.h (which defines REG_STARTEND)
-    #    before musl's regex.h.
-    # 2. /usr/include must be a SYSTEM include (-isystem) so that git's own
-    #    headers (.-relative like tar.h) take precedence via -I. in
-    #    BASIC_CFLAGS (user includes are always searched before system).
-    #    Without this, /usr/include/tar.h shadows git's own tar.h.
-    var _sysinc = "-isystem ${_kr}/usr/include"
+    # Include ordering for musl/zig cc:
+    # - -Icompat/regex before -I/usr/include: NO_REGEX=NeedsStartEnd adds
+    #   -Icompat/regex via COMPAT_CFLAGS. musl lacks REG_STARTEND; with
+    #   -Icompat/regex first, #include <regex.h> finds git's bundled
+    #   compat/regex/regex.h (which defines REG_STARTEND) not musl's.
+    # - -I. before -I/usr/include: git's own tar.h etc. take precedence
+    #   over /usr/include/tar.h (which Alpine's musl-dev provides and
+    #   lacks TYPEFLAG_GLOBAL_HEADER). -I. is also added by BASIC_CFLAGS
+    #   but we need it here first.
+    var _inc = "-I${_kr}/usr/include"
     var _libs = "-L${_kr}/usr/lib -lssl -lcrypto"
 
     make \
@@ -49,9 +48,8 @@ proc build(dest) {
         NO_INSTALL_HARDLINKS=1 \
         prefix=/usr \
         libexecdir=/usr/lib \
-        CPPFLAGS="$_sysinc" \
-        CFLAGS="-Wall -O2 -DNO_REGEX -Icompat/regex" \
-        LDFLAGS="$_libs" \
+        CFLAGS="-Wall -O2 -DNO_REGEX -Icompat/regex -I. ${_inc}" \
+        LDFLAGS="${_libs}" \
         FUZZ_PROGRAMS= \
         all
 
