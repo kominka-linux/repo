@@ -25,6 +25,18 @@
     - we can also standardize on bzip2
 - builds should be done in a linux namespace container and in a maximally reproducible manner
 
+## Known Build Environment Limitations
+
+- **x86_64 build-package.yml (self-hosted)**: Our boringssl shared library crashes with
+  SIGSEGV during SSL init when built with `zig cc -target x86_64-linux-musl`. Root cause
+  not isolated after extensive investigation (OPENSSL_NO_ASM, -fno-sanitize=all,
+  -fno-exceptions, -fno-rtti, static/dynamic, etc. all attempted). The crash manifests
+  in `curl --version` crashing in build-essential, preventing source tarball downloads.
+  **Workaround**: use `bootstrap-build-package.yml` for all amd64 package builds — it
+  runs in Alpine's Docker environment and uses Alpine's working curl.
+  arm64 `build-package.yml` (self-hosted) is fully functional.
+  See ZIG-CC.md for the full investigation.
+
 ## Infrastructure
 - Server health monitoring / alerting
 
