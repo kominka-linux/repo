@@ -2,7 +2,7 @@
 
 var name    = 'git'
 var ver     = '2.53.0'
-var rel     = '19'
+var rel     = '21'
 var deps    = ['musl', 'curl', 'zlib']
 var mkdeps  = ['zig', 'make', 'musl']
 
@@ -28,33 +28,33 @@ proc build(dest) {
     # - -I. before wrapper's appended -I/usr/include: git's own tar.h takes
     #   precedence over /usr/include/tar.h (musl's lacks TYPEFLAG_GLOBAL_HEADER)
     # NO_OPENSSL: git uses curl for HTTPS transport (curl has its own TLS).
-    make \
-        CC="$CC" \
-        NO_REGEX=NeedsStartEnd \
-        NO_OPENSSL=YesPlease \
-        NO_GETTEXT=YesPlease \
-        NO_SVN_TESTS=YesPlease \
-        NO_TCLTK=YesPlease \
-        NO_EXPAT=YesPlease \
-        NO_NSEC=YesPlease \
-        NO_PYTHON=YesPlease \
-        NO_PERL=YesPlease \
-        NO_SYS_POLL_H=1 \
-        NO_CROSS_DIRECTORY_HARDLINKS=1 \
-        NO_INSTALL_HARDLINKS=1 \
-        prefix=/usr \
-        libexecdir=/usr/lib \
-        CFLAGS="-Wall -O2 -DNO_REGEX -DNO_OPENSSL -DNO_EXPAT -Icompat/regex -I." \
-        LDFLAGS="${_libs}" \
-        FUZZ_PROGRAMS= \
-        all
+    # NO_* flags passed to both make invocations: the second (install) would
+    # otherwise re-evaluate PROGRAM_OBJS without them and try to build
+    # git-http-push (needs expat) and git-credential-gnome-keyring, etc.
+    var make_flags = [
+        "CC=$CC",
+        'NO_REGEX=NeedsStartEnd',
+        'NO_OPENSSL=YesPlease',
+        'NO_GETTEXT=YesPlease',
+        'NO_SVN_TESTS=YesPlease',
+        'NO_TCLTK=YesPlease',
+        'NO_EXPAT=YesPlease',
+        'NO_NSEC=YesPlease',
+        'NO_PYTHON=YesPlease',
+        'NO_PERL=YesPlease',
+        'NO_SYS_POLL_H=1',
+        'NO_CROSS_DIRECTORY_HARDLINKS=1',
+        'NO_INSTALL_HARDLINKS=1',
+        'prefix=/usr',
+        'libexecdir=/usr/lib',
+        "CFLAGS=-Wall -O2 -DNO_REGEX -DNO_OPENSSL -DNO_EXPAT -Icompat/regex -I.",
+        "LDFLAGS=${_libs}",
+        'FUZZ_PROGRAMS=',
+    ]
 
-    make \
-        NO_REGEX=NeedsStartEnd \
-        prefix=/usr \
-        libexecdir=/usr/lib \
-        DESTDIR=$dest \
-        install
+    make @make_flags all
+
+    make @make_flags DESTDIR=$dest install
 
     if test -d man {
         mkdir -p "${dest}/usr/share/man"
