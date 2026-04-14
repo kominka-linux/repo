@@ -13,10 +13,10 @@ proc build(dest) {
     var zig_bin = $(command -v zig)
 
     # EGREP: busybox egrep may not accept -e flag that autoconf checks for.
-    # busybox egrep rejects -e; autoconf's AC_PROG_EGREP tests egrep -e pattern.
-    # Wrapper strips -e (redundant for egrep which is already extended) then
-    # calls grep -E. Placed as "egrep" in PATH so autoconf finds it directly.
-    printf '#!/bin/sh\ncase "$1" in -e) shift;; esac\nexec grep -E "$@"\n' > /tmp/egrep
+    # busybox egrep rejects -e/-E flags; autoconf tests "egrep -Ee pattern".
+    # Wrapper strips any arg starting with -e or -E (redundant since grep -E
+    # is already extended regex), keeps everything else including bare -.
+    printf '#!/bin/sh\nargs=\nfor a in "$@"; do\n  case "$a" in -[eE]*) ;; *) args="$args $a";; esac\ndone\nexec grep -E $args\n' > /tmp/egrep
     chmod +x /tmp/egrep
     env CC="$zig_bin cc" PATH="/tmp:$PATH" ./configure \
         --prefix=/usr
