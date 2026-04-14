@@ -2,9 +2,9 @@
 
 var name    = 'git'
 var ver     = '2.53.0'
-var rel     = '8'
+var rel     = '9'
 var deps    = ['musl', 'curl', 'boringssl', 'zlib']
-var mkdeps  = ['zig', 'make']
+var mkdeps  = ['make']
 
 var sources = [
     'https://mirrors.edge.kernel.org/pub/software/scm/git/git-VERSION.tar.xz',
@@ -19,17 +19,13 @@ proc build(dest) {
     var _kr = ENV => get("KOMINKA_ROOT", "")
     if (_kr === '/') { setvar _kr = '' }
 
-    # Build WITHOUT ./configure — like Alpine.
-    # Use the zig cc wrapper (/usr/bin/cc) which includes -target ARCH-linux-musl.
-    var CC = $(command -v cc)
+    # Build WITHOUT ./configure — like Alpine. Remove zig from mkdeps so
+    # Alpine's gcc is used: zig cc silently ignores -DNO_REGEX in some
+    # versions, but Alpine's gcc handles it correctly. Alpine uses musl
+    # so the resulting binary is correctly musl-linked.
+    var CC = $(command -v gcc 2>/dev/null || command -v cc)
     var _inc = "-I${_kr}/usr/include"
     var _libs = "-L${_kr}/usr/lib -lssl -lcrypto"
-
-    # Force NO_REGEX and REGEX_UNDEF_STARTEND into every compilation unit via
-    # a pre-include file. CFLAGS/BASIC_CFLAGS override alone isn't reliable
-    # because git's Makefile may put these in a different variable than what
-    # reaches the final ALL_CFLAGS used for compilation.
-    printf '#define NO_REGEX 1\n#define REGEX_UNDEF_STARTEND 1\n' > /tmp/git-no-regex.h
 
     make \
         CC="$CC" \
@@ -46,7 +42,7 @@ proc build(dest) {
         NO_REGEX=NeedsStartEnd \
         prefix=/usr \
         libexecdir=/usr/lib \
-        CFLAGS="-Wall -O2 -include /tmp/git-no-regex.h ${_inc}" \
+        CFLAGS="-Wall -O2 -DNO_REGEX -DREGEX_UNDEF_STARTEND ${_inc}" \
         LDFLAGS="${_libs}" \
         FUZZ_PROGRAMS= \
         all
