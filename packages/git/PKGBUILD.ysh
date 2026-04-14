@@ -57,7 +57,7 @@ EOF
             config.mak.autogen Makefile
     }
 
-    make NO_REGEX=NeedsStartEnd LDFLAGS=$_ldflags FUZZ_PROGRAMS=
+    make NO_REGEX=NeedsStartEnd CPPFLAGS="-DNO_REGEX ${_cppflags}" LDFLAGS=$_ldflags FUZZ_PROGRAMS=
     make DESTDIR=$dest install
 
     # Install manpages.

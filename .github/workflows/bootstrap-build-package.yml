@@ -71,7 +71,6 @@ jobs:
             -v "$PWD/pm/pm.ysh:/usr/bin/pm:ro" \
             -v "$PWD/out:/out" \
             -e KOMINKA_REPO='https://kominka.17166969.xyz' \
-            -e KOMINKA_TOKEN="$KOMINKA_TOKEN" \
             -e KOMINKA_PATH=/packages \
             -e KOMINKA_COMPRESS=gz \
             -e KOMINKA_COLOR=0 \
@@ -95,7 +94,31 @@ jobs:
               pm b "${{ inputs.package }}"
               for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
                 [ -f "$f" ] && cp "$f" /out/
-              done
+              done'
+
+      - name: Get fresh OIDC token for upload
+        run: |
+          TOKEN=$(curl -fsSL \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=kominka-repo" | jq -r .value)
+          echo "KOMINKA_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Publish ${{ inputs.package }}
+        run: |
+          docker run --rm \
+            -v "$PWD/packages:/packages:ro" \
+            -v "$PWD/pm/pm.ysh:/usr/bin/pm:ro" \
+            -v "$PWD/out:/root/.cache/kominka/bin" \
+            -e KOMINKA_REPO='https://kominka.17166969.xyz' \
+            -e KOMINKA_TOKEN="$KOMINKA_TOKEN" \
+            -e KOMINKA_PATH=/packages \
+            -e KOMINKA_COMPRESS=gz \
+            -e KOMINKA_COLOR=0 \
+            -e KOMINKA_PROMPT=0 \
+            -e KOMINKA_GET=/usr/bin/curl \
+            -e LOGNAME=root \
+            -e HOME=/root \
+            kominka:bootstrap /usr/local/bin/ysh -c '
               pm p "${{ inputs.package }}"'
 
       - name: Upload artifact

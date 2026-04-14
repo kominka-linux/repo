@@ -4,7 +4,7 @@ var name    = 'perl'
 var ver     = '5.42.2'
 var rel     = '4'
 var deps    = ['bzip2', 'zlib']
-var mkdeps  = ['zig', 'make']
+var mkdeps  = ['make']
 
 var sources = ['https://www.cpan.org/src/5.0/perl-VERSION.tar.xz']
 var checksums = ['0a585eeb9e363c0f80482ddb3571625250c2c86aeb408853e8ea50805cfb14bb']
@@ -14,9 +14,9 @@ proc build(dest) {
     if (_kr === '/') { setvar _kr = '' }
 
     # Use system cc (Alpine gcc in bootstrap, zig cc wrapper otherwise).
-    # Explicitly building with zig cc -target musl causes Configure test
-    # failures; system cc produces a working musl-linked perl either way
-    # since Alpine already uses musl.
+    # zig's /usr/bin/ar wrapper breaks perl's Configure ("didn't work right").
+    # By removing zig from mkdeps, Alpine's native binutils ar stays at
+    # /usr/bin/ar and Configure tests pass correctly.
     var CC = $(command -v gcc 2>/dev/null || command -v cc)
 
     # zig cc doesn't add /usr/include to the system include path, so set
