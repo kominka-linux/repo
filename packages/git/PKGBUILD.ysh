@@ -30,6 +30,7 @@ NO_PERL=YesPlease
 NO_SYS_POLL_H=1
 NO_CROSS_DIRECTORY_HARDLINKS=1
 NO_INSTALL_HARDLINKS=1
+NO_REGEX=NeedsStartEnd
 EOF
 
     # zig cc -target musl doesn't search /usr/include by default — set it
