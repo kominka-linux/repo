@@ -1,30 +1,5 @@
 # Repository Design
 
-## Content-Addressed Binary Cache
-
-Tarballs are named by a hash of their build inputs, not by version string.
-
-```
-hash = sha256(contents of PKGBUILD.ysh)
-```
-
-If anything in the package definition changes (version, dep, build script,
-source URL), the hash changes. Does NOT include transitive dependency hashes —
-avoids Nix-style rebuild cascades. Computable before building, which enables
-cache-hit detection: if `{arch}/{pkg}/{hash}.tar.gz` exists on R2, skip the
-build entirely.
-
-```
-Local:  ${bin_dir}/${pkg}@${hash}.tar.gz
-R2:     ${arch}/${pkg}/${hash}.tar.gz
-```
-
-The installed database gains a `hash` file at
-`/var/db/kominka/installed/{pkg}/hash`, written during build (included in the
-tarball and tracked by the manifest). This lets `pkg_outdated` compare hashes
-instead of version-release strings — catches cases where the build script
-changed without a version bump.
-
 ## Package Index
 
 One JSON file per architecture, stored in R2, served by the server.
@@ -103,19 +78,6 @@ CREATE TABLE sessions (
 );
 ```
 
-### Configuration
-
-```sh
-ALLOWED_USERS=josh
-RP_ID=repo.kominka.org
-RP_ORIGIN=https://repo.kominka.org
-DB_PATH=/var/lib/kominka-repo/auth.db
-JWT_JWKS_URL=https://token.actions.githubusercontent.com/.well-known/jwks
-JWT_ISSUER=https://token.actions.githubusercontent.com
-JWT_AUDIENCE=kominka-repo
-JWT_SUBJECT_PATTERN=repo:josh/*
-```
-
 ### Passkey Auth Flow
 
 ```
@@ -183,38 +145,6 @@ GitHub Actions provides a short-lived OIDC token. The CI job sets
 2. Verifying JWT signature against JWKS
 3. Checking claims: `iss`, `aud`, `sub` against configured values
 
-Example GitHub Actions usage:
-```yaml
-permissions:
-  id-token: write
-  contents: read
-
-steps:
-  - name: Get OIDC token
-    run: |
-      TOKEN=$(curl -s \
-        -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-        "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=kominka-repo" | jq -r .value)
-      echo "KOMINKA_TOKEN=$TOKEN" >> $GITHUB_ENV
-
-  - name: Upload package
-    run: pm p curl
-    env:
-      KOMINKA_REPO: https://repo.kominka.org
-```
-
-### V2 Presigned Downloads
-
-Replace the proxy-based GET handler with presigned S3 URLs:
-
-1. S3 HeadObject to verify existence → 404 if missing
-2. Generate presigned S3 GET URL (1 hour TTL)
-3. Return `302 Location: <presigned URL>`
-4. On presign failure: fall back to proxy
-
-curl (`-fLo`) and busybox wget both follow 302 redirects and preserve query
-parameters in the redirect URL (where the S3 signature lives). This offloads
-download bandwidth from the server to R2.
 
 ### Rate Limiting
 
