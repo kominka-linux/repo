@@ -135,6 +135,47 @@ impl Storage {
         Self::Memory(RwLock::new(HashMap::new()))
     }
 
+    /// Return the stored size of an object via HEAD, without downloading it.
+    pub fn object_size(&self, key: &str) -> Option<u64> {
+        match self {
+            Self::Memory(map) => map.read().unwrap().get(key).map(|b| b.len() as u64),
+            Self::S3 { endpoint, bucket, access_key, secret_key, region } => {
+                let url = format!("{endpoint}/{bucket}/{key}");
+                let host = url
+                    .strip_prefix("https://")
+                    .or_else(|| url.strip_prefix("http://"))
+                    .and_then(|r| r.split('/').next())
+                    .unwrap_or("")
+                    .to_string();
+                let path = format!("/{bucket}/{key}");
+                let body_hash = sha256_hex(b"");
+                let (date, datetime) = utc_now();
+                let hdr = [
+                    ("host", host.as_str()),
+                    ("x-amz-content-sha256", body_hash.as_str()),
+                    ("x-amz-date", datetime.as_str()),
+                ];
+                let auth = sigv4_auth(
+                    "HEAD", &path, "", &hdr, &body_hash,
+                    access_key, secret_key, region, &date, &datetime,
+                );
+                let result = ureq::Agent::new_with_defaults()
+                    .head(&url)
+                    .header("Authorization", &auth)
+                    .header("X-Amz-Content-Sha256", &body_hash)
+                    .header("X-Amz-Date", &datetime)
+                    .call();
+                match result {
+                    Ok(resp) => resp.headers()
+                        .get("content-length")
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|v| v.parse::<u64>().ok()),
+                    Err(_) => None,
+                }
+            }
+        }
+    }
+
     pub fn get(&self, key: &str) -> Option<Vec<u8>> {
         match self {
             Self::S3 { .. } => {

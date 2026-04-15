@@ -811,7 +811,8 @@ proc pkg_upload (pkg) {
             -H "X-Rel: $[_p.rel]" \
             -H "X-Deps: ${_deps_header}" \
             -H "X-Mkdeps: ${_mkdeps_header}" \
-            -H "X-Sha256: ${_sha256}")
+            -H "X-Sha256: ${_sha256}" \
+            -H "X-Size: ${_size}")
         var _idx_body = $(cat $_resp_tmp)
         rm -f $_resp_tmp
         if (_idx_code !== '201') {
@@ -1668,7 +1669,7 @@ proc pkg_source_upload (pkg; p Dict) {
     if (KOMINKA_REPO === '') { die "KOMINKA_REPO not set" }
     var _tarball = "${mir_dir}/${pkg}@$[p.ver]-$[p.rel].tar.bz2"
     if ! test -f $_tarball {
-        log $pkg "No source tarball cached — run 'pm b $pkg' first to generate it" WARNING
+        log $pkg "No source tarball cached — run 'pm src $pkg' first to generate it" WARNING
         return
     }
 
@@ -1685,12 +1686,19 @@ proc pkg_source_upload (pkg; p Dict) {
         -H "X-Ver: $[p.ver]" \
         -H "X-Rel: $[p.rel]" \
         --data-binary "@${_tarball}")
+    var _resp_body = $(cat $_resp_tmp)
     rm -f $_resp_tmp
     if (_code !== '201') {
         war $pkg "Source upload failed (HTTP $_code)"
         return
     }
-    log $pkg "Source uploaded"
+    var _resp = null
+    json read (&_resp) <<< $_resp_body
+    if (_resp !== null and not _resp['indexed']) {
+        war $pkg "Source uploaded to R2 but no matching index entry — run 'pm p $pkg' first"
+    } else {
+        log $pkg "Source uploaded"
+    }
 }
 
 proc pkg_source_cmd (...pkgs) {
@@ -1701,8 +1709,6 @@ proc pkg_source_cmd (...pkgs) {
     var _token = ''
     auth_token_load (&_token)
     if (_token === '') { die "Not authenticated — set KOMINKA_TOKEN or run 'pm auth'" }
-
-    index_refresh
 
     var p = null
     for pkg in (pkgs) {
@@ -2812,8 +2818,8 @@ proc args (action='', ...pkgs) {
             # list here would mark implicit make-deps as "explicit", bypassing
             # the pre-built binary cache check.
             case (action) {
-                b | build | c | checksum | src { true }
-                *                              { setvar pkgs = order }
+                b | build | c | checksum | src | p | upload { true }
+                *                                            { setvar pkgs = order }
             }
         }
     }
@@ -3018,9 +3024,9 @@ proc main (...argv) {
     } else {
         var _uname = $(uname -m)
         case (_uname) {
-            aarch64 { setglobal sys_arch = 'aarch64-linux-gnu' }
-            x86_64  { setglobal sys_arch = 'x86_64-linux-gnu' }
-            *       { setglobal sys_arch = _uname }
+            aarch64 | arm64 { setglobal sys_arch = 'aarch64-linux-gnu' }
+            x86_64          { setglobal sys_arch = 'x86_64-linux-gnu' }
+            *               { setglobal sys_arch = _uname }
         }
     }
 

@@ -8,7 +8,7 @@ var mkdeps  = []
 
 var _commit = '18f0fbf4ab85f018d6d1a77ec4497c196be84de2'
 var sources   = ["https://github.com/kominka-linux/repo/archive/${_commit}.zip"]
-var checksums = ['']
+var checksums = ['98e52030346fa774626f80e13295e26f60b436080a5b8b543fd5871e98f62221']
 
 proc build(dest) {
     mkdir -p "${dest}/usr/bin"

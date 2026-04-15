@@ -17,3 +17,8 @@ test:
 
 release:
 	scripts/build-deb.sh
+
+deploy: release
+	scp server/kominka-repo_0.1.0_amd64.deb oracle:
+	ssh -T oracle "sh -c 'sudo dpkg -i kominka-repo_0.1.0_amd64.deb && sudo systemctl restart kominka-repo'"
+
