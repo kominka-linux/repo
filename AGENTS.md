@@ -96,6 +96,50 @@ memory for 1 hour. Enabled only when `JWT_JWKS_URL` is set in env.
 
 Auth check order (in `auth.rs`): DB token lookup → JWT verification → 401.
 
+### SQLite Schema
+
+```sql
+CREATE TABLE users (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE credentials (
+  id         TEXT PRIMARY KEY,       -- hex credential ID
+  user_id    TEXT NOT NULL REFERENCES users(id),
+  passkey    TEXT NOT NULL,          -- JSON: {cred_id, x, y, sign_count}
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE tokens (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id),
+  token_hash TEXT NOT NULL UNIQUE,   -- SHA-256 of bearer token
+  name       TEXT NOT NULL DEFAULT 'cli',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_used  TEXT,
+  expires_at TEXT                    -- NULL means never expires
+);
+
+CREATE TABLE browser_sessions (
+  id           TEXT PRIMARY KEY,
+  user_id      TEXT NOT NULL REFERENCES users(id),
+  session_hash TEXT NOT NULL UNIQUE, -- SHA-256 of cookie value
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at   TEXT NOT NULL DEFAULT (datetime('now', '+30 days'))
+);
+
+CREATE TABLE sessions (
+  id         TEXT PRIMARY KEY,       -- 64 hex chars
+  token      TEXT,                   -- plaintext (ephemeral, returned once then cleared)
+  challenge  TEXT,                   -- WebAuthn challenge
+  user_id    TEXT,
+  status     TEXT NOT NULL DEFAULT 'pending',  -- pending | completed | consumed
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
 ### WebAuthn Flow
 
 `/auth` serves `static/auth.html`. Registration and authentication use the
@@ -107,6 +151,45 @@ round-trips. Sessions expire after 10 minutes.
 On successful authentication the server creates a new token, stores its hash,
 and returns the plaintext once. Tokens are also stored in the session row so
 a future `pm auth` CLI flow can poll `/auth/poll?session={id}` to retrieve them.
+
+`pm auth` polling flow:
+1. Client creates a session (gets a 64-char hex session ID)
+2. Opens `https://repo.kominka.org/auth?session={id}` in browser
+3. Polls `GET /auth/poll?session={id}` every 2s (up to 5 min)
+4. Browser: user taps passkey → server creates token → binds to session
+5. Poll returns token (once, then server clears it from session row)
+6. `pm` stores token via `auth_token_store`
+
+`/auth/settings` lets the authenticated user (browser session cookie) create
+and delete named tokens.
+
+### HTTP API Endpoints
+
+```
+GET  /auth?session={id}               # passkey HTML page
+GET  /auth/settings                   # token management UI (browser session required)
+GET  /auth/logout                     # invalidate browser session cookie
+GET  /auth/poll?session={id}          # CLI polls for completed token
+POST /auth/register/options            # registration challenge
+POST /auth/register/verify             # verify + create user + token
+POST /auth/authenticate/options        # authentication challenge
+POST /auth/authenticate/verify         # verify assertion + create token
+POST /auth/tokens                      # create a named token via API
+POST /auth/tokens/delete               # delete a token by ID
+POST /api/upload                       # upload tarball + register in index
+POST /api/upload-url                   # get presigned R2 PUT URL for large uploads
+POST /api/update-index                 # register in index after presigned upload
+POST /api/publish                      # publish metapackage (no tarball)
+POST /api/reindex                      # recompute sha256 from R2 + register in index
+POST /api/delete                       # remove package from index
+```
+
+### Rate Limiting
+
+In-memory token bucket:
+- Auth endpoints: 10 requests/min per IP
+- Uploads: 60 requests/min per token
+- Index/tarball GETs: no limit (public, cacheable)
 
 ## pm Integration
 
