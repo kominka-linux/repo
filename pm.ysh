@@ -23,7 +23,6 @@ var KOMINKA_KEEPLOG = ''
 var KOMINKA_SU = ''
 var KOMINKA_ELF = ''
 var KOMINKA_CHK = ''
-var KOMINKA_GET = ''
 var KOMINKA_BIN_MIRROR = ''
 var KOMINKA_REPO = ''
 var KOMINKA_TOKEN = ''
@@ -47,7 +46,6 @@ var newline = \n
 var cmd_su = ''
 var cmd_elf = ''
 var cmd_sha = ''
-var cmd_get = ''
 
 var sys_db = ''
 var sys_ch = ''
@@ -372,7 +370,7 @@ proc _sh256 (...files) {
 
 proc _download (dest, url) {
     ### Download a URL to a local file. Returns 1 on failure.
-    try { $cmd_get  -q -O $dest $url }
+    try { wget  -q -O $dest $url }
     if failed { rm -f $dest; return 1 }
 }
 
@@ -724,7 +722,7 @@ proc pkg_upload (pkg) {
                 if (_deps_json !== '') { setvar _deps_json = "\"${_deps_json}\"" }
                 var _mkdeps_json = _p.mkdeps => join('","')
                 if (_mkdeps_json !== '') { setvar _mkdeps_json = "\"${_mkdeps_json}\"" }
-                $cmd_get -q \
+                wget -q \
                     --post-data="{\"arch\":\"${sys_arch}\",\"pkg\":\"${_pkg}\",\"ver\":\"$[_p.ver]\",\"rel\":\"$[_p.rel]\",\"deps\":[${_deps_json}],\"mkdeps\":[${_mkdeps_json}]}" \
                     --header="Authorization: Bearer ${_token}" \
                     --header="Content-Type: application/json" \
@@ -771,7 +769,7 @@ proc pkg_upload (pkg) {
 
     if (_size > 50 * 1024 * 1024) {
         # Step 1: get a presigned PUT URL from the server.
-        $cmd_get -q \
+        wget -q \
             --method=POST \
             --header="Authorization: Bearer ${_token}" \
             --header="X-Arch: ${sys_arch}" \
@@ -788,7 +786,7 @@ proc pkg_upload (pkg) {
         if (_put_url === '') { die $_pkg "Could not parse presigned URL from server response" }
 
         # Step 2: PUT directly to R2 (bypasses Cloudflare proxy).
-        $cmd_get -q \
+        wget -q \
             --method=PUT \
             --body-file=$_tarball \
             --header="Content-Type: application/octet-stream" \
@@ -798,7 +796,7 @@ proc pkg_upload (pkg) {
 
         # Step 3: register the package in the server index.
         var _sha256 = $(sha256sum $_tarball | awk '{print $1}')
-        $cmd_get -q \
+        wget -q \
             --method=POST \
             --header="Authorization: Bearer ${_token}" \
             --header="X-Arch: ${sys_arch}" \
@@ -813,7 +811,7 @@ proc pkg_upload (pkg) {
             "${KOMINKA_REPO}/api/update-index" \
             || die $_pkg "Index update failed"
     } else {
-        $cmd_get -q \
+        wget -q \
             --post-file=$_tarball \
             --header="Authorization: Bearer ${_token}" \
             --header="X-Arch: ${sys_arch}" \
@@ -1017,7 +1015,7 @@ proc pkg_source_url (dest, url, fatal='y'; p Dict) {
     var max_attempts = 5
     while (attempt < max_attempts) {
         setvar attempt += 1
-        try { $cmd_get  -q -O $dest $url }
+        try { wget  -q -O $dest $url }
         if (_status === 0) { return }
         rm -f $dest
         if (attempt < max_attempts) {
@@ -1670,7 +1668,7 @@ proc pkg_source_upload (pkg; p Dict) {
 
     log $pkg "Uploading source tarball"
     var _resp_tmp = "/tmp/pm_src_resp_$$"
-    $cmd_get -q \
+    wget -q \
         --post-file=$_tarball \
         --header="Authorization: Bearer ${_token}" \
         --header="X-Pkg: ${pkg}" \
@@ -2400,7 +2398,7 @@ proc pkg_install_all (...pkgs) {
         # Start all downloads silently in background.
         var pids = {}
         for pkg in (dl_names) {
-            fork { $cmd_get  -q -O $[dests[pkg]] $[urls[pkg]] }
+            fork { wget  -q -O $[dests[pkg]] $[urls[pkg]] }
             setvar pids[pkg] = $!
         }
 
@@ -2966,7 +2964,6 @@ proc main (...argv) {
     setglobal KOMINKA_SU        = ENV => get("KOMINKA_SU", "")
     setglobal KOMINKA_ELF       = ENV => get("KOMINKA_ELF", "")
     setglobal KOMINKA_CHK       = ENV => get("KOMINKA_CHK", "")
-    setglobal KOMINKA_GET       = ENV => get("KOMINKA_GET", "")
     setglobal KOMINKA_BIN_MIRROR  = ENV => get("KOMINKA_BIN_MIRROR", "")
     setglobal KOMINKA_REPO        = ENV => get("KOMINKA_REPO", "")
     setglobal KOMINKA_TOKEN       = ENV => get("KOMINKA_TOKEN", "")
@@ -3027,9 +3024,6 @@ proc main (...argv) {
     setglobal cmd_sha = $(_discover_tool $KOMINKA_CHK openssl sha256sum sha256 shasum digest)
     if (cmd_sha === '') { die "No sha256 utility found" }
 
-    setglobal cmd_get = $(_discover_tool $KOMINKA_GET wget)
-    if (cmd_get === '') { die "No download tool found (wget)" }
-
     # Config dict — single source of truth for runtime configuration.
     setglobal config = {
         root:       KOMINKA_ROOT,
@@ -3042,7 +3036,7 @@ proc main (...argv) {
         strip:      KOMINKA_STRIP,
         color:      KOMINKA_COLOR,
         hook:       KOMINKA_HOOK,
-        get:        cmd_get,
+        get:        'wget',
         sha:        cmd_sha,
         elf:        cmd_elf,
     }

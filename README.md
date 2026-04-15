@@ -39,7 +39,6 @@ docs/           Reference docs (YSH.md, ZIG-CC.md)
 | `KOMINKA_PATH` | `/packages` | Colon-separated path to package definitions |
 | `KOMINKA_ROOT` | `` | Install root (empty = `/`) |
 | `KOMINKA_REPO` | `` | Repo server URL |
-| `KOMINKA_GET` | `` | Downloader binary (curl or wget) |
 | `KOMINKA_INSECURE` | `` | Skip TLS verification if `1` |
 | `KOMINKA_COMPRESS` | `gz` | Tarball compression format |
 | `KOMINKA_FORCE` | `` | Force reinstall if `1` |

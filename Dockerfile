@@ -41,7 +41,6 @@ SHELL ["/usr/local/bin/ysh", "-c"]
 # Promote ARGs to ENV so they're available without ${} substitution in ysh.
 ENV KOMINKA_REPO=${REPO_URL} \
     R2_PUBLIC_URL=${R2_PUBLIC_URL} \
-    KOMINKA_GET=/usr/bin/wget \
     LOGNAME=root \
     HOME=/root
 
