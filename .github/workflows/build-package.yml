@@ -46,9 +46,7 @@ jobs:
           docker build \
             --build-arg REPO_URL=https://kominka.17166969.xyz \
             --build-arg KARCH=$KARCH \
-            -t kominka:core .
-          docker build --build-arg REPO_URL=https://kominka.17166969.xyz \
-            -t kominka:builder -f Dockerfile .
+            -t kominka:builder .
           docker save kominka:builder | gzip > /tmp/kominka-builder.tar.gz
 
       - name: Load kominka:builder
