@@ -69,7 +69,6 @@ jobs:
             -e KOMINKA_COLOR=0 \
             -e KOMINKA_PROMPT=0 \
             -e KOMINKA_FORCE=1 \
-            -e KOMINKA_GET=/usr/bin/curl \
             -e LD_LIBRARY_PATH=/usr/lib \
             -e LOGNAME=root \
             -e HOME=/root \
