@@ -14,6 +14,8 @@ pub struct PackageEntry {
     #[serde(default)]
     pub mkdeps: Vec<String>,
     pub sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub src_sha256: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -139,9 +141,13 @@ pub fn route(
             if let Some(arch) = path.strip_prefix('/').and_then(|p| p.strip_suffix("/packages.json")) {
                 return get_index(arch, state);
             }
-            // /{arch}/{pkg}/{file}
+            // /src/{pkg}/{ver}-{rel}.tar.bz2  — processed source tarballs (arch-independent)
+            // /{arch}/{pkg}/{ver}-{rel}.tar.gz — binary tarballs
             let parts: Vec<&str> = path.trim_start_matches('/').splitn(3, '/').collect();
             if parts.len() == 3 {
+                if parts[0] == "src" {
+                    return get_source_tarball(parts[1], parts[2], state);
+                }
                 return get_tarball(&parts[0], &parts[1], parts[2], state);
             }
             Response::not_found()
@@ -154,6 +160,7 @@ pub fn route(
             "/auth/tokens" => crate::webauthn_handlers::create_token_api(body, headers, state),
             "/auth/tokens/delete" => crate::webauthn_handlers::delete_token_api(body, headers, state),
             "/api/upload" => upload(headers, body, state),
+            "/api/upload-src" => upload_src(headers, body, state),
             "/api/upload-url" => upload_url(headers, state),
             "/api/update-index" => update_index_endpoint(headers, state),
             "/api/publish" => publish(headers, body, state),
@@ -353,6 +360,7 @@ fn upload(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> R
         deps,
         mkdeps,
         sha256: sha256_hex.clone(),
+        src_sha256: None,
     };
     if let Err(e) = update_index(state, arch, pkg, entry) {
         tracing::error!("index update failed: {e}");
@@ -432,6 +440,7 @@ fn update_index_endpoint(headers: &HashMap<String, String>, state: &AppState) ->
         deps: parse_list(deps_raw),
         mkdeps: parse_list(mkdeps_raw),
         sha256: sha256.to_string(),
+        src_sha256: None,
     };
     if let Err(e) = update_index(state, arch, pkg, entry) {
         tracing::error!("index update failed: {e}");
@@ -466,6 +475,7 @@ fn publish(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> 
         deps: req.deps,
         mkdeps: req.mkdeps,
         sha256: String::new(),
+        src_sha256: None,
     };
     if let Err(e) = update_index(state, &req.arch, &req.pkg, entry) {
         tracing::error!("index update failed: {e}");
@@ -531,6 +541,7 @@ fn reindex(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> 
         deps: req.deps,
         mkdeps: req.mkdeps,
         sha256,
+        src_sha256: None,
     };
     if let Err(e) = update_index(state, &req.arch, &req.pkg, entry) {
         tracing::error!("reindex failed: {e}");
@@ -566,6 +577,64 @@ fn delete_pkg(headers: &HashMap<String, String>, body: &[u8], state: &AppState) 
     } else {
         Response::not_found()
     }
+}
+
+fn get_source_tarball(pkg: &str, file: &str, state: &AppState) -> Response {
+    if !valid_pkg_name(pkg) {
+        return Response::not_found();
+    }
+    if !file.ends_with(".tar.bz2") || file.contains("..") || file.contains('/') {
+        return Response::not_found();
+    }
+    if let Some(base) = &state.r2_public_url {
+        return Response::redirect(&format!("{base}/src/{pkg}/{file}"));
+    }
+    let key = format!("src/{pkg}/{file}");
+    match state.s3.get(&key) {
+        Some(bytes) => Response::octet(bytes),
+        None => Response::not_found(),
+    }
+}
+
+fn upload_src(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> Response {
+    if !auth::authenticated(headers, state) {
+        return Response::unauthorized();
+    }
+
+    let pkg = headers.get("x-pkg").map(|s| s.as_str()).unwrap_or("");
+    let ver = headers.get("x-ver").map(|s| s.as_str()).unwrap_or("");
+    let rel = headers.get("x-rel").map(|s| s.as_str()).unwrap_or("");
+
+    if pkg.is_empty() || ver.is_empty() || rel.is_empty() {
+        return Response::bad_request("missing headers");
+    }
+    if !valid_pkg_name(pkg) {
+        return Response::bad_request("invalid package name");
+    }
+
+    let sha256_hex = s3::sha256_hex(body);
+    let key = format!("src/{pkg}/{ver}-{rel}.tar.bz2");
+
+    if let Err(e) = state.s3.put(&key, body.to_vec(), "application/octet-stream") {
+        tracing::error!("source upload failed: {e}");
+        return Response::error("source upload failed");
+    }
+
+    // Update src_sha256 in the package index for all architectures (sources are arch-independent).
+    let mut indexes = state.indexes.write().unwrap();
+    for arch in KNOWN_ARCHES {
+        if let Some(idx) = indexes.get_mut(*arch) {
+            if let Some(entry) = idx.packages.get_mut(pkg) {
+                if entry.ver == ver && entry.rel == rel {
+                    entry.src_sha256 = Some(sha256_hex.clone());
+                    let _ = save_index(&state.s3, arch, idx);
+                }
+            }
+        }
+    }
+
+    tracing::info!("uploaded source {key} sha256={sha256_hex}");
+    Response::json_bytes(201, br#"{"ok":true}"#.to_vec())
 }
 
 fn update_index(state: &AppState, arch: &str, pkg: &str, entry: PackageEntry) -> Result<(), String> {
