@@ -2,14 +2,17 @@
 
 var name    = 'sudo-rs'
 var ver     = '0.2.13'
-var rel     = '3'
+var rel     = '4'
 var deps    = ['musl', 'linux-pam']
-var mkdeps  = ['cargo']
+var mkdeps  = ['cargo', 'linux-pam']
 
 var sources = ['https://github.com/trifectatechfoundation/sudo-rs/archive/refs/tags/vVERSION.tar.gz']
 var checksums = ['79becefc504d14ffccc7cab18d42f8d892e78b2d13d9c5bb887c5f02a2721eaf']
 
 proc build(dest) {
+    # The musl Rust target defaults to static C library linking; override so
+    # cargo links libpam dynamically (we only have libpam.so, not libpam.a).
+    setglobal ENV.RUSTFLAGS = "-C target-feature=-crt-static"
 
     cargo build --release
 
