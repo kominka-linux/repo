@@ -1,61 +1,39 @@
-# Kominka Linux base image (FROM scratch, ~57MB).
+# Build environment: core + build-essential
+# Used by CI for all package builds.
 #
-# Bootstrap: busybox:latest is used ONLY to download our own packages from R2
-# via wget. The scratch stage copies only our packages — no Docker Hub files
-# end up in the final image or in any stage that actually executes our code.
+# Bootstrap: busybox:latest provides sh + tar during the build only.
+# The final scratch stage copies only Kominka packages — no Docker Hub
+# content ends up in the final image.
 #
 # KARCH: architecture string passed by the caller.
 #   x86_64-linux-gnu  or  aarch64-linux-gnu
 #
 # Usage:
-#   KARCH=$(uname -m | sed 's/x86_64/x86_64-linux-gnu/;s/aarch64/aarch64-linux-gnu/')
-#   docker build \
-#     --build-arg KARCH=$KARCH --build-arg REPO_URL=http://localhost:3000 \
-#     --network=host -t kominka:core .
+#   KARCH=$(uname -m | sed 's/x86_64/x86_64-linux-gnu/;s/aarch64/aarch64-linux-gnu/;s/arm64/aarch64-linux-gnu/')
+#   docker build --build-arg KARCH=$KARCH -t kominka:core .
 
-FROM busybox:latest AS fetch
+FROM busybox:latest AS bootstrap
 
-ARG R2=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
 ARG KARCH=aarch64-linux-gnu
-
-# Minimal bootstrap environment: only musl + baselayout + busybox + ysh needed
-# to run pm. All other packages are pre-cached below so pm never calls curl.
-RUN mkdir -p /pkg && \
-    wget --no-check-certificate -qO- "$R2/$KARCH/musl/1.2.6-24.tar.gz"      | tar xzf - -C /pkg && \
-    wget --no-check-certificate -qO- "$R2/$KARCH/baselayout/1-9.tar.gz"       | tar xzf - -C /pkg && \
-    wget --no-check-certificate -qO- "$R2/$KARCH/busybox/1.36.1-12.tar.gz"    | tar xzf - -C /pkg && \
-    wget --no-check-certificate -qO- "$R2/$KARCH/ysh/0.37.0-4.tar.gz"         | tar xzf - -C /pkg
-
-# Pre-populate pm binary cache with all packages needed for both:
-#   1. pm i core (kominka:core base packages)
-#   2. pm i zig busybox make binutils-strip (kominka:build-essential tools)
-# pm checks pkg@ver-rel.tar.gz in $XDG_CACHE_HOME/kominka/bin/ before downloading.
-# Pre-seeding bypasses the HTTPS download entirely — critical because our x86_64
-# boringssl crashes with SIGSEGV during SSL_library_init() (zig cc x86_64 bug).
-# Update versions here whenever any of these packages change.
-RUN mkdir -p /cache && \
-    wget --no-check-certificate -qO "/cache/musl@1.2.6-24.tar.gz"               "$R2/$KARCH/musl/1.2.6-24.tar.gz" && \
-    wget --no-check-certificate -qO "/cache/baselayout@1-9.tar.gz"               "$R2/$KARCH/baselayout/1-9.tar.gz" && \
-    wget --no-check-certificate -qO "/cache/busybox@1.36.1-12.tar.gz"            "$R2/$KARCH/busybox/1.36.1-12.tar.gz" && \
-    wget --no-check-certificate -qO "/cache/ysh@0.37.0-4.tar.gz"                 "$R2/$KARCH/ysh/0.37.0-4.tar.gz" && \
-    wget --no-check-certificate -qO "/cache/zlib@1.3.2-4.tar.gz"                 "$R2/$KARCH/zlib/1.3.2-4.tar.gz" && \
-    wget --no-check-certificate -qO "/cache/boringssl@0.20260327.0-9.tar.gz"     "$R2/$KARCH/boringssl/0.20260327.0-9.tar.gz" && \
-    wget --no-check-certificate -qO "/cache/curl@8.19.0-9.tar.gz"                "$R2/$KARCH/curl/8.19.0-9.tar.gz" && \
-    wget --no-check-certificate -qO "/cache/mimalloc@2.2.7-1.tar.gz"             "$R2/$KARCH/mimalloc/2.2.7-1.tar.gz" && \
-    wget --no-check-certificate -qO "/cache/baseinit@2.0.0-1.tar.gz"             "$R2/$KARCH/baseinit/2.0.0-1.tar.gz" && \
-    wget --no-check-certificate -qO "/cache/runit@2.3.1-2.tar.gz"                "$R2/$KARCH/runit/2.3.1-2.tar.gz" && \
-    wget --no-check-certificate -qO "/cache/ca-certificates@2026.03.19-1.tar.gz" "$R2/$KARCH/ca-certificates/2026.03.19-1.tar.gz" && \
-    wget --no-check-certificate -qO "/cache/zig@0.15.2-11.tar.gz"                "$R2/$KARCH/zig/0.15.2-11.tar.gz" && \
-    wget --no-check-certificate -qO "/cache/make@4.4.1-3.tar.gz"                 "$R2/$KARCH/make/4.4.1-3.tar.gz" && \
-    wget --no-check-certificate -qO "/cache/binutils-strip@2.44-2.tar.gz"        "$R2/$KARCH/binutils-strip/2.44-2.tar.gz"
-
-FROM scratch AS bootstrap
-
+ARG WGET_TAG=wget-9839bca87f17e4e67c79590c58c180653f477e18
 ARG REPO_URL=
 ARG R2_PUBLIC_URL=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
 
-# Copy only our own packages — no Docker Hub files in this stage.
-COPY --from=fetch /pkg /
+# Download our static wget binary; replaces busybox wget for all pm operations.
+RUN WARCH=$(echo "$KARCH" | cut -d- -f1) && \
+    wget -q -O "wget-linux-$WARCH" \
+      "https://github.com/kominka-linux/seed/releases/download/$WGET_TAG/wget-linux-$WARCH" && \
+    wget -q -O "wget-linux-$WARCH.sha256" \
+      "https://github.com/kominka-linux/seed/releases/download/$WGET_TAG/wget-linux-$WARCH.sha256" && \
+    awk -v f="wget-linux-$WARCH" '{print $1 "  " f}' "wget-linux-$WARCH.sha256" | sha256sum -c && \
+    mv "wget-linux-$WARCH" /usr/bin/wget && \
+    rm "wget-linux-$WARCH.sha256" && \
+    chmod +x /usr/bin/wget
+
+ADD packages/ca-certificates/files/cacert.pem /etc/ssl/certs/ca-certificates.crt
+
+# Install ysh (static binary, used as the shell for pm).
+RUN /usr/bin/wget -q -O - "$R2_PUBLIC_URL/$KARCH/ysh/0.37.0-4.tar.gz" | tar xzf - -C /
 
 # ysh is statically compiled; use it as the shell for all RUN commands.
 SHELL ["/usr/local/bin/ysh", "-c"]
@@ -63,51 +41,24 @@ SHELL ["/usr/local/bin/ysh", "-c"]
 # Promote ARGs to ENV so they're available without ${} substitution in ysh.
 ENV KOMINKA_REPO=${REPO_URL} \
     R2_PUBLIC_URL=${R2_PUBLIC_URL} \
-    KOMINKA_GET=/usr/bin/curl \
+    KOMINKA_GET=/usr/bin/wget \
     LOGNAME=root \
     HOME=/root
-
-COPY packages /packages
-RUN find /packages -name build -exec chmod +x {} + && \
-    find /packages -name post-install -exec chmod +x {} +
-
-# Seed pm binary cache inside /kominka-root (persists to final image).
-# XDG_CACHE_HOME=/kominka-root/root/.cache in pm i core below means the
-# pm cache lives at /kominka-root/root/.cache/kominka/bin/ = /root/.cache/...
-# in the final image. pm finds all tarballs there and skips all downloads.
-COPY --from=fetch /cache /kominka-root/root/.cache/kominka/bin/
-
-# Embed build-essential PKGBUILDs in the image so pm can resolve versions
-# without network access. busybox is in core; only zig/make/binutils-strip.
-RUN mkdir -p \
-        /kominka-root/usr/lib/kominka/packages/zig \
-        /kominka-root/usr/lib/kominka/packages/make \
-        /kominka-root/usr/lib/kominka/packages/binutils-strip && \
-    cp /packages/zig/PKGBUILD.ysh \
-        /kominka-root/usr/lib/kominka/packages/zig/PKGBUILD.ysh && \
-    cp /packages/make/PKGBUILD.ysh \
-        /kominka-root/usr/lib/kominka/packages/make/PKGBUILD.ysh && \
-    cp /packages/binutils-strip/PKGBUILD.ysh \
-        /kominka-root/usr/lib/kominka/packages/binutils-strip/PKGBUILD.ysh
-
-RUN mkdir -p /kominka-root/var/db/kominka/installed \
-             /kominka-root/var/db/kominka/choices
 
 COPY pm.ysh /usr/bin/pm
 RUN chmod +x /usr/bin/pm
 
 RUN XDG_CACHE_HOME=/kominka-root/root/.cache \
-    KOMINKA_PATH=/packages \
     KOMINKA_ROOT=/kominka-root \
     KOMINKA_COMPRESS=gz \
     KOMINKA_COLOR=0 \
     KOMINKA_PROMPT=0 \
     KOMINKA_STRIP=0 \
     KOMINKA_FORCE=1 \
-    KOMINKA_INSECURE=1 \
     ysh /usr/bin/pm i core
 
-RUN cp /usr/bin/pm /kominka-root/usr/bin/pm
+RUN cp /usr/bin/pm /kominka-root/usr/bin/pm && \
+    cp /usr/bin/wget /kominka-root/usr/bin/wget
 
 FROM scratch
 

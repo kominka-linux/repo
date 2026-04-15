@@ -17,7 +17,6 @@ var KOMINKA_FORCE = ''
 var KOMINKA_CHOICE = ''
 var KOMINKA_DEBUG = ''
 var KOMINKA_STRIP = ''
-var KOMINKA_INSECURE = ''
 var KOMINKA_HOOK = ''
 var KOMINKA_TMPDIR = ''
 var KOMINKA_KEEPLOG = ''
@@ -373,18 +372,7 @@ proc _sh256 (...files) {
 
 proc _download (dest, url) {
     ### Download a URL to a local file. Returns 1 on failure.
-    case (cmd_get) {
-        */curl {
-            if (KOMINKA_INSECURE === '1') {
-                try { $cmd_get -ksfLo $dest $url }
-            } else {
-                try { $cmd_get -sfLo $dest $url }
-            }
-        }
-        */wget {
-            try { $cmd_get --no-check-certificate -qO $dest $url }
-        }
-    }
+    try { $cmd_get  -q -O $dest $url }
     if failed { rm -f $dest; return 1 }
 }
 
@@ -603,7 +591,8 @@ proc _pkg_find (name, mode='', test_flag='', search_path='') {
 
     if (len(results) === 0) {
         # Remote index fallback (only for default package search).
-        if (test_flag === '' and mode === '' and KOMINKA_REPO !== '') {
+        if (test_flag === '' and mode === '' and (KOMINKA_REPO !== '' or R2_PUBLIC_URL !== '')) {
+            if (not _remote_loaded) { index_refresh }
             index_load
             if (name in _remote_index) {
                 setglobal repo_dir = "remote:${name}"
@@ -713,11 +702,6 @@ proc pkg_upload (pkg) {
     auth_token_load (&_token)
     if (_token === '') { die "Not authenticated — set KOMINKA_TOKEN or run 'pm auth'" }
 
-    case (cmd_get) {
-        */curl { true }
-        * { die "Upload requires curl" }
-    }
-
     var _tarball = ''
     var _pkg = ''
     var _p = null
@@ -740,10 +724,12 @@ proc pkg_upload (pkg) {
                 if (_deps_json !== '') { setvar _deps_json = "\"${_deps_json}\"" }
                 var _mkdeps_json = _p.mkdeps => join('","')
                 if (_mkdeps_json !== '') { setvar _mkdeps_json = "\"${_mkdeps_json}\"" }
-                $cmd_get -sf -X POST "${KOMINKA_REPO}/api/publish" \
-                    -H "Authorization: Bearer ${_token}" \
-                    -H "Content-Type: application/json" \
-                    -d "{\"arch\":\"${sys_arch}\",\"pkg\":\"${_pkg}\",\"ver\":\"$[_p.ver]\",\"rel\":\"$[_p.rel]\",\"deps\":[${_deps_json}],\"mkdeps\":[${_mkdeps_json}]}" \
+                $cmd_get -q \
+                    --post-data="{\"arch\":\"${sys_arch}\",\"pkg\":\"${_pkg}\",\"ver\":\"$[_p.ver]\",\"rel\":\"$[_p.rel]\",\"deps\":[${_deps_json}],\"mkdeps\":[${_mkdeps_json}]}" \
+                    --header="Authorization: Bearer ${_token}" \
+                    --header="Content-Type: application/json" \
+                    -O /dev/null \
+                    "${KOMINKA_REPO}/api/publish" \
                     || die $_pkg "Publish failed"
                 log $_pkg "Published metapackage"
                 return
@@ -785,67 +771,60 @@ proc pkg_upload (pkg) {
 
     if (_size > 50 * 1024 * 1024) {
         # Step 1: get a presigned PUT URL from the server.
-        var _presign_code = $($cmd_get -s -w '%{http_code}' -o $_resp_tmp \
-            -X POST "${KOMINKA_REPO}/api/upload-url" \
-            -H "Authorization: Bearer ${_token}" \
-            -H "X-Arch: ${sys_arch}" \
-            -H "X-Pkg: ${_pkg}" \
-            -H "X-Ver: $[_p.ver]" \
-            -H "X-Rel: $[_p.rel]")
+        $cmd_get -q \
+            --method=POST \
+            --header="Authorization: Bearer ${_token}" \
+            --header="X-Arch: ${sys_arch}" \
+            --header="X-Pkg: ${_pkg}" \
+            --header="X-Ver: $[_p.ver]" \
+            --header="X-Rel: $[_p.rel]" \
+            -O $_resp_tmp \
+            "${KOMINKA_REPO}/api/upload-url" \
+            || die $_pkg "Upload URL request failed"
         var _presign_body = $(cat $_resp_tmp)
         rm -f $_resp_tmp
-        if (_presign_code !== '200') {
-            die $_pkg "Upload URL request failed (HTTP $_presign_code): $_presign_body"
-        }
         # Extract URL from {"url":"..."}
         var _put_url = $(echo $_presign_body | grep -o '"url":"[^"]*"' | sed 's/"url":"//;s/"//')
         if (_put_url === '') { die $_pkg "Could not parse presigned URL from server response" }
 
         # Step 2: PUT directly to R2 (bypasses Cloudflare proxy).
-        var _put_code = $($cmd_get -s -w '%{http_code}' -o $_resp_tmp \
-            -X PUT "$_put_url" \
-            -H "Content-Type: application/octet-stream" \
-            --data-binary "@${_tarball}")
-        var _put_body = $(cat $_resp_tmp)
-        rm -f $_resp_tmp
-        if (_put_code !== '200') {
-            die $_pkg "Direct R2 upload failed (HTTP $_put_code): $_put_body"
-        }
+        $cmd_get -q \
+            --method=PUT \
+            --body-file=$_tarball \
+            --header="Content-Type: application/octet-stream" \
+            -O /dev/null \
+            "$_put_url" \
+            || die $_pkg "Direct R2 upload failed"
 
         # Step 3: register the package in the server index.
         var _sha256 = $(sha256sum $_tarball | awk '{print $1}')
-        var _idx_code = $($cmd_get -s -w '%{http_code}' -o $_resp_tmp \
-            -X POST "${KOMINKA_REPO}/api/update-index" \
-            -H "Authorization: Bearer ${_token}" \
-            -H "X-Arch: ${sys_arch}" \
-            -H "X-Pkg: ${_pkg}" \
-            -H "X-Ver: $[_p.ver]" \
-            -H "X-Rel: $[_p.rel]" \
-            -H "X-Deps: ${_deps_header}" \
-            -H "X-Mkdeps: ${_mkdeps_header}" \
-            -H "X-Sha256: ${_sha256}" \
-            -H "X-Size: ${_size}")
-        var _idx_body = $(cat $_resp_tmp)
-        rm -f $_resp_tmp
-        if (_idx_code !== '201') {
-            die $_pkg "Index update failed (HTTP $_idx_code): $_idx_body"
-        }
+        $cmd_get -q \
+            --method=POST \
+            --header="Authorization: Bearer ${_token}" \
+            --header="X-Arch: ${sys_arch}" \
+            --header="X-Pkg: ${_pkg}" \
+            --header="X-Ver: $[_p.ver]" \
+            --header="X-Rel: $[_p.rel]" \
+            --header="X-Deps: ${_deps_header}" \
+            --header="X-Mkdeps: ${_mkdeps_header}" \
+            --header="X-Sha256: ${_sha256}" \
+            --header="X-Size: ${_size}" \
+            -O /dev/null \
+            "${KOMINKA_REPO}/api/update-index" \
+            || die $_pkg "Index update failed"
     } else {
-        var _code = $($cmd_get -s -w '%{http_code}' -o $_resp_tmp \
-            -X POST "${KOMINKA_REPO}/api/upload" \
-            -H "Authorization: Bearer ${_token}" \
-            -H "X-Arch: ${sys_arch}" \
-            -H "X-Pkg: ${_pkg}" \
-            -H "X-Ver: $[_p.ver]" \
-            -H "X-Rel: $[_p.rel]" \
-            -H "X-Deps: ${_deps_header}" \
-            -H "X-Mkdeps: ${_mkdeps_header}" \
-            --data-binary "@${_tarball}")
-        var _body = $(cat $_resp_tmp)
-        rm -f $_resp_tmp
-        if (_code !== '201') {
-            die $_pkg "Upload failed (HTTP $_code): $_body"
-        }
+        $cmd_get -q \
+            --post-file=$_tarball \
+            --header="Authorization: Bearer ${_token}" \
+            --header="X-Arch: ${sys_arch}" \
+            --header="X-Pkg: ${_pkg}" \
+            --header="X-Ver: $[_p.ver]" \
+            --header="X-Rel: $[_p.rel]" \
+            --header="X-Deps: ${_deps_header}" \
+            --header="X-Mkdeps: ${_mkdeps_header}" \
+            -O /dev/null \
+            "${KOMINKA_REPO}/api/upload" \
+            || die $_pkg "Upload failed"
     }
 
     log $_pkg "Uploaded"
@@ -1038,18 +1017,7 @@ proc pkg_source_url (dest, url, fatal='y'; p Dict) {
     var max_attempts = 5
     while (attempt < max_attempts) {
         setvar attempt += 1
-        case (cmd_get) {
-            */curl {
-                var curl_args = ['-fLo', dest, url]
-                if (KOMINKA_INSECURE === '1') { setvar curl_args = ['-kfLo', dest, url] }
-                try { $cmd_get @curl_args }
-            }
-            */wget {
-                # busybox wget does not implement TLS certificate validation;
-                # --no-check-certificate is required for any HTTPS download.
-                try { $cmd_get --no-check-certificate -qO $dest $url }
-            }
-        }
+        try { $cmd_get  -q -O $dest $url }
         if (_status === 0) { return }
         rm -f $dest
         if (attempt < max_attempts) {
@@ -1702,19 +1670,17 @@ proc pkg_source_upload (pkg; p Dict) {
 
     log $pkg "Uploading source tarball"
     var _resp_tmp = "/tmp/pm_src_resp_$$"
-    var _code = $($cmd_get -s -w '%{http_code}' -o $_resp_tmp \
-        -X POST "${KOMINKA_REPO}/api/upload-src" \
-        -H "Authorization: Bearer ${_token}" \
-        -H "X-Pkg: ${pkg}" \
-        -H "X-Ver: $[p.ver]" \
-        -H "X-Rel: $[p.rel]" \
-        --data-binary "@${_tarball}")
+    $cmd_get -q \
+        --post-file=$_tarball \
+        --header="Authorization: Bearer ${_token}" \
+        --header="X-Pkg: ${pkg}" \
+        --header="X-Ver: $[p.ver]" \
+        --header="X-Rel: $[p.rel]" \
+        -O $_resp_tmp \
+        "${KOMINKA_REPO}/api/upload-src" \
+        || { war $pkg "Source upload failed"; return }
     var _resp_body = $(cat $_resp_tmp)
     rm -f $_resp_tmp
-    if (_code !== '201') {
-        war $pkg "Source upload failed (HTTP $_code)"
-        return
-    }
     var _resp = null
     json read (&_resp) <<< $_resp_body
     if (_resp !== null and not _resp['indexed']) {
@@ -2434,16 +2400,7 @@ proc pkg_install_all (...pkgs) {
         # Start all downloads silently in background.
         var pids = {}
         for pkg in (dl_names) {
-            case (cmd_get) {
-                */curl {
-                    if (KOMINKA_INSECURE === '1') {
-                        fork { $cmd_get -ksfLo $[dests[pkg]] $[urls[pkg]] }
-                    } else {
-                        fork { $cmd_get -sfLo $[dests[pkg]] $[urls[pkg]] }
-                    }
-                }
-                */wget { fork { $cmd_get --no-check-certificate -qO $[dests[pkg]] $[urls[pkg]] } }
-            }
+            fork { $cmd_get  -q -O $[dests[pkg]] $[urls[pkg]] }
             setvar pids[pkg] = $!
         }
 
@@ -3003,7 +2960,6 @@ proc main (...argv) {
     setglobal KOMINKA_CHOICE    = ENV => get("KOMINKA_CHOICE", "")
     setglobal KOMINKA_DEBUG     = ENV => get("KOMINKA_DEBUG", "")
     setglobal KOMINKA_STRIP     = ENV => get("KOMINKA_STRIP", "")
-    setglobal KOMINKA_INSECURE  = ENV => get("KOMINKA_INSECURE", "")
     setglobal KOMINKA_HOOK      = ENV => get("KOMINKA_HOOK", "")
     setglobal KOMINKA_TMPDIR    = ENV => get("KOMINKA_TMPDIR", "")
     setglobal KOMINKA_KEEPLOG   = ENV => get("KOMINKA_KEEPLOG", "")
@@ -3071,8 +3027,8 @@ proc main (...argv) {
     setglobal cmd_sha = $(_discover_tool $KOMINKA_CHK openssl sha256sum sha256 shasum digest)
     if (cmd_sha === '') { die "No sha256 utility found" }
 
-    setglobal cmd_get = $(_discover_tool $KOMINKA_GET curl wget)
-    if (cmd_get === '') { die "No download tool found (curl, wget)" }
+    setglobal cmd_get = $(_discover_tool $KOMINKA_GET wget)
+    if (cmd_get === '') { die "No download tool found (wget)" }
 
     # Config dict — single source of truth for runtime configuration.
     setglobal config = {
@@ -3084,7 +3040,6 @@ proc main (...argv) {
         force:      KOMINKA_FORCE,
         prompt:     KOMINKA_PROMPT,
         strip:      KOMINKA_STRIP,
-        insecure:   KOMINKA_INSECURE,
         color:      KOMINKA_COLOR,
         hook:       KOMINKA_HOOK,
         get:        cmd_get,

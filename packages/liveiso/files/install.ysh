@@ -147,7 +147,7 @@ proc build_kernel_x86_64() {
 
     echo "    Downloading kernel source (~130MB)..."
     var tarball = "${build_dir}/linux-${KERNEL_VER}.tar.xz"
-    if ! curl -fsSL --progress-bar -o $tarball $kernel_url {
+    if ! wget -qO $tarball $kernel_url {
         echo "    Download failed — falling back to baseline kernel."
         cp /usr/share/kominka/Image "${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
         rm -rf $build_dir

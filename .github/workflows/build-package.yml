@@ -32,14 +32,14 @@ jobs:
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=kominka-repo" | jq -r .value)
           echo "KOMINKA_TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
-      - name: Cache kominka:build-essential
+      - name: Cache kominka:builder
         id: cache
         uses: actions/cache@v4
         with:
-          path: /tmp/kominka-build-essential.tar.gz
-          key: kominka-build-essential-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'Dockerfile.buildessential', 'pm.ysh') }}
+          path: /tmp/kominka-builder.tar.gz
+          key: kominka-builder-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'pm.ysh') }}
 
-      - name: Build kominka:build-essential
+      - name: Build kominka:builder
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}
         run: |
           KARCH=$(uname -m | sed 's/x86_64/x86_64-linux-gnu/;s/aarch64/aarch64-linux-gnu/')
@@ -48,12 +48,12 @@ jobs:
             --build-arg KARCH=$KARCH \
             -t kominka:core .
           docker build --build-arg REPO_URL=https://kominka.17166969.xyz \
-            -t kominka:build-essential -f Dockerfile.buildessential .
-          docker save kominka:build-essential | gzip > /tmp/kominka-build-essential.tar.gz
+            -t kominka:builder -f Dockerfile .
+          docker save kominka:builder | gzip > /tmp/kominka-builder.tar.gz
 
-      - name: Load kominka:build-essential
+      - name: Load kominka:builder
         if: ${{ steps.cache.outputs.cache-hit == 'true' }}
-        run: docker load < /tmp/kominka-build-essential.tar.gz
+        run: docker load < /tmp/kominka-builder.tar.gz
 
       - name: Build ${{ inputs.package }}
         run: |
@@ -73,7 +73,7 @@ jobs:
             -e LD_LIBRARY_PATH=/usr/lib \
             -e LOGNAME=root \
             -e HOME=/root \
-            kominka:build-essential /usr/local/bin/ysh -c '
+            kominka:builder /usr/local/bin/ysh -c '
               pm b "${{ inputs.package }}"
               for f in /root/.cache/kominka/bin/${{ inputs.package }}@*.tar.*; do
                 [ -f "$f" ] && cp "$f" /out/
