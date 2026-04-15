@@ -57,6 +57,7 @@ fn main() {
         jwks,
         allowed_users,
         indexes: std::sync::RwLock::new(HashMap::new()),
+        upload_lock: std::sync::Mutex::new(()),
         secure_cookies: rp_origin.starts_with("https://"),
         r2_public_url,
     });

@@ -399,6 +399,7 @@ fn upload(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> R
     let sha256_hex = s3::sha256_hex(body);
 
     let key = format!("{arch}/{pkg}/{ver}-{rel}.tar.gz");
+    let _upload_guard = state.upload_lock.lock().unwrap();
     if let Err(e) = state.s3.put(&key, body.to_vec(), "application/octet-stream") {
         tracing::error!("upload failed: {e}");
         return Response::error("upload failed");
@@ -674,6 +675,7 @@ fn upload_src(headers: &HashMap<String, String>, body: &[u8], state: &AppState) 
     let sha256_hex = s3::sha256_hex(body);
     let key = format!("src/{pkg}/{ver}-{rel}.tar.bz2");
 
+    let _upload_guard = state.upload_lock.lock().unwrap();
     if let Err(e) = state.s3.put(&key, body.to_vec(), "application/octet-stream") {
         tracing::error!("source upload failed: {e}");
         return Response::error("source upload failed");
@@ -789,6 +791,7 @@ mod tests {
             jwks: None,
             allowed_users: vec![],
             indexes: RwLock::new(HashMap::new()),
+            upload_lock: Mutex::new(()),
             secure_cookies: false,
             r2_public_url: None,
         }

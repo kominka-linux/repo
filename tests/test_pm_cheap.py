@@ -7,11 +7,15 @@ manually populating the installed database and repo directories.
 Every test class is duplicated for the YSH port via subclassing.
 """
 
+import contextlib
+import http.server
+import json
 import os
 import shutil
 import subprocess
 import tempfile
 import textwrap
+import threading
 import unittest
 from pathlib import Path
 
@@ -669,6 +673,128 @@ class YSH_ArgumentValidationTests(CheapPMTestCase, ArgumentValidationTests):
 
 @unittest.skipUnless(HAS_YSH, "ysh interpreter not found")
 class YSH_RemoveDependentTests(CheapPMTestCase, RemoveDependentTests):
+    PM_INTERPRETER = YSH
+    PM_SCRIPT = PM_YSH
+
+
+class UploadSkipTests:
+    """pm p must skip uploads when the remote index already has the current ver-rel.
+
+    These tests spin up a minimal HTTP server to serve a fake packages.json so
+    that index_refresh succeeds without a real repo.  The tests only verify the
+    skip/no-skip decision; they do not test the actual upload path.
+    """
+
+    TEST_ARCH = "x86_64-linux-gnu"
+    FAKE_SHA = "a" * 64
+
+    def setUp(self):
+        super().setUp()
+        self.env["KOMINKA_ARCH"] = self.TEST_ARCH
+        self.env["KOMINKA_TOKEN"] = "faketoken"
+
+    @contextlib.contextmanager
+    def _fake_repo(self, pkg_index):
+        """Spin up a local HTTP server that serves pkg_index as packages.json."""
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(handler_self):
+                if handler_self.path.endswith("/packages.json"):
+                    body = json.dumps({"_version": 1, "packages": pkg_index}).encode()
+                    handler_self.send_response(200)
+                    handler_self.send_header("Content-Type", "application/json")
+                    handler_self.send_header("Content-Length", str(len(body)))
+                    handler_self.end_headers()
+                    handler_self.wfile.write(body)
+                else:
+                    handler_self.send_response(404)
+                    handler_self.end_headers()
+
+            def log_message(handler_self, *args):
+                pass  # suppress access log noise
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        port = server.server_address[1]
+        t = threading.Thread(target=server.serve_forever)
+        t.daemon = True
+        t.start()
+        try:
+            yield f"http://127.0.0.1:{port}"
+        finally:
+            server.shutdown()
+
+    def _fake_tarball(self, pkg, ver, rel):
+        """Create a placeholder binary tarball and return its path."""
+        bin_dir = self.kominka_cache / "bin"
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        path = bin_dir / f"{pkg}@{ver}-{rel}.tar.gz"
+        path.write_bytes(b"fake tarball content")
+        return path
+
+    def _fake_source_tarball(self, pkg, ver, rel):
+        """Create a placeholder source tarball and return its path."""
+        src_dir = self.kominka_cache / "src"
+        src_dir.mkdir(parents=True, exist_ok=True)
+        path = src_dir / f"{pkg}@{ver}-{rel}.tar.bz2"
+        path.write_bytes(b"fake source content")
+        return path
+
+    def test_skips_binary_upload_if_already_in_index(self):
+        """pm p should log 'Already uploaded' and not attempt an upload."""
+        self.create_repo_pkg("skipme", version="1.0 1",
+                             sources="https://example.com/v1.tar.gz")
+        self._fake_tarball("skipme", "1.0", "1")
+        pkg_index = {
+            "skipme": {"ver": "1.0", "rel": "1", "deps": [], "sha256": self.FAKE_SHA}
+        }
+        with self._fake_repo(pkg_index) as repo_url:
+            r = self.pm("p", "skipme",
+                        env_override={"KOMINKA_REPO": repo_url},
+                        check=False)
+        self.assertIn("Already uploaded", r.stderr)
+        self.assertNotIn("Uploading skipme@", r.stderr)
+
+    def test_skips_source_upload_if_src_sha256_already_in_index(self):
+        """pm p should log 'Source already uploaded' when src_sha256 is already set."""
+        self.create_repo_pkg("srcdone", version="2.0 3",
+                             sources="https://example.com/v2.tar.gz")
+        self._fake_tarball("srcdone", "2.0", "3")
+        self._fake_source_tarball("srcdone", "2.0", "3")
+        pkg_index = {
+            "srcdone": {
+                "ver": "2.0", "rel": "3", "deps": [],
+                "sha256": self.FAKE_SHA,
+                "src_sha256": self.FAKE_SHA,
+            }
+        }
+        with self._fake_repo(pkg_index) as repo_url:
+            r = self.pm("p", "srcdone",
+                        env_override={"KOMINKA_REPO": repo_url},
+                        check=False)
+        self.assertIn("Already uploaded", r.stderr)
+        self.assertIn("Source already uploaded", r.stderr)
+
+    def test_does_not_skip_when_version_differs(self):
+        """pm p should attempt the upload when the index has a different ver-rel."""
+        self.create_repo_pkg("newver", version="2.0 1",
+                             sources="https://example.com/v2.tar.gz")
+        self._fake_tarball("newver", "2.0", "1")
+        # Index has old ver 1.0-1; local PKGBUILD is at 2.0-1.
+        pkg_index = {
+            "newver": {"ver": "1.0", "rel": "1", "deps": [], "sha256": self.FAKE_SHA}
+        }
+        with self._fake_repo(pkg_index) as repo_url:
+            # Upload will fail (fake server has no /api/upload endpoint) but
+            # the "Uploading" log must appear before the attempt.
+            r = self.pm("p", "newver",
+                        env_override={"KOMINKA_REPO": repo_url},
+                        check=False)
+        self.assertIn("Uploading newver@2.0-1.tar.gz", r.stderr)
+        self.assertNotIn("Already uploaded", r.stderr)
+
+
+@unittest.skipUnless(HAS_YSH, "ysh interpreter not found")
+class YSH_UploadSkipTests(CheapPMTestCase, UploadSkipTests):
     PM_INTERPRETER = YSH
     PM_SCRIPT = PM_YSH
 

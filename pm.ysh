@@ -761,6 +761,18 @@ proc pkg_upload (pkg) {
         }
     }
 
+    # Skip upload if this exact ver-rel is already in the remote index.
+    index_refresh
+    index_load
+    if (_pkg in _remote_index) {
+        var _ri = _remote_index[_pkg]
+        if (_ri['ver'] === _p.ver and _ri['rel'] === _p.rel) {
+            log $_pkg "Already uploaded at $[_p.ver]-$[_p.rel]"
+            pkg_source_upload $_pkg (_p)
+            return
+        }
+    }
+
     var _deps_header = _p.deps => join(',')
     var _mkdeps_header = _p.mkdeps => join(',')
 
@@ -1671,6 +1683,17 @@ proc pkg_source_upload (pkg; p Dict) {
     if ! test -f $_tarball {
         log $pkg "No source tarball cached — run 'pm src $pkg' first to generate it" WARNING
         return
+    }
+
+    # Skip if the source tarball is already indexed for this ver-rel.
+    index_load
+    if (pkg in _remote_index) {
+        var _ri = _remote_index[pkg]
+        var _src_sha = _ri => get('src_sha256', '')
+        if (_src_sha !== '' and _ri['ver'] === p.ver and _ri['rel'] === p.rel) {
+            log $pkg "Source already uploaded at $[p.ver]-$[p.rel]"
+            return
+        }
     }
 
     var _token = ''

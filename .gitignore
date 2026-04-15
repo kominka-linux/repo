@@ -2,3 +2,4 @@ target/
 .env
 server/*.deb
 out/
+__pycache__

@@ -22,6 +22,7 @@ fn make_state() -> AppState {
         jwks: None,
         allowed_users: vec![TEST_USER.to_string()],
         indexes: RwLock::new(HashMap::new()),
+        upload_lock: std::sync::Mutex::new(()),
         secure_cookies: false,
         r2_public_url: None,
     }
@@ -409,4 +410,66 @@ fn root_shows_settings_link_when_authenticated() {
     assert!(body.contains("settings"), "should show settings link when logged in");
     assert!(body.contains("sign out"), "should show sign-out when logged in");
     assert!(body.contains(TEST_USER), "should show username when logged in");
+}
+
+// ── Upload serialization tests ────────────────────────────────────────────────
+
+#[test]
+fn upload_same_package_twice_is_idempotent() {
+    let state = make_state();
+    let r1 = upload_pkg(&state, "aarch64-linux-gnu", "curl", "1.0", "1", "", b"data");
+    let r2 = upload_pkg(&state, "aarch64-linux-gnu", "curl", "1.0", "1", "", b"data");
+    assert_eq!(r1.status, 201);
+    assert_eq!(r2.status, 201);
+    // Package appears exactly once in the index.
+    let resp = packages::route("GET", "/aarch64-linux-gnu/packages.json", &headers(&[]), b"", &state);
+    assert_eq!(body_json(&resp)["packages"].as_object().unwrap().len(), 1);
+}
+
+#[test]
+fn concurrent_uploads_of_different_packages_both_land_in_index() {
+    use std::sync::Arc;
+    let state = Arc::new(make_state());
+
+    let s1 = state.clone();
+    let t1 = std::thread::spawn(move || {
+        upload_pkg(&s1, "x86_64-linux-gnu", "pkg-a", "1.0", "1", "", b"data-a")
+    });
+    let s2 = state.clone();
+    let t2 = std::thread::spawn(move || {
+        upload_pkg(&s2, "x86_64-linux-gnu", "pkg-b", "1.0", "1", "", b"data-b")
+    });
+
+    assert_eq!(t1.join().unwrap().status, 201);
+    assert_eq!(t2.join().unwrap().status, 201);
+
+    let resp = packages::route("GET", "/x86_64-linux-gnu/packages.json", &headers(&[]), b"", &state);
+    let pkgs = body_json(&resp);
+    let pkg_map = pkgs["packages"].as_object().unwrap();
+    assert!(pkg_map.contains_key("pkg-a"), "pkg-a missing from index");
+    assert!(pkg_map.contains_key("pkg-b"), "pkg-b missing from index");
+}
+
+#[test]
+fn concurrent_uploads_of_same_package_both_succeed() {
+    use std::sync::Arc;
+    let state = Arc::new(make_state());
+
+    let s1 = state.clone();
+    let t1 = std::thread::spawn(move || {
+        upload_pkg(&s1, "x86_64-linux-gnu", "zlib", "1.3", "1", "", b"tarball")
+    });
+    let s2 = state.clone();
+    let t2 = std::thread::spawn(move || {
+        upload_pkg(&s2, "x86_64-linux-gnu", "zlib", "1.3", "1", "", b"tarball")
+    });
+
+    assert_eq!(t1.join().unwrap().status, 201);
+    assert_eq!(t2.join().unwrap().status, 201);
+
+    let resp = packages::route("GET", "/x86_64-linux-gnu/packages.json", &headers(&[]), b"", &state);
+    let idx = body_json(&resp);
+    assert_eq!(idx["packages"]["zlib"]["ver"], "1.3");
+    // Package appears exactly once despite two concurrent uploads.
+    assert_eq!(idx["packages"].as_object().unwrap().len(), 1);
 }
