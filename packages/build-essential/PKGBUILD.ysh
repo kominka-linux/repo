@@ -2,8 +2,8 @@
 
 var name    = 'build-essential'
 var ver     = '1.0.0'
-var rel     = '2'
-var deps    = ['core', 'zig', 'linux', 'zlib', 'm4', 'make', 'bison', 'samurai', 'cmake', 'git', 'pkgconf', 'binutils']
+var rel     = '3'
+var deps    = ['core', 'zig', 'linux', 'zlib', 'm4', 'make', 'bison', 'samurai', 'muon', 'cmake', 'git', 'pkgconf', 'binutils']
 var mkdeps  = []
 
 var sources = []
