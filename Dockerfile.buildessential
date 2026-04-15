@@ -8,4 +8,4 @@ ENV LD_LIBRARY_PATH=/usr/lib \
     LOGNAME=root
 RUN KOMINKA_REPO=${REPO_URL} \
     R2_PUBLIC_URL=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev \
-    /usr/local/bin/ysh -c 'pm i zig busybox make binutils-strip'
+    /usr/local/bin/ysh -c 'pm i zig busybox make binutils'

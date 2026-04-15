@@ -9,7 +9,7 @@
 #
 # Usage:
 #   KARCH=$(uname -m | sed 's/x86_64/x86_64-linux-gnu/;s/aarch64/aarch64-linux-gnu/')
-#   docker build --build-context packages=<dir> --build-context pm=<pm dir> \
+#   docker build \
 #     --build-arg KARCH=$KARCH --build-arg REPO_URL=http://localhost:3000 \
 #     --network=host -t kominka:core .
 
@@ -67,9 +67,7 @@ ENV KOMINKA_REPO=${REPO_URL} \
     LOGNAME=root \
     HOME=/root
 
-COPY --from=pm pm.ysh /usr/bin/pm
-RUN chmod +x /usr/bin/pm
-COPY --from=packages / /packages
+COPY packages /packages
 RUN find /packages -name build -exec chmod +x {} + && \
     find /packages -name post-install -exec chmod +x {} +
 
@@ -94,6 +92,9 @@ RUN mkdir -p \
 
 RUN mkdir -p /kominka-root/var/db/kominka/installed \
              /kominka-root/var/db/kominka/choices
+
+COPY pm.ysh /usr/bin/pm
+RUN chmod +x /usr/bin/pm
 
 RUN XDG_CACHE_HOME=/kominka-root/root/.cache \
     KOMINKA_PATH=/packages \

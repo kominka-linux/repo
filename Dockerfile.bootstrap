@@ -21,9 +21,9 @@ RUN ARCH=$(uname -m) && \
     esac && \
     curl -fsSL "$R2_BASE/$KARCH/ysh/0.37.0-2.tar.gz" | tar xzf - -C / ./usr/local/bin/
 
-COPY --from=pm pm.ysh /usr/bin/pm
-RUN chmod +x /usr/bin/pm
-
 ENV LD_LIBRARY_PATH=/usr/lib \
     LOGNAME=root \
     HOME=/root
+
+COPY pm.ysh /usr/bin/pm
+RUN chmod +x /usr/bin/pm

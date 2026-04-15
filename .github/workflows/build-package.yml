@@ -44,8 +44,6 @@ jobs:
         run: |
           KARCH=$(uname -m | sed 's/x86_64/x86_64-linux-gnu/;s/aarch64/aarch64-linux-gnu/')
           docker build \
-            --build-context packages=packages \
-            --build-context pm=. \
             --build-arg REPO_URL=https://kominka.17166969.xyz \
             --build-arg KARCH=$KARCH \
             -t kominka:core .
