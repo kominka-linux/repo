@@ -35,8 +35,13 @@
   **Workaround**: use `bootstrap-build-package.yml` for all amd64 package builds — it
   runs in Alpine's Docker environment and uses Alpine's working curl.
   arm64 `build-package.yml` (self-hosted) is fully functional.
-  See ZIG-CC.md for the full investigation.
+  See docs/ZIG-CC.md for the full investigation.
 
 ## Infrastructure
 - Server health monitoring / alerting
+
+## pm.ysh / YSH
+- **SIGCHLD accounting**: YSH limitation — the process group SIGCHLD accounting in oils
+  fires for all descendant exits, not just direct children. Nothing pm can do about it
+  without a patch to oils itself.
 

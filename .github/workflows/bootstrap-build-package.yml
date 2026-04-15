@@ -38,24 +38,18 @@ jobs:
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=kominka-repo" | jq -r .value)
           echo "KOMINKA_TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
-      - name: Checkout pm
-        uses: actions/checkout@v4
-        with:
-          repository: kominka-linux/pm
-          path: pm
-
       - name: Cache kominka:bootstrap
         id: cache
         uses: actions/cache@v4
         with:
           path: /tmp/kominka-bootstrap.tar.gz
-          key: kominka-bootstrap-${{ matrix.arch }}-${{ hashFiles('Dockerfile.bootstrap', 'pm/pm.ysh') }}
+          key: kominka-bootstrap-${{ matrix.arch }}-${{ hashFiles('Dockerfile.bootstrap', 'pm.ysh') }}
 
       - name: Build kominka:bootstrap
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}
         run: |
           docker build \
-            --build-context pm=pm \
+            --build-context pm=. \
             -t kominka:bootstrap -f Dockerfile.bootstrap .
           docker save kominka:bootstrap | gzip > /tmp/kominka-bootstrap.tar.gz
 
@@ -68,7 +62,7 @@ jobs:
           mkdir -p out
           docker run --rm \
             -v "$PWD/packages:/packages:ro" \
-            -v "$PWD/pm/pm.ysh:/usr/bin/pm:ro" \
+            -v "$PWD/pm.ysh:/usr/bin/pm:ro" \
             -v "$PWD/out:/out" \
             -e KOMINKA_REPO='https://kominka.17166969.xyz' \
             -e KOMINKA_PATH=/packages \
@@ -107,7 +101,7 @@ jobs:
         run: |
           docker run --rm \
             -v "$PWD/packages:/packages:ro" \
-            -v "$PWD/pm/pm.ysh:/usr/bin/pm:ro" \
+            -v "$PWD/pm.ysh:/usr/bin/pm:ro" \
             -v "$PWD/out:/root/.cache/kominka/bin" \
             -e KOMINKA_REPO='https://kominka.17166969.xyz' \
             -e KOMINKA_TOKEN="$KOMINKA_TOKEN" \

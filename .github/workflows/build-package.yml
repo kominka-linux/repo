@@ -32,18 +32,12 @@ jobs:
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=kominka-repo" | jq -r .value)
           echo "KOMINKA_TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
-      - name: Checkout pm
-        uses: actions/checkout@v4
-        with:
-          repository: kominka-linux/pm
-          path: pm
-
       - name: Cache kominka:build-essential
         id: cache
         uses: actions/cache@v4
         with:
           path: /tmp/kominka-build-essential.tar.gz
-          key: kominka-build-essential-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'Dockerfile.buildessential', 'pm/pm.ysh') }}
+          key: kominka-build-essential-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'Dockerfile.buildessential', 'pm.ysh') }}
 
       - name: Build kominka:build-essential
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}
@@ -51,7 +45,7 @@ jobs:
           KARCH=$(uname -m | sed 's/x86_64/x86_64-linux-gnu/;s/aarch64/aarch64-linux-gnu/')
           docker build \
             --build-context packages=packages \
-            --build-context pm=pm \
+            --build-context pm=. \
             --build-arg REPO_URL=https://kominka.17166969.xyz \
             --build-arg KARCH=$KARCH \
             -t kominka:core .
@@ -68,7 +62,7 @@ jobs:
           mkdir -p out
           docker run --rm \
             -v "$PWD/packages:/packages:ro" \
-            -v "$PWD/pm/pm.ysh:/usr/bin/pm:ro" \
+            -v "$PWD/pm.ysh:/usr/bin/pm:ro" \
             -v "$PWD/out:/out" \
             -e KOMINKA_REPO='https://kominka.17166969.xyz' \
             -e KOMINKA_TOKEN="$KOMINKA_TOKEN" \
