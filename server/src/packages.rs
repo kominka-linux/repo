@@ -154,6 +154,8 @@ pub fn route(
             "/auth/tokens" => crate::webauthn_handlers::create_token_api(body, headers, state),
             "/auth/tokens/delete" => crate::webauthn_handlers::delete_token_api(body, headers, state),
             "/api/upload" => upload(headers, body, state),
+            "/api/upload-url" => upload_url(headers, state),
+            "/api/update-index" => update_index_endpoint(headers, state),
             "/api/publish" => publish(headers, body, state),
             "/api/reindex" => reindex(headers, body, state),
             "/api/delete" => delete_pkg(headers, body, state),
@@ -359,6 +361,86 @@ fn upload(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> R
 
     tracing::info!("uploaded {key}");
     Response::json_bytes(201, format!(r#"{{"ok":true,"sha256":"{sha256_hex}"}}"#).into_bytes())
+}
+
+/// Return a presigned R2 PUT URL so large uploads bypass the Cloudflare proxy
+/// (which has a 100MB request body limit). The caller PUTs the tarball directly
+/// to R2, then calls /api/update-index with the sha256 to register the package.
+fn upload_url(headers: &HashMap<String, String>, state: &AppState) -> Response {
+    if !auth::authenticated(headers, state) {
+        return Response::unauthorized();
+    }
+
+    let arch = headers.get("x-arch").map(|s| s.as_str()).unwrap_or("");
+    let pkg = headers.get("x-pkg").map(|s| s.as_str()).unwrap_or("");
+    let ver = headers.get("x-ver").map(|s| s.as_str()).unwrap_or("");
+    let rel = headers.get("x-rel").map(|s| s.as_str()).unwrap_or("");
+
+    if arch.is_empty() || pkg.is_empty() || ver.is_empty() || rel.is_empty() {
+        return Response::bad_request("missing headers");
+    }
+    if !KNOWN_ARCHES.contains(&arch) {
+        return Response::bad_request("unknown arch");
+    }
+    if !valid_pkg_name(pkg) {
+        return Response::bad_request("invalid package name");
+    }
+
+    let key = format!("{arch}/{pkg}/{ver}-{rel}.tar.gz");
+    match state.s3.presign_put(&key, 3600) {
+        Some(url) => Response::json_bytes(200, format!(r#"{{"url":"{url}"}}"#).into_bytes()),
+        None => Response::error("presigned URLs not supported for this storage backend"),
+    }
+}
+
+/// Register a package in the index after a presigned direct-to-R2 upload.
+/// Caller must provide X-Sha256 header with the hex sha256 of the uploaded file.
+fn update_index_endpoint(headers: &HashMap<String, String>, state: &AppState) -> Response {
+    if !auth::authenticated(headers, state) {
+        return Response::unauthorized();
+    }
+
+    let arch = headers.get("x-arch").map(|s| s.as_str()).unwrap_or("");
+    let pkg = headers.get("x-pkg").map(|s| s.as_str()).unwrap_or("");
+    let ver = headers.get("x-ver").map(|s| s.as_str()).unwrap_or("");
+    let rel = headers.get("x-rel").map(|s| s.as_str()).unwrap_or("");
+    let sha256 = headers.get("x-sha256").map(|s| s.as_str()).unwrap_or("");
+    let deps_raw = headers.get("x-deps").map(|s| s.as_str()).unwrap_or("");
+    let mkdeps_raw = headers.get("x-mkdeps").map(|s| s.as_str()).unwrap_or("");
+
+    if arch.is_empty() || pkg.is_empty() || ver.is_empty() || rel.is_empty() || sha256.is_empty() {
+        return Response::bad_request("missing headers");
+    }
+    if !KNOWN_ARCHES.contains(&arch) {
+        return Response::bad_request("unknown arch");
+    }
+    if !valid_pkg_name(pkg) {
+        return Response::bad_request("invalid package name");
+    }
+    if sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Response::bad_request("invalid sha256");
+    }
+
+    let parse_list = |raw: &str| -> Vec<String> {
+        if raw.is_empty() { vec![] }
+        else { raw.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect() }
+    };
+
+    let entry = PackageEntry {
+        ver: ver.to_string(),
+        rel: rel.to_string(),
+        deps: parse_list(deps_raw),
+        mkdeps: parse_list(mkdeps_raw),
+        sha256: sha256.to_string(),
+    };
+    if let Err(e) = update_index(state, arch, pkg, entry) {
+        tracing::error!("index update failed: {e}");
+        return Response::error("index update failed");
+    }
+
+    let key = format!("{arch}/{pkg}/{ver}-{rel}.tar.gz");
+    tracing::info!("registered {key} sha256={sha256}");
+    Response::json_bytes(201, br#"{"ok":true}"#.to_vec())
 }
 
 fn publish(headers: &HashMap<String, String>, body: &[u8], state: &AppState) -> Response {

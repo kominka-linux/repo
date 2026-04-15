@@ -55,13 +55,12 @@ fn utc_now() -> (String, String) {
     (date, datetime)
 }
 
-fn sigv4_auth(
+fn sigv4_signature(
     method: &str,
     path: &str,
     query: &str,
     headers_sorted: &[(&str, &str)],
     body_hash: &str,
-    access_key: &str,
     secret_key: &str,
     region: &str,
     date: &str,
@@ -87,8 +86,25 @@ fn sigv4_auth(
     let rk = hmac_sha256(&dk, region.as_bytes());
     let sk = hmac_sha256(&rk, b"s3");
     let signing_key = hmac_sha256(&sk, b"aws4_request");
-    let sig = hex_encode(&hmac_sha256(&signing_key, to_sign.as_bytes()));
+    hex_encode(&hmac_sha256(&signing_key, to_sign.as_bytes()))
+}
 
+fn sigv4_auth(
+    method: &str,
+    path: &str,
+    query: &str,
+    headers_sorted: &[(&str, &str)],
+    body_hash: &str,
+    access_key: &str,
+    secret_key: &str,
+    region: &str,
+    date: &str,
+    datetime: &str,
+) -> String {
+    let signed_headers: Vec<&str> = headers_sorted.iter().map(|(k, _)| *k).collect();
+    let signed_headers_str = signed_headers.join(";");
+    let scope = format!("{date}/{region}/s3/aws4_request");
+    let sig = sigv4_signature(method, path, query, headers_sorted, body_hash, secret_key, region, date, datetime);
     format!("AWS4-HMAC-SHA256 Credential={access_key}/{scope}, SignedHeaders={signed_headers_str}, Signature={sig}")
 }
 
@@ -144,6 +160,40 @@ impl Storage {
                 Ok(())
             }
         }
+    }
+
+    /// Generate a presigned PUT URL valid for `expires_secs` seconds.
+    /// The caller may PUT any body to this URL without auth headers.
+    /// Body hash is UNSIGNED-PAYLOAD so the size need not be known in advance.
+    pub fn presign_put(&self, key: &str, expires_secs: u64) -> Option<String> {
+        let Self::S3 { endpoint, bucket, access_key, secret_key, region } = self else {
+            return None;
+        };
+        let (date, datetime) = utc_now();
+        let scope = format!("{date}/{region}/s3/aws4_request");
+        // Percent-encode '/' in credential for the query string.
+        let credential = format!("{access_key}/{scope}").replace('/', "%2F");
+        // Query parameters must be sorted alphabetically.
+        let query = format!(
+            "X-Amz-Algorithm=AWS4-HMAC-SHA256\
+            &X-Amz-Credential={credential}\
+            &X-Amz-Date={datetime}\
+            &X-Amz-Expires={expires_secs}\
+            &X-Amz-SignedHeaders=host"
+        );
+        let url = format!("{endpoint}/{bucket}/{key}");
+        let host = url
+            .strip_prefix("https://")
+            .or_else(|| url.strip_prefix("http://"))
+            .and_then(|r| r.split('/').next())
+            .unwrap_or("");
+        let path = format!("/{bucket}/{key}");
+        let headers_sorted = vec![("host", host)];
+        let sig = sigv4_signature(
+            "PUT", &path, &query, &headers_sorted, "UNSIGNED-PAYLOAD",
+            secret_key, region, &date, &datetime,
+        );
+        Some(format!("{url}?{query}&X-Amz-Signature={sig}"))
     }
 
     fn s3_request(&self, method: &str, key: &str, body: &[u8], content_type: &str) -> Result<(u16, Vec<u8>), String> {

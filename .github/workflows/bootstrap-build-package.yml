@@ -84,7 +84,7 @@ jobs:
               # musl is also registered: our musl installed to KOMINKA_ROOT=/
               # overwrites /usr/lib/libc.so and breaks Alpine gcc+ld.
               # zig-cc packages use zig bundled musl and skip system libc.
-              for tool in make perl linux cmake go samurai muon pkgconf musl m4 flex {
+              for tool in make perl linux cmake go samurai pkgconf musl m4 flex {
                 mkdir -p "/var/db/kominka/installed/${tool}"
                 write -- "system 1" > "/var/db/kominka/installed/${tool}/version"
                 write -- "#!/bin/sh" ":" > "/var/db/kominka/installed/${tool}/build"
