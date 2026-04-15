@@ -2812,8 +2812,8 @@ proc args (action='', ...pkgs) {
             # list here would mark implicit make-deps as "explicit", bypassing
             # the pre-built binary cache check.
             case (action) {
-                b | build | src { true }
-                *               { setvar pkgs = order }
+                b | build | c | checksum | src { true }
+                *                              { setvar pkgs = order }
             }
         }
     }
