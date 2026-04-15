@@ -2,8 +2,8 @@
 
 var name    = 'tmux'
 var ver     = '3.7next'
-var rel     = '1'
-var deps    = ['libevent']
+var rel     = '2'
+var deps    = ['musl', 'libevent']
 var mkdeps  = ['zig', 'samurai', 'pkgconf', 'bison']
 
 # joshuarli/tmux master: hand-written configure (no autotools, no ncurses).

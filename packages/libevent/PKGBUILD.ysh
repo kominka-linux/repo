@@ -2,8 +2,8 @@
 
 var name    = 'libevent'
 var ver     = '2.1.12'
-var rel     = '1'
-var deps    = ['zlib']
+var rel     = '2'
+var deps    = ['musl', 'zlib']
 var mkdeps  = ['zig', 'make']
 
 var sources = ['https://github.com/libevent/libevent/releases/download/release-VERSION-stable/libevent-VERSION-stable.tar.gz']

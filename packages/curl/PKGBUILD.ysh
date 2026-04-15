@@ -2,8 +2,8 @@
 
 var name    = 'curl'
 var ver     = '8.19.0'
-var rel     = '9'
-var deps    = ['boringssl', 'zlib']
+var rel     = '10'
+var deps    = ['musl', 'boringssl', 'zlib']
 var mkdeps  = ['zig', 'make']
 
 var sources = ['https://curl.se/download/curl-VERSION.tar.xz']

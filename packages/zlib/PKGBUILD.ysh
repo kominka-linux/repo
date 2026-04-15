@@ -2,8 +2,8 @@
 
 var name    = 'zlib'
 var ver     = '1.3.2'
-var rel     = '4'
-var deps    = []
+var rel     = '5'
+var deps    = ['musl']
 var mkdeps  = ['zig', 'cmake', 'samurai']
 
 var sources = ['https://zlib.net/fossils/zlib-VERSION.tar.gz']

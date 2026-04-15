@@ -2,8 +2,8 @@
 
 var name    = 'sqlite'
 var ver     = '3.53.0'
-var rel     = '2'
-var deps    = ['zlib']
+var rel     = '3'
+var deps    = ['musl', 'zlib']
 var mkdeps  = ['zig', 'make']
 
 var sources = ['https://www.sqlite.org/2026/sqlite-autoconf-3530000.tar.gz']

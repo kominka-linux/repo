@@ -2,8 +2,8 @@
 
 var name    = 'dropbear'
 var ver     = '2025.89'
-var rel     = '2'
-var deps    = ['zlib']
+var rel     = '3'
+var deps    = ['musl', 'zlib']
 var mkdeps  = ['zig', 'make']
 
 var sources    = ['https://matt.ucc.asn.au/dropbear/releases/dropbear-VERSION.tar.bz2']

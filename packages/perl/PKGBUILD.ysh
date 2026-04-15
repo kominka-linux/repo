@@ -2,8 +2,8 @@
 
 var name    = 'perl'
 var ver     = '5.42.2'
-var rel     = '4'
-var deps    = ['bzip2', 'zlib']
+var rel     = '5'
+var deps    = ['musl', 'bzip2', 'zlib']
 var mkdeps  = ['make']
 
 var sources = ['https://www.cpan.org/src/5.0/perl-VERSION.tar.xz']
