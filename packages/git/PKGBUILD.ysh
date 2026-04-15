@@ -3,7 +3,7 @@
 var name    = 'git'
 var ver     = '2.53.0'
 var rel     = '22'
-var deps    = ['musl', 'curl', 'zlib']
+var deps    = ['musl', 'zlib', 'dropbear']
 var mkdeps  = ['zig', 'make', 'musl']
 
 var sources = [
@@ -20,20 +20,23 @@ proc build(dest) {
     if (_kr === '/') { setvar _kr = '' }
 
     var CC = $(command -v cc)
-    var _libs = "-L${_kr}/usr/lib -lcurl -lz"
+    var _libs = "-L${_kr}/usr/lib -lz"
 
     # Include ordering for musl/zig cc (zig rel=11+ appends -I/usr/include):
     # - -Icompat/regex first: finds compat/regex/regex.h (defines REG_STARTEND)
     #   before musl's /usr/include/regex.h (which lacks REG_STARTEND)
     # - -I. before wrapper's appended -I/usr/include: git's own tar.h takes
     #   precedence over /usr/include/tar.h (musl's lacks TYPEFLAG_GLOBAL_HEADER)
-    # NO_OPENSSL: git uses curl for HTTPS transport (curl has its own TLS).
+    # NO_CURL: HTTP/HTTPS transport disabled; SSH-only. SSH uses the system ssh
+    #   binary and needs no TLS library.
+    # NO_OPENSSL: no TLS needed when curl transport is also disabled.
     # NO_* flags passed to both make invocations: the second (install) would
     # otherwise re-evaluate PROGRAM_OBJS without them and try to build
     # git-http-push (needs expat) and git-credential-gnome-keyring, etc.
     var make_flags = [
         "CC=$CC",
         'NO_REGEX=NeedsStartEnd',
+        'NO_CURL=YesPlease',
         'NO_OPENSSL=YesPlease',
         'NO_GETTEXT=YesPlease',
         'NO_SVN_TESTS=YesPlease',
@@ -60,4 +63,9 @@ proc build(dest) {
         mkdir -p "${dest}/usr/share/man"
         cp -Rf man "${dest}/usr/share/"
     }
+
+    # dropbear provides dbclient, not ssh. Point git at it system-wide.
+    mkdir -p "${dest}/etc"
+    echo '[core]' >> "${dest}/etc/gitconfig"
+    echo '	sshCommand = dbclient' >> "${dest}/etc/gitconfig"
 }
