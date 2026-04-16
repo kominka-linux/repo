@@ -2,26 +2,133 @@
 
 var name    = 'dropbear'
 var ver     = '2025.89'
-var rel     = '3'
+var rel     = '6'
 var deps    = ['musl', 'zlib']
-var mkdeps  = ['zig', 'make']
+var mkdeps  = ['make', 'zig']
 
-var sources    = ['https://matt.ucc.asn.au/dropbear/releases/dropbear-VERSION.tar.bz2']
-var checksums  = ['0d1f7ca711cfc336dc8a85e672cab9cfd8223a02fe2da0a4a7aeb58c9e113634']
+var sources    = ['https://github.com/mkj/dropbear/archive/f5d44406ef2952ca69a68d59c6b0f7f0ff777305.tar.gz']
+var checksums  = ['ca55783baa7a67e57de4c234d43711349b7b3f8c17b15a04fd58a6e88700572c']
 
 proc build(dest) {
-    var zig_bin = $(command -v zig)
+    var CC = $(command -v cc)
     var kr = ENV => get('KOMINKA_ROOT', '')
     if (kr === '/') { setvar kr = '' }
 
     # Disable password auth — musl has no libcrypt.
     # Key-based auth is sufficient and more secure anyway.
-    printf '#define DROPBEAR_SVR_PASSWORD_AUTH 0\n' > localoptions.h
+    # Disable privilege dropping — setresgid is present on musl but the zig cc
+    # configure test misdetects it (implicit-declaration rejection), so
+    # HAVE_SETRESGID stays absent from config.h.  Drop-privs is optional for
+    # this embedded use case; the server stays root throughout.
+    # Disable LOCALSTREAMFWD — it requires either DROP_PRIVS or !MULTIUSER;
+    # since we have neither, drop the feature rather than disabling MULTIUSER.
+    printf '%s\n' \
+        '#define DROPBEAR_SVR_PASSWORD_AUTH 0' \
+        '#define DROPBEAR_SVR_DROP_PRIVS 0' \
+        '#define DROPBEAR_SVR_LOCALSTREAMFWD 0' \
+        > localoptions.h
+    # options.h lives in src/ and includes "localoptions.h" relative to itself.
+    # The libtomcrypt sub-make uses a static Makefile (no -I${_src}), so without
+    # a copy here the include search falls through only to system paths and misses
+    # our override, leaving PASSWORD_AUTH and DROP_PRIVS at their default of 1.
+    cp localoptions.h src/localoptions.h
 
-    env CC="$zig_bin cc" \
-        CFLAGS="-I${kr}/usr/include" \
+    # Busybox grep fails autoconf's long-line test; setting GREP/EGREP/FGREP in
+    # the environment makes AC_PROG_GREP skip its detection and use these values
+    # directly. Use the cc wrapper (not zig cc directly): the wrapper sets the
+    # musl target so compiled test binaries are runnable, avoiding autoconf's
+    # "cannot run C compiled programs" failure.
+    #
+    # AC_FUNC_MEMCMP: configure's memcmp test returns a false negative on musl/
+    # aarch64 — the test exits non-zero even though musl's memcmp is correct.
+    # When LIBOBJS contains "memcmp", config.status emits awk strings like
+    # "${LIBOBJDIR}memcmp$U.lo" where $U (dollar-letter without braces) inside
+    # an awk string literal causes busybox awk to fail parsing subs.awk.
+    # Pre-cache the result so LIBOBJS stays empty.
+    # autoconf 2.71 defaults cache_file=/dev/null; pass --cache-file= explicitly.
+    # Pre-cache configure results that zig cc (strict Clang) gets wrong.
+    # AC_CHECK_FUNCS calls functions without the correct #include; zig cc
+    # treats implicit declarations as errors, causing false negatives.
+    printf '%s\n' \
+        'ac_cv_func_memcmp_working=yes' \
+        'ac_cv_func_setresgid=yes' \
+        'ac_cv_func_setresuid=yes' \
+        'ac_cv_have_decl_htole64=yes' \
+        'ac_cv_have_decl_le64toh=yes' \
+        'ac_cv_have_decl_htole32=yes' \
+        'ac_cv_have_decl_le32toh=yes' \
+        'ac_cv_type_struct_addrinfo=yes' \
+        'ac_cv_type_struct_sockaddr_storage=yes' \
+        'ac_cv_type_struct_in6_addr=yes' \
+        'ac_cv_type_struct_sockaddr_in6=yes' \
+        'ac_cv_func_getaddrinfo=yes' \
+        'ac_cv_func_getnameinfo=yes' \
+        'ac_cv_func_freeaddrinfo=yes' \
+        'ac_cv_func_gai_strerror=yes' \
+        > config.cache
+
+    # Busybox awk 1.36.x crashes (SIGSEGV) on autoconf 2.71's generated awk
+    # substitution scripts (for both Makefile and config.h).  The awk scripts do
+    # @KEY@ → value substitution using S["KEY"]="VALUE" or similar assignments.
+    # This sed-based wrapper replaces that logic entirely.  configure finds it
+    # first (PATH: /usr/local/bin before /usr/bin); non-autoconf awk calls fall
+    # through to /usr/bin/awk.
+    cat > /usr/local/bin/awk << 'ENDAWK'
+#!/bin/sh
+prev= script= inputs=
+for a; do
+  if [ "$prev" = "-f" ]; then
+    script=$a
+  elif [ "$prev" != "-v" ] && [ "$a" != "-f" ] && [ "$a" != "-v" ]; then
+    case "$a" in -*) ;; *) inputs="$inputs $a" ;; esac
+  fi
+  prev=$a
+done
+# Detect any autoconf awk substitution script: look for ["key"]="value" lines.
+# config.status may call awk with the .in file as a positional arg (not stdin);
+# collect those args above and forward them to sed.
+if [ -n "$script" ] && grep -qF '"]="' "$script" 2>/dev/null; then
+  tmp=$(mktemp /tmp/awk-sed.XXXXXX)
+  while IFS= read -r line; do
+    case "$line" in
+      *'["'*'"]="'*)
+        k=$(printf '%s\n' "$line" | sed -n 's/^[^[]*\["\([^"]*\)"\]=.*/\1/p')
+        v=$(printf '%s\n' "$line" | sed -n 's/^[^[]*\["[^"]*"\]="\(.*\)"$/\1/p')
+        [ -n "$k" ] || continue
+        v=$(printf '%s\n' "$v" | sed 's/[\\&|]/\\&/g')
+        printf 's|@%s@|%s|g\n' "$k" "$v"
+        ;;
+    esac
+  done < "$script" > "$tmp"
+  if [ -n "$inputs" ]; then
+    sed -f "$tmp" $inputs
+  else
+    sed -f "$tmp"
+  fi
+  rc=$? ; rm -f "$tmp" ; exit $rc
+fi
+exec /usr/bin/awk "$@"
+ENDAWK
+    chmod 0755 /usr/local/bin/awk
+
+    # Run configure with --no-create: generates config.status but does NOT run it.
+    # This lets us patch config.status before execution.
+    #
+    # Use absolute include paths: sub-makes (libtommath, libtomcrypt) change
+    # directory, so relative paths in CFLAGS would resolve incorrectly.
+    # -DHAVE_CONFIG_H is normally in DEFS (not CFLAGS), but libtommath/Makefile
+    # only passes CFLAGS to its compiler, missing DEFS. Adding it here ensures
+    # sub-makes include config.h and pick up HAVE_SETRESGID and friends.
+    var _src = $(pwd)
+    env CC="$CC" \
+        GREP=/usr/bin/grep \
+        EGREP="/usr/bin/grep -E" \
+        FGREP="/usr/bin/grep -F" \
+        CFLAGS="-DHAVE_CONFIG_H -DLOCALOPTIONS_H_EXISTS -I${_src} -I${_src}/libtommath -I${_src}/src -I${_src}/libtomcrypt/src/headers -I${kr}/usr/include" \
         LDFLAGS="-L${kr}/usr/lib" \
         ./configure \
+        --no-create \
+        --cache-file=config.cache \
         --prefix=/usr \
         --sbindir=/usr/bin \
         --sysconfdir=/etc \
@@ -29,8 +136,60 @@ proc build(dest) {
         --disable-lastlog \
         --disable-pam
 
-    make
-    make DESTDIR=$dest install
+    # Autoconf 2.71 subs.awk template embeds '$ 0' inside an unquoted shell
+    # heredoc; replace with '\$0' so the shell produces literal '$0' in subs.awk.
+    # (Our sed wrapper ignores $0 entirely, but patch to keep config.status
+    # self-consistent in case it's ever re-run directly.)
+    sed -i 's/\$ 0/\\$0/g' config.status
+
+    # Now generate Makefile and config.h
+    try { ./config.status }
+    if failed {
+        var _ec = _error.code
+        echo "=== config.status exit: $_ec ==="
+        exit 1
+    }
+
+    # zig cc (strict Clang) misdetects several musl-provided symbols during
+    # configure, leaving them absent or zeroed in config.h. Patch config.h
+    # after generation: #undef+#define at the end of the file takes effect
+    # after any earlier /* #undef */ comment or #define 0 from autoconf.
+    # HAVE_HTOLE64/HAVE_DECL_HTOLE64: musl defines htole64 as a function-like
+    # macro; without these guards compat.h declares `uint64_t htole64(...)`,
+    # the preprocessor expands `htole64` to `(uint64_t)(x)` making uint64_t
+    # a function name — "redefinition of 'uint64_t' as different kind of symbol".
+    # HAVE_STRUCT_*: musl provides these in <netdb.h>/<sys/socket.h>; without
+    # the guards fake-rfc2553.h redefines them causing redefinition errors.
+    printf '%s\n' \
+        '#undef HAVE_HTOLE64'             '#define HAVE_HTOLE64 1' \
+        '#undef HAVE_DECL_HTOLE64'        '#define HAVE_DECL_HTOLE64 1' \
+        '#undef HAVE_LE64TOH'             '#define HAVE_LE64TOH 1' \
+        '#undef HAVE_DECL_LE64TOH'        '#define HAVE_DECL_LE64TOH 1' \
+        '#undef HAVE_HTOLE32'             '#define HAVE_HTOLE32 1' \
+        '#undef HAVE_DECL_HTOLE32'        '#define HAVE_DECL_HTOLE32 1' \
+        '#undef HAVE_LE32TOH'             '#define HAVE_LE32TOH 1' \
+        '#undef HAVE_DECL_LE32TOH'        '#define HAVE_DECL_LE32TOH 1' \
+        '#undef HAVE_STRUCT_ADDRINFO'     '#define HAVE_STRUCT_ADDRINFO 1' \
+        '#undef HAVE_STRUCT_SOCKADDR_STORAGE' '#define HAVE_STRUCT_SOCKADDR_STORAGE 1' \
+        '#undef HAVE_STRUCT_IN6_ADDR'     '#define HAVE_STRUCT_IN6_ADDR 1' \
+        '#undef HAVE_STRUCT_SOCKADDR_IN6' '#define HAVE_STRUCT_SOCKADDR_IN6 1' \
+        '#undef HAVE_GETADDRINFO'         '#define HAVE_GETADDRINFO 1' \
+        '#undef HAVE_GETNAMEINFO'         '#define HAVE_GETNAMEINFO 1' \
+        '#undef HAVE_FREEADDRINFO'        '#define HAVE_FREEADDRINFO 1' \
+        '#undef HAVE_GAI_STRERROR'        '#define HAVE_GAI_STRERROR 1' \
+        '#undef HAVE_NETINET_TCP_H'       '#define HAVE_NETINET_TCP_H 1' \
+        >> config.h
+
+    # Override CFLAGS explicitly: libtomcrypt uses a static Makefile (not
+    # generated by config.status) so @CFLAGS@ substitution never reaches it.
+    # LOCALOPTIONS_H_EXISTS bypasses the HAVE_CONFIG_H→config.h→macro chain
+    # that options.h normally uses to decide whether to include localoptions.h;
+    # defining it directly here ensures libtomcrypt compilation sees our
+    # PASSWORD_AUTH/DROP_PRIVS/LOCALSTREAMFWD overrides via the src/ copy.
+    # CFLAGS command-line vars propagate to all sub-makes including libtomcrypt.
+    var cflags = "-W -Wall -Wno-pointer-sign -Os -DHAVE_CONFIG_H -DLOCALOPTIONS_H_EXISTS -DBUNDLED_LIBTOM -I${_src} -I${_src}/libtommath -I${_src}/src -I${_src}/libtomcrypt/src/headers -I${kr}/usr/include"
+    make -j1 "CFLAGS=$cflags" "LDFLAGS=-L${kr}/usr/lib"
+    make -j1 DESTDIR=$dest "CFLAGS=$cflags" "LDFLAGS=-L${kr}/usr/lib" install
 
     mkdir -p "${dest}/etc/dropbear"
 

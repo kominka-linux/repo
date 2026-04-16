@@ -1,3 +1,27 @@
+KARCH ?= $(shell uname -m | sed 's/x86_64/x86_64-linux-gnu/;s/aarch64/aarch64-linux-gnu/;s/arm64/aarch64-linux-gnu/')
+
+.PHONY: dev test builder
+
+builder:
+	docker build --build-arg KARCH=$(KARCH) -t kominka:builder .
+
+Makefile: ;
+
+%: builder
+	docker run --rm \
+		-v "$(CURDIR)/packages:/packages:ro" \
+		-v "$(CURDIR)/pm.ysh:/usr/bin/pm:ro" \
+		-e KOMINKA_REPO='https://kominka.17166969.xyz' \
+		-e KOMINKA_PATH=/packages \
+		-e KOMINKA_COMPRESS=gz \
+		-e KOMINKA_COLOR=0 \
+		-e KOMINKA_PROMPT=0 \
+		-e KOMINKA_FORCE=1 \
+		-e LD_LIBRARY_PATH=/usr/lib \
+		-e LOGNAME=root \
+		-e HOME=/root \
+		kominka:builder /usr/local/bin/ysh -c 'pm b $@'
+
 .PHONY: dev test
 
 dev:
