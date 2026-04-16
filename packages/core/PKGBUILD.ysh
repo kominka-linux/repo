@@ -2,7 +2,7 @@
 
 var name    = 'core'
 var ver     = '1.0.0'
-var rel     = '2'
+var rel     = '3'
 var deps    = ['baselayout', 'musl', 'mimalloc', 'seed', 'baseinit', 'runit', 'ca-certificates', 'ysh']
 var mkdeps  = []
 

@@ -20,7 +20,7 @@ var sources = [
     'files/udhcpc.ysh',
 ]
 var checksums_aarch64 = [
-    '762f4ca2263e1862e7860fe888a10681fa26b3ee947e20292383c68d6fa0bb87',
+    '237af0395052f5e53d89b517d6f98ee04233577f346571917b97487eed17fd92',
     'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP',
 ]
 var checksums_x86_64  = [
