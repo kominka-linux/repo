@@ -2405,7 +2405,7 @@ proc pkg_install_all (...pkgs) {
         # Start all downloads silently in background.
         var pids = {}
         for pkg in (dl_names) {
-            fork { wget  -q -O $[dests[pkg]] $[urls[pkg]] }
+            fork { seed wget -q -O $[dests[pkg]] $[urls[pkg]] }
             setvar pids[pkg] = $!
         }
 
