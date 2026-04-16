@@ -2,7 +2,7 @@
 
 var name    = 'git'
 var ver     = '2.53.0'
-var rel     = '22'
+var rel     = '23'
 var deps    = ['musl', 'zlib', 'dropbear']
 var mkdeps  = ['zig', 'make', 'musl']
 
@@ -50,14 +50,21 @@ proc build(dest) {
         'NO_INSTALL_HARDLINKS=1',
         'prefix=/usr',
         'libexecdir=/usr/lib',
-        "CFLAGS=-Wall -O2 -DNO_REGEX -DNO_OPENSSL -DNO_EXPAT -Icompat/regex -I.",
+        "CFLAGS=-Wall -O2 -Wno-shift-op-parentheses -Wno-bitwise-op-parentheses -DNO_REGEX -DNO_OPENSSL -DNO_EXPAT -Icompat/regex -I.",
         "LDFLAGS=${_libs}",
         'FUZZ_PROGRAMS=',
     ]
 
-    make @make_flags all
+    # The test/fuzz infrastructure is pulled in by two unconditional all:: rules
+    # that are never needed for an install build. Drop them from the Makefile so
+    # only the real git programs are compiled. (Command-line variable overrides
+    # can't suppress these because the lists are built with += in the Makefile,
+    # and GNU make appends to the command-line value on each +=.)
+    sed -i '/^all:: \$(FUZZ_OBJS)$/d; /^all:: \$(TEST_PROGRAMS)/d' Makefile
 
-    make @make_flags DESTDIR=$dest install
+    make "-j$(nproc)" @make_flags all
+
+    make "-j$(nproc)" @make_flags DESTDIR=$dest install
 
     if test -d man {
         mkdir -p "${dest}/usr/share/man"
