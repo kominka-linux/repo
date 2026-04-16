@@ -3,7 +3,7 @@
 # Partitions a disk, formats filesystems, copies the live rootfs, and
 # optionally builds a machine-specific kernel for the target hardware.
 #
-# Partition layout (MBR via busybox fdisk):
+# Partition layout (MBR via fdisk):
 #   1: EFI System (256M, FAT32, type 0xEF)  -> /boot
 #   2: Linux swap  (8G, type 0x82)
 #   3: Linux root  (rest, ext4, type 0x83)
@@ -248,7 +248,7 @@ echo ""
 echo "==> Partitioning $DISK (MBR)"
 dd if=/dev/zero of=$DISK bs=1M count=1 2>/dev/null
 
-busybox fdisk $DISK <<'FDISK'
+fdisk $DISK <<'FDISK'
 o
 n
 p
@@ -339,7 +339,7 @@ if (NEW_USER !== '') {
 
     echo ""
     echo "Set password for ${NEW_USER}:"
-    chroot $MNT /usr/bin/busybox passwd $NEW_USER
+    chroot $MNT passwd $NEW_USER
     echo ""
     echo "  User '${NEW_USER}' created (wheel group, sudo access)."
 } else {

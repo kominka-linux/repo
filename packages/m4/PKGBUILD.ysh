@@ -13,9 +13,9 @@ proc build(dest) {
     var zig_bin = $(command -v zig)
 
     # EGREP_TRADITIONAL and GREP: if these env vars are non-empty, configure
-    # skips the tool-detection tests entirely. Avoids busybox egrep -Ee failure.
+    # skips the tool-detection tests entirely. Avoids seed egrep -Ee failure.
     # --disable-dependency-tracking + --disable-nls: reduce substitutions in
-    # config.status; busybox sed fails on the full gnulib-generated set.
+    # config.status; seed sed fails on the full gnulib-generated set.
     env CC="$zig_bin cc" EGREP_TRADITIONAL=egrep GREP=grep ./configure \
         --prefix=/usr \
         --disable-dependency-tracking \

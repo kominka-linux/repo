@@ -1,2 +1,0 @@
-#!/usr/local/bin/ysh
-exec getty 38400 tty1

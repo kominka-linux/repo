@@ -1,6 +1,6 @@
 #!/usr/local/bin/ysh
 # Kominka Linux shutdown script.
-# Called by busybox init on shutdown/restart.
+# Called by seed init on shutdown/restart.
 
 source /usr/lib/init/rc.lib
 
@@ -43,5 +43,5 @@ log "Running shutdown post hooks..." {
     run_hook post.shutdown
 }
 
-# busybox init handles the actual reboot/poweroff syscall after this
+# seed init handles the actual reboot/poweroff syscall after this
 # script exits — no kpow needed.

@@ -43,7 +43,7 @@ proc build(dest) {
     # aarch64 — the test exits non-zero even though musl's memcmp is correct.
     # When LIBOBJS contains "memcmp", config.status emits awk strings like
     # "${LIBOBJDIR}memcmp$U.lo" where $U (dollar-letter without braces) inside
-    # an awk string literal causes busybox awk to fail parsing subs.awk.
+    # an awk string literal causes seed awk to fail parsing subs.awk.
     # Pre-cache the result so LIBOBJS stays empty.
     # autoconf 2.71 defaults cache_file=/dev/null; pass --cache-file= explicitly.
     # Pre-cache configure results that zig cc (strict Clang) gets wrong.

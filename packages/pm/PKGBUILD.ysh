@@ -3,7 +3,7 @@
 var name    = 'pm'
 var ver     = '5.5.28'
 var rel     = '2'
-var deps    = ['ysh', 'busybox']
+var deps    = ['ysh', 'seed']
 var mkdeps  = []
 
 var _commit = '18f0fbf4ab85f018d6d1a77ec4497c196be84de2'

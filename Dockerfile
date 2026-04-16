@@ -1,5 +1,5 @@
 # Build environment: core + build-essential
-# Bootstrap installs ysh + busybox (via pm, statically linked) + wget + pm
+# Bootstrap installs ysh + seed (via pm, statically linked) + wget + pm
 # into kominka-root. pm i then runs inside the scratch container.
 #
 # KARCH: architecture string passed by the caller.
@@ -17,7 +17,7 @@ ARG WGET_TAG=wget-c5c83721bb3ab246692318c9c279adea76899aee
 ARG REPO_URL=
 ARG R2_PUBLIC_URL=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
 
-# Download and verify static wget (replaces busybox wget for TLS support).
+# Download and verify static wget.
 RUN WARCH=$(echo "$KARCH" | cut -d- -f1) && \
     wget -q -O "wget-linux-$WARCH" \
       "https://github.com/kominka-linux/seed/releases/download/$WGET_TAG/wget-linux-$WARCH" && \
@@ -50,15 +50,13 @@ ENV KOMINKA_REPO=${REPO_URL} \
     LOGNAME=root \
     HOME=/root
 
-# Install busybox into kominka-root via pm (Kominka's build is static;
-# busybox:latest's binary is dynamically linked and breaks in scratch).
+# Install seed into kominka-root via pm (statically linked multicall binary).
+# seed includes wget; copy our TLS-capable wget over the applet so scratch
+# has working HTTPS for pm i.
 RUN KOMINKA_ROOT=/kominka-root \
     KOMINKA_COLOR=0 KOMINKA_PROMPT=0 KOMINKA_STRIP=0 KOMINKA_FORCE=1 \
-    pm i busybox
-
-# busybox package creates a wget applet symlink that would shadow our TLS-capable
-# binary. Re-place it so scratch has a working HTTPS wget for pm i.
-RUN rm -f /kominka-root/usr/bin/wget && cp /usr/bin/wget /kominka-root/usr/bin/wget
+    pm i seed && \
+    cp /usr/bin/wget /kominka-root/usr/bin/wget
 
 FROM scratch
 

@@ -1,9 +1,0 @@
-#!/usr/local/bin/ysh
-# runit service: ntpd
-# Wait for a DHCP lease before starting NTP.
-
-while ! test -f /run/network-up {
-    sleep 2
-}
-
-exec ntpd -n -N -p pool.ntp.org

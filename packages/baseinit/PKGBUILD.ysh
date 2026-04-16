@@ -7,8 +7,8 @@ var deps    = []
 var mkdeps  = []
 
 # Fully self-contained — no upstream C utilities needed.
-# kpow replaced by busybox init's built-in reboot/poweroff handling.
-# kall replaced by busybox killall5.
+# kpow replaced by seed init's built-in reboot/poweroff handling.
+# kall replaced by seed killall5.
 var sources = [
     'files/rc.lib',
     'files/rc.boot',

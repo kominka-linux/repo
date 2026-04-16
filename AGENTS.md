@@ -170,8 +170,6 @@ Configure scripts offer hundreds of optional features; the default answer is `--
 - No `--enable-debug` or `-g` flags in release builds
 - For autotools: `ac_cv_*=yes/no` overrides are fine to skip configure tests
 
-**busybox specifically** was audited against Alpine's main vs extras split. Our config has been through multiple aggressive trim passes to reach ~217 applets. Justify each new applet. When in doubt, leave it out.
-
 **Verify your assumptions with `--help` output.** Run `./configure --help` in a build container and read what's available. Do not guess; do not cargo-cult flags from other distros.
 
 ## Repository Server (server/)

@@ -1,6 +1,6 @@
 #!/usr/local/bin/ysh
 # Kominka Linux boot script.
-# Called by busybox init as the sysinit action.
+# Called by seed init as the sysinit action.
 
 source /usr/lib/init/rc.lib
 

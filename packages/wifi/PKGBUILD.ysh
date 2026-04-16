@@ -3,7 +3,7 @@
 var name    = 'wifi'
 var ver     = '1.0.0'
 var rel     = '3'
-var deps    = ['wpa_supplicant', 'busybox', 'ysh']
+var deps    = ['wpa_supplicant', 'seed', 'ysh']
 var mkdeps  = []
 
 var sources = [

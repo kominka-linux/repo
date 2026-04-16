@@ -1,7 +1,0 @@
-#!/usr/local/bin/ysh
-# runit service: mdev
-# Clear the legacy hotplug handler so mdev takes over device events.
-
-echo '' > /proc/sys/kernel/hotplug
-
-exec mdev -df

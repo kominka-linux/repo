@@ -186,7 +186,7 @@ class SearchTests:
         self.assertIn("zlib", r.stdout)
 
     def test_search_finds_multiple(self):
-        for pkg in ["boringssl", "curl", "glibc", "busybox"]:
+        for pkg in ["boringssl", "curl", "musl", "seed"]:
             r = self.pm("s", pkg)
             self.assertIn(pkg, r.stdout)
 
@@ -725,7 +725,8 @@ class UploadSkipTests:
 
     def _fake_tarball(self, pkg, ver, rel):
         """Create a placeholder binary tarball and return its path."""
-        bin_dir = self.kominka_cache / "bin"
+        # pm sets cac_dir = XDG_CACHE_HOME/kominka, bin_dir = cac_dir/bin.
+        bin_dir = self.kominka_cache / "kominka" / "bin"
         bin_dir.mkdir(parents=True, exist_ok=True)
         path = bin_dir / f"{pkg}@{ver}-{rel}.tar.gz"
         path.write_bytes(b"fake tarball content")
@@ -733,7 +734,8 @@ class UploadSkipTests:
 
     def _fake_source_tarball(self, pkg, ver, rel):
         """Create a placeholder source tarball and return its path."""
-        src_dir = self.kominka_cache / "src"
+        # pm sets mir_dir = cac_dir/src = XDG_CACHE_HOME/kominka/src.
+        src_dir = self.kominka_cache / "kominka" / "src"
         src_dir.mkdir(parents=True, exist_ok=True)
         path = src_dir / f"{pkg}@{ver}-{rel}.tar.bz2"
         path.write_bytes(b"fake source content")
@@ -794,7 +796,7 @@ class UploadSkipTests:
 
 
 @unittest.skipUnless(HAS_YSH, "ysh interpreter not found")
-class YSH_UploadSkipTests(CheapPMTestCase, UploadSkipTests):
+class YSH_UploadSkipTests(UploadSkipTests, CheapPMTestCase):
     PM_INTERPRETER = YSH
     PM_SCRIPT = PM_YSH
 

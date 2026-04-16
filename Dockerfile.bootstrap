@@ -1,7 +1,6 @@
 # Bootstrap build environment based on Alpine Linux.
 # Alpine has musl at /lib/ — the path zig cc embeds in ELF interpreters —
 # so packages built with zig cc run correctly here.
-# Used until our own musl+busybox are published to the Kominka repo.
 
 FROM alpine:latest
 
