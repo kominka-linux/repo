@@ -30,6 +30,7 @@ var checksums_x86_64  = [
 
 proc build(dest) {
     seed mkdir -p "${dest}/usr/bin" "${dest}/usr/share/seed"
+    seed chmod +x bin/*
     seed cp -a bin/. "${dest}/usr/bin/"
 
     seed mkdir -p "${dest}/etc/acpi"

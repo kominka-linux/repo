@@ -349,15 +349,19 @@ proc _sh256 (...files) {
 
     var sha_args = []
     case (cmd_sha) {
-        */openssl { setvar sha_args = :| dgst -sha256 -r | }
         */sha256  { setvar sha_args = :| -r | }
         */shasum  { setvar sha_args = :| -a 256 | }
-        */digest  { setvar sha_args = :| -a sha256 | }
+        */seed    { setvar sha_args = :| sha256sum | }
     }
 
     var raw = ''
     try { setvar raw = $($cmd_sha @sha_args @files) }
-    if failed { die "Failed to generate checksums" }
+    if failed {
+        # sha256sum may exist but be non-executable (0644 from busybox package);
+        # fall back to the seed multicall binary's sha256sum applet.
+        try { setvar raw = $(seed sha256sum @files) }
+        if failed { die "Failed to generate checksums" }
+    }
 
     var result = []
     for line in @(builtin echo $raw) {
@@ -1557,8 +1561,9 @@ proc pkg_manifest (pkg, base_dir) {
         }
 
         seed find "${base_dir}/${pkg}" ! -path "${base_dir}/${pkg}" \
-            -type d -exec printf '%s/\n' {} + \
-            -o \( ! -type d -a ! -name '*.la' -a ! -name charset.alias \) -print
+            -type d -exec printf '%s/\n' {} \;
+        seed find "${base_dir}/${pkg}" ! -path "${base_dir}/${pkg}" \
+            ! -type d -a ! -name '*.la' -a ! -name charset.alias -print
 
     } | seed sort -ur > $[tf[-1]]
 
@@ -2157,6 +2162,7 @@ proc pkg_install_files (test_flag, src_dir) {
 
         case (file) {
             */ {
+                if ! builtin test -d "${src_dir}${file%/}" { continue }
                 if ! builtin test -d $_file {
                     file_rwx "${src_dir}/${file#/}"
                     seed mkdir -m $oct $_file
@@ -3021,7 +3027,10 @@ proc main (...argv) {
     setglobal cmd_elf = $(_discover_tool $KOMINKA_ELF readelf eu-readelf llvm-readelf)
     if (cmd_elf === '') { setglobal cmd_elf = 'ldd' }
 
-    setglobal cmd_sha = $(_discover_tool $KOMINKA_CHK openssl sha256sum sha256 shasum digest)
+    setglobal cmd_sha = $(_discover_tool $KOMINKA_CHK sha256sum sha256)
+    # Fall back to the seed multicall binary (sha256sum applet) if no standalone
+    # sha256sum is found or it isn't executable (command -v checks executability).
+    if (cmd_sha === '') { setglobal cmd_sha = $(builtin command -v seed 2>/dev/null) }
     if (cmd_sha === '') { die "No sha256 utility found" }
 
     # Config dict — single source of truth for runtime configuration.
