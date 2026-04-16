@@ -375,7 +375,7 @@ proc _sh256 (...files) {
 
 proc _download (dest, url) {
     ### Download a URL to a local file. Returns 1 on failure.
-    try { wget  -q -O $dest $url }
+    try { seed wget -q -O $dest $url }
     if failed { seed rm -f $dest; return 1 }
 }
 
@@ -1020,7 +1020,7 @@ proc pkg_source_url (dest, url, fatal='y'; p Dict) {
     var max_attempts = 5
     while (attempt < max_attempts) {
         setvar attempt += 1
-        try { wget  -q -O $dest $url }
+        try { seed wget -q -O $dest $url }
         if (_status === 0) { return }
         seed rm -f $dest
         if (attempt < max_attempts) {
