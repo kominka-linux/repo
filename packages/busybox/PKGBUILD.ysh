@@ -2,7 +2,7 @@
 
 var name    = 'busybox'
 var ver     = '1.36.1'
-var rel     = '13'
+var rel     = '17'
 var deps    = []
 var mkdeps  = ['zig', 'make', 'linux']
 
@@ -87,7 +87,7 @@ proc build(dest) {
     if (cc_ver => contains('clang')) {
         # Disable UB based optimizations which are optimized out by
         # clang and become null pointer dereferences.
-        patch -p1 --ignore-whitespace -F3 < patch-clang/fix-UB.patch || true
+        patch -p1 < patch-clang/fix-UB.patch || true
 
         var _pre3 = r's&\(\$(CC),\)clang&\1'
         var sed3 = "${_pre3}${CC}&g"
@@ -119,6 +119,12 @@ proc build(dest) {
     # musl has no libcrypt; busybox uses its own
     # crypt (USE_BB_CRYPT=y) so strip the -lcrypt link flag everywhere.
     try { grep -rl -- -lcrypt . 2>/dev/null | xargs sed -i 's/-lcrypt//g' }
+    # CONFIG_FEATURE_SH_EMBEDDED_SCRIPTS: declared scripted_main unconditionally
+    # (libbb.h:1505) but only defined when NUM_SCRIPTS>0. When the feature is
+    # enabled with no actual scripts to embed, lld rejects the undefined hidden
+    # symbol. Disable it — no scripts are embedded anyway.
+    sed -i 's/^CONFIG_FEATURE_SH_EMBEDDED_SCRIPTS=y/# CONFIG_FEATURE_SH_EMBEDDED_SCRIPTS is not set/' .config
+
     # Settle any new config symbols before the main build. Run oldconfig
     # until no NEW symbols remain; silentoldconfig aborts otherwise.
     # Use a temp file to avoid pipeline-in-command-substitution (YSH strict_errexit).
@@ -135,7 +141,7 @@ proc build(dest) {
     # Linux 6.x. Guard against oldconfig re-enabling TC by removing tc.o
     # from the networking Makefile entirely.
     try { sed -i 's/^lib-\$(CONFIG_TC) += tc\.o//' networking/Makefile }
-    make HOSTCC=$HOSTCC SKIP_STRIP=y
+    make HOSTCC=$HOSTCC SKIP_STRIP=y EXTRA_CFLAGS='-Wno-undef -Wno-bitwise-op-parentheses -Wno-shift-op-parentheses -Wno-unused-command-line-argument'
     make HOSTCC=$HOSTCC CONFIG_PREFIX="${dest}/usr" install
 
     try {
