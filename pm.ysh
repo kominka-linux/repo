@@ -239,7 +239,7 @@ proc am_owner (path) {
     if (LOGNAME === 'root') { return 0 }
 
     var inf = ''
-    try { setvar inf = $(seed ls -l $path) }
+    try { setvar inf = $(seed ls -ld $path) }
     if failed { return 1 }  # can't stat path; treat as not-owner
 
     builtin read --raw-line (&line) <<< $inf
@@ -2133,7 +2133,7 @@ proc file_rwx (path) {
     setglobal oct = ''
     var o = 0
 
-    var rwx = $(seed ls -l $path)
+    var rwx = $(seed ls -ld $path)
 
     for c in 14 22 31 44 52 61 74 82 91 {
         setvar rwx = ${rwx#?}
