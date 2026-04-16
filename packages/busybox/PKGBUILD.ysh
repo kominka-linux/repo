@@ -2,9 +2,9 @@
 
 var name    = 'busybox'
 var ver     = '1.36.1'
-var rel     = '12'
+var rel     = '13'
 var deps    = []
-var mkdeps  = ['zig', 'make', 'linux', 'perl']
+var mkdeps  = ['zig', 'make', 'linux']
 
 var sources = [
     'https://busybox.net/downloads/busybox-VERSION.tar.bz2',
