@@ -1,15 +1,14 @@
 KARCH ?= $(shell uname -m | sed 's/x86_64/x86_64-linux-gnu/;s/aarch64/aarch64-linux-gnu/;s/arm64/aarch64-linux-gnu/')
-PLATFORM ?= $(shell echo "$(KARCH)" | grep -q x86_64 && echo linux/amd64 || echo linux/arm64)
 
 .PHONY: dev test builder
 
 builder:
-	docker build --platform $(PLATFORM) --build-arg KARCH=$(KARCH) -t kominka:builder .
+	docker build --build-arg KARCH=$(KARCH) -t kominka:builder .
 
 Makefile: ;
 
 %: builder
-	docker run --rm --platform $(PLATFORM) \
+	docker run --rm \
 		-v "$(CURDIR)/packages:/packages:ro" \
 		-v "$(CURDIR)/pm.ysh:/usr/bin/pm:ro" \
 		-e KOMINKA_REPO='https://kominka.17166969.xyz' \
