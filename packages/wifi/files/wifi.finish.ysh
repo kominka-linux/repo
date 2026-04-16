@@ -3,13 +3,13 @@
 # Called when wpa_supplicant exits (crash, card removed, etc.).
 # Kill udhcpc so we don't leave a DHCP client with no underlying link.
 
-if ! test -f /etc/wifi.conf { exit 0 }
-source /etc/wifi.conf
+if ! builtin test -f /etc/wifi.conf { exit 0 }
+builtin source /etc/wifi.conf
 if (IFACE === '') { exit 0 }
 
 var pid_file = "/run/udhcpc-${IFACE}.pid"
-if test -f $pid_file {
-    kill $(cat $pid_file) 2>/dev/null || true
+if builtin test -f $pid_file {
+    seed kill $(seed cat $pid_file) 2>/dev/null || builtin true
 }
-rm -f $pid_file
-ip addr flush dev $IFACE 2>/dev/null || true
+seed rm -f $pid_file
+seed ip addr flush dev $IFACE 2>/dev/null || builtin true

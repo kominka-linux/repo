@@ -1,7 +1,7 @@
 #!/usr/local/bin/ysh
 
 var name    = 'seed'
-var ver     = '72c10c58b956316a4849fa6f6c4f78a2a39108eb'
+var ver     = '2138a1ae863d05591ecda011703364ebc0f05958'
 var rel     = '1'
 var deps    = []
 var mkdeps  = []
@@ -29,22 +29,21 @@ var checksums_x86_64  = [
 ]
 
 proc build(dest) {
-    mkdir -p "${dest}/usr/bin" "${dest}/usr/share/seed"
-    cp -a bin/. "${dest}/usr/bin/"
-    cp share/seed/applets.txt "${dest}/usr/share/seed/applets.txt"
+    seed mkdir -p "${dest}/usr/bin" "${dest}/usr/share/seed"
+    seed cp -a bin/. "${dest}/usr/bin/"
 
-    mkdir -p "${dest}/etc/acpi"
+    seed mkdir -p "${dest}/etc/acpi"
 
     for s in (:| acpid syslogd mdev ntpd udhcpc getty-hvc0 getty-tty1 |) {
-        mkdir -p "${dest}/etc/sv/${s}"
-        cp -f "${s}.run" "${dest}/etc/sv/${s}/run"
-        chmod +x "${dest}/etc/sv/${s}/run"
-        ln -sf "/run/runit/supervise.${s}" "${dest}/etc/sv/${s}/supervise"
+        seed mkdir -p "${dest}/etc/sv/${s}"
+        seed cp -f "${s}.run" "${dest}/etc/sv/${s}/run"
+        seed chmod +x "${dest}/etc/sv/${s}/run"
+        seed ln -sf "/run/runit/supervise.${s}" "${dest}/etc/sv/${s}/supervise"
     }
 
-    cp -f mdev.conf "${dest}/etc/mdev.conf"
+    seed cp -f mdev.conf "${dest}/etc/mdev.conf"
 
-    mkdir -p "${dest}/etc"
-    cp -f udhcpc.ysh "${dest}/etc/udhcpc.sh"
-    chmod +x "${dest}/etc/udhcpc.sh"
+    seed mkdir -p "${dest}/etc"
+    seed cp -f udhcpc.ysh "${dest}/etc/udhcpc.sh"
+    seed chmod +x "${dest}/etc/udhcpc.sh"
 }

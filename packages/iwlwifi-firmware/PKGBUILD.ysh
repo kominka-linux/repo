@@ -20,7 +20,7 @@ var checksums = [
 var nostrip = true
 
 proc build(dest) {
-    mkdir -p "${dest}/lib/firmware"
-    cp -f iwlwifi-7265D-29.ucode "${dest}/lib/firmware/"
-    cp -f iwlwifi-7265-17.ucode  "${dest}/lib/firmware/"
+    seed mkdir -p "${dest}/lib/firmware"
+    seed cp -f iwlwifi-7265D-29.ucode "${dest}/lib/firmware/"
+    seed cp -f iwlwifi-7265-17.ucode  "${dest}/lib/firmware/"
 }

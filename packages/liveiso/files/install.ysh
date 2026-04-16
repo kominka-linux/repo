@@ -8,7 +8,7 @@
 #   2: Linux swap  (8G, type 0x82)
 #   3: Linux root  (rest, ext4, type 0x83)
 
-var ARCH       = $(uname -m)
+var ARCH       = $(seed uname -m)
 var MNT        = '/mnt/target'
 var KERNEL_VER = '6.19.12'
 var KERNEL_SHA = 'ce5c4f1205f9729286b569b037649591555f31ca1e03cc504bd3b70b8e58a8d5'
@@ -16,24 +16,24 @@ var KERNEL_SHA = 'ce5c4f1205f9729286b569b037649591555f31ca1e03cc504bd3b70b8e58a8
 var MACHINE_PROFILE = ''
 var MACHINE_NAME    = ''
 
-echo "Kominka Linux Installer"
-echo ""
+builtin echo "Kominka Linux Installer"
+builtin echo ""
 
 # ── Network setup ─────────────────────────────────────────────────────────────
 
 proc setup_network() {
     var wlan = ''
     for _d in @[glob('/sys/class/net/*/wireless')] {
-        if test -d $_d {
-            setvar wlan = $(basename $(dirname $_d))
+        if builtin test -d $_d {
+            setvar wlan = $(seed basename $(seed dirname $_d))
             break
         }
     }
     if (wlan === '') { return }
 
-    echo "Wireless interface $wlan detected. Connect to WiFi now? [y/N]"
-    echo "(needed for machine-specific kernel download)"
-    var ans; read --line (&ans)
+    builtin echo "Wireless interface $wlan detected. Connect to WiFi now? [y/N]"
+    builtin echo "(needed for machine-specific kernel download)"
+    var ans; builtin read --line (&ans)
     if (ans === 'y' or ans === 'Y') { wifi-setup }
 }
 
@@ -42,22 +42,22 @@ proc setup_network() {
 proc detect_machine() {
     if (ARCH !== 'x86_64') { return }
     var machines_dir = '/usr/share/kominka/machines'
-    if ! test -d $machines_dir { return }
+    if ! builtin test -d $machines_dir { return }
 
-    var dmi = $(cat /sys/class/dmi/id/product_name 2>/dev/null || true)
+    var dmi = $(seed cat /sys/class/dmi/id/product_name 2>/dev/null || builtin true)
     if (dmi === '') { return }
 
-    var match = $(awk -F= -v name=$dmi '$1 == name { print $2 }' \
-        "${machines_dir}/index" 2>/dev/null || true)
+    var match = $(seed awk -F= -v name=$dmi '$1 == name { print $2 }' \
+        "${machines_dir}/index" 2>/dev/null || builtin true)
 
-    echo ""
-    echo "==> Machine detection"
+    builtin echo ""
+    builtin echo "==> Machine detection"
     var ans = ''
-    if test -n $match && test -f "${machines_dir}/${match}.config" {
-        echo "    Detected: $dmi"
-        echo ""
-        printf "    Build kernel for '%s'? [Y/n/list] " $match
-        read --line (&ans)
+    if builtin test -n $match && builtin test -f "${machines_dir}/${match}.config" {
+        builtin echo "    Detected: $dmi"
+        builtin echo ""
+        builtin printf "    Build kernel for '%s'? [Y/n/list] " $match
+        builtin read --line (&ans)
         case (ans) {
             n|N          { setglobal MACHINE_PROFILE = '' }
             l|L|list     { select_machine }
@@ -65,10 +65,10 @@ proc detect_machine() {
                            setglobal MACHINE_NAME = dmi }
         }
     } else {
-        echo "    Machine not in profile list (DMI: ${dmi:-unknown})"
-        echo ""
-        printf "    Build a machine-specific kernel? [y/N/list] "
-        read --line (&ans)
+        builtin echo "    Machine not in profile list (DMI: ${dmi:-unknown})"
+        builtin echo ""
+        builtin printf "    Build a machine-specific kernel? [y/N/list] "
+        builtin read --line (&ans)
         case (ans) {
             y|Y | l|L|list { select_machine }
             *               { setglobal MACHINE_PROFILE = '' }
@@ -76,45 +76,45 @@ proc detect_machine() {
     }
 
     if (MACHINE_PROFILE !== '') {
-        echo "    Will build: $MACHINE_PROFILE"
+        builtin echo "    Will build: $MACHINE_PROFILE"
     } else {
-        echo "    Using pre-built baseline kernel."
+        builtin echo "    Using pre-built baseline kernel."
     }
-    echo ""
+    builtin echo ""
 }
 
 proc select_machine() {
     var machines_dir = '/usr/share/kominka/machines'
-    echo ""
-    echo "    Available profiles:"
+    builtin echo ""
+    builtin echo "    Available profiles:"
     var i = 1
     var cfgs = @[glob("${machines_dir}/*.config")]
     for cfg in (cfgs) {
-        var name = $(basename $cfg .config)
-        printf '      %2d) %s\n' $i $name
+        var name = $(seed basename $cfg .config)
+        builtin printf '      %2d) %s\n' $i $name
         setvar i = i + 1
     }
-    echo ""
-    printf "    Enter number (or blank to use baseline): "
-    var num; read --line (&num)
+    builtin echo ""
+    builtin printf "    Enter number (or blank to use baseline): "
+    var num; builtin read --line (&num)
     if (num === '') { return }
 
     setvar i = 1
     for cfg in (cfgs) {
         if (str(i) === num) {
-            setglobal MACHINE_PROFILE = $(basename $cfg .config)
+            setglobal MACHINE_PROFILE = $(seed basename $cfg .config)
             setglobal MACHINE_NAME = MACHINE_PROFILE
             return
         }
         setvar i = i + 1
     }
-    echo "    Invalid selection — using baseline."
+    builtin echo "    Invalid selection — using baseline."
 }
 
 # ── Kernel installation ───────────────────────────────────────────────────────
 
 proc install_kernel() {
-    mkdir -p "${MNT}/boot/EFI/BOOT"
+    seed mkdir -p "${MNT}/boot/EFI/BOOT"
 
     if (ARCH === 'x86_64' and MACHINE_PROFILE !== '') {
         build_kernel_x86_64
@@ -128,8 +128,8 @@ proc install_kernel() {
         aarch64 { setvar efi_name = 'BOOTAA64.EFI' }
         *       { setvar efi_name = 'BOOTX64.EFI' }
     }
-    cp /usr/share/kominka/Image "${MNT}/boot/EFI/BOOT/${efi_name}"
-    echo "    Baseline kernel installed."
+    seed cp /usr/share/kominka/Image "${MNT}/boot/EFI/BOOT/${efi_name}"
+    builtin echo "    Baseline kernel installed."
 }
 
 proc build_kernel_x86_64() {
@@ -138,76 +138,76 @@ proc build_kernel_x86_64() {
     var build_dir    = "${MNT}/tmp/kernel-build"
     var kernel_url   = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${KERNEL_VER}.tar.xz"
 
-    echo ""
-    echo "==> Building machine-specific kernel ($MACHINE_PROFILE)"
-    echo "    Kernel: linux-$KERNEL_VER"
-    echo ""
+    builtin echo ""
+    builtin echo "==> Building machine-specific kernel ($MACHINE_PROFILE)"
+    builtin echo "    Kernel: linux-$KERNEL_VER"
+    builtin echo ""
 
-    mkdir -p $build_dir
+    seed mkdir -p $build_dir
 
-    echo "    Downloading kernel source (~130MB)..."
+    builtin echo "    Downloading kernel source (~130MB)..."
     var tarball = "${build_dir}/linux-${KERNEL_VER}.tar.xz"
     if ! wget -qO $tarball $kernel_url {
-        echo "    Download failed — falling back to baseline kernel."
-        cp /usr/share/kominka/Image "${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
-        rm -rf $build_dir
+        builtin echo "    Download failed — falling back to baseline kernel."
+        seed cp /usr/share/kominka/Image "${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
+        seed rm -rf $build_dir
         return
     }
 
     # Verify checksum if sha256sum is available.
     # SHA256 hashes are exactly 64 hex chars; slice to avoid quoted-space issue.
-    var _sum  = $(sha256sum $tarball 2>/dev/null || true)
+    var _sum  = $(seed sha256sum $tarball 2>/dev/null || builtin true)
     var actual = _sum[0:64]
     if (actual !== '' and actual !== KERNEL_SHA) {
-        echo "    Checksum mismatch — falling back to baseline kernel."
-        cp /usr/share/kominka/Image "${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
-        rm -rf $build_dir
+        builtin echo "    Checksum mismatch — falling back to baseline kernel."
+        seed cp /usr/share/kominka/Image "${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
+        seed rm -rf $build_dir
         return
     }
 
-    echo "    Extracting..."
-    tar xJf $tarball -C $build_dir
+    builtin echo "    Extracting..."
+    seed tar xJf $tarball -C $build_dir
     var src = "${build_dir}/linux-${KERNEL_VER}"
 
     # Merge base config with machine profile (later entries win).
-    echo "    Configuring..."
-    cp /usr/share/kominka/kernel.config "${src}/.config"
-    grep -v '^#' $profile_cfg | grep -v '^$' >> "${src}/.config"
-    make -C $src ARCH=x86_64 olddefconfig 2>&1 | grep -v '^#' || true
+    builtin echo "    Configuring..."
+    seed cp /usr/share/kominka/kernel.config "${src}/.config"
+    seed grep -v '^#' $profile_cfg | seed grep -v '^$' >> "${src}/.config"
+    make -C $src ARCH=x86_64 olddefconfig 2>&1 | seed grep -v '^#' || builtin true
 
-    var nproc = $(nproc 2>/dev/null || echo 4)
-    echo "    Building kernel (10-20 minutes on $nproc cores)..."
-    echo "    Output: ${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
-    echo ""
+    var nproc = $(seed nproc 2>/dev/null || builtin echo 4)
+    builtin echo "    Building kernel (10-20 minutes on $nproc cores)..."
+    builtin echo "    Output: ${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
+    builtin echo ""
 
     if make -C $src ARCH=x86_64 -j$nproc bzImage {
-        cp "${src}/arch/x86/boot/bzImage" "${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
-        cp "${src}/.config" "${MNT}/usr/share/kominka/kernel.config" 2>/dev/null || true
-        echo ""
-        echo "    Kernel built and installed."
+        seed cp "${src}/arch/x86/boot/bzImage" "${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
+        seed cp "${src}/.config" "${MNT}/usr/share/kominka/kernel.config" 2>/dev/null || builtin true
+        builtin echo ""
+        builtin echo "    Kernel built and installed."
     } else {
-        echo ""
-        echo "    Build failed — falling back to baseline kernel."
-        cp /usr/share/kominka/Image "${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
+        builtin echo ""
+        builtin echo "    Build failed — falling back to baseline kernel."
+        seed cp /usr/share/kominka/Image "${MNT}/boot/EFI/BOOT/BOOTX64.EFI"
     }
 
-    echo "    Cleaning up build directory..."
-    rm -rf $build_dir
+    builtin echo "    Cleaning up build directory..."
+    seed rm -rf $build_dir
 }
 
 # ── Disk listing ──────────────────────────────────────────────────────────────
 
 proc list_disks() {
     for dev in @[glob('/sys/block/*')] {
-        var name = $(basename $dev)
+        var name = $(seed basename $dev)
         case (name) {
             loop*|ram*|dm-* { continue }
         }
-        var size = $(cat "${dev}/size" 2>/dev/null || echo 0)
+        var size = $(seed cat "${dev}/size" 2>/dev/null || builtin echo 0)
         var size_mb = int(size) // 2048
         if (size_mb <= 0) { continue }
-        var model = $(cat "${dev}/device/model" 2>/dev/null | sed 's/ *$//' || true)
-        printf '  /dev/%-10s %6d MB  %s\n' $name $size_mb $model
+        var model = $(seed cat "${dev}/device/model" 2>/dev/null | seed sed 's/ *$//' || builtin true)
+        builtin printf '  /dev/%-10s %6d MB  %s\n' $name $size_mb $model
     }
 }
 
@@ -216,39 +216,39 @@ proc list_disks() {
 setup_network
 detect_machine
 
-echo "Available disks:"
-echo ""
+builtin echo "Available disks:"
+builtin echo ""
 list_disks
-echo ""
+builtin echo ""
 
-printf "Install to (e.g. /dev/sda): "
-var DISK; read --line (&DISK)
+builtin printf "Install to (e.g. /dev/sda): "
+var DISK; builtin read --line (&DISK)
 
-if (DISK === '') { echo "Aborted."; exit 0 }
+if (DISK === '') { builtin echo "Aborted."; exit 0 }
 
-if ! test -b $DISK { echo "error: $DISK is not a block device"; exit 1 }
+if ! builtin test -b $DISK { builtin echo "error: $DISK is not a block device"; exit 1 }
 
-var size    = $(cat "/sys/block/$(basename $DISK)/size" 2>/dev/null || echo 0)
+var size    = $(seed cat "/sys/block/$(seed basename $DISK)/size" 2>/dev/null || builtin echo 0)
 var size_mb = int(size) // 2048
 var root_mb = size_mb - 256 - 8192
 
-echo ""
-echo "WARNING: all data on $DISK will be destroyed."
-echo ""
-echo "  Partition layout (MBR):"
-echo "    ${DISK}1   256M   EFI System (FAT32)   /boot"
-echo "    ${DISK}2     8G   Linux swap"
-echo "    ${DISK}3  ${root_mb}M   Linux (ext4)          /"
-echo ""
-printf "Continue? [y/N] "
-var ans; read --line (&ans)
-if (ans !== 'y' and ans !== 'Y') { echo "Aborted."; exit 0 }
+builtin echo ""
+builtin echo "WARNING: all data on $DISK will be destroyed."
+builtin echo ""
+builtin echo "  Partition layout (MBR):"
+builtin echo "    ${DISK}1   256M   EFI System (FAT32)   /boot"
+builtin echo "    ${DISK}2     8G   Linux swap"
+builtin echo "    ${DISK}3  ${root_mb}M   Linux (ext4)          /"
+builtin echo ""
+builtin printf "Continue? [y/N] "
+var ans; builtin read --line (&ans)
+if (ans !== 'y' and ans !== 'Y') { builtin echo "Aborted."; exit 0 }
 
-echo ""
-echo "==> Partitioning $DISK (MBR)"
-dd if=/dev/zero of=$DISK bs=1M count=1 2>/dev/null
+builtin echo ""
+builtin echo "==> Partitioning $DISK (MBR)"
+seed dd if=/dev/zero of=$DISK bs=1M count=1 2>/dev/null
 
-fdisk $DISK <<'FDISK'
+seed fdisk $DISK <<'FDISK'
 o
 n
 p
@@ -274,7 +274,7 @@ p
 w
 FDISK
 
-sleep 1
+seed sleep 1
 
 var P
 case (DISK) {
@@ -282,111 +282,111 @@ case (DISK) {
     *               { setvar P = DISK }
 }
 
-echo "==> Formatting partitions"
+builtin echo "==> Formatting partitions"
 mkfs.vfat -F32 -n KOMINKA_EFI "${P}1"
-mkswap -L KOMINKA_SWAP "${P}2"
+seed mkswap -L KOMINKA_SWAP "${P}2"
 mkfs.ext4 -q -L KOMINKA_ROOT "${P}3"
 
-echo "==> Mounting target"
-mkdir -p $MNT
-mount "${P}3" $MNT
-mkdir -p "${MNT}/boot"
-mount "${P}1" "${MNT}/boot"
+builtin echo "==> Mounting target"
+seed mkdir -p $MNT
+seed mount "${P}3" $MNT
+seed mkdir -p "${MNT}/boot"
+seed mount "${P}1" "${MNT}/boot"
 
-echo "==> Copying rootfs"
+builtin echo "==> Copying rootfs"
 for dir in usr etc var root {
-    if test -d "/$dir" { cp -a "/$dir" "${MNT}/" }
+    if builtin test -d "/$dir" { seed cp -a "/$dir" "${MNT}/" }
 }
-mkdir -p "${MNT}/dev" "${MNT}/proc" "${MNT}/sys" "${MNT}/tmp" "${MNT}/mnt"
-ln -sf usr/bin "${MNT}/bin"
-ln -sf usr/bin "${MNT}/sbin"
-ln -sf usr/lib "${MNT}/lib"
+seed mkdir -p "${MNT}/dev" "${MNT}/proc" "${MNT}/sys" "${MNT}/tmp" "${MNT}/mnt"
+seed ln -sf usr/bin "${MNT}/bin"
+seed ln -sf usr/bin "${MNT}/sbin"
+seed ln -sf usr/lib "${MNT}/lib"
 
-rm -f "${MNT}/usr/bin/pm-install"
+seed rm -f "${MNT}/usr/bin/pm-install"
 
-echo "==> Installing kernel"
+builtin echo "==> Installing kernel"
 install_kernel
 
-echo "==> Writing fstab"
-cat > "${MNT}/etc/fstab" <<'EOF'
+builtin echo "==> Writing fstab"
+seed cat > "${MNT}/etc/fstab" <<'EOF'
 LABEL=KOMINKA_ROOT  /      ext4  defaults  0 0
 LABEL=KOMINKA_EFI   /boot  vfat  defaults  0 0
 LABEL=KOMINKA_SWAP  none   swap  defaults  0 0
 EOF
 
-echo ""
-echo "==> Setting up user account"
-echo ""
-printf "Username: "
-var NEW_USER; read --line (&NEW_USER)
+builtin echo ""
+builtin echo "==> Setting up user account"
+builtin echo ""
+builtin printf "Username: "
+var NEW_USER; builtin read --line (&NEW_USER)
 
 if (NEW_USER !== '') {
-    grep -q '^wheel:' "${MNT}/etc/group" || echo "wheel:x:10:" >> "${MNT}/etc/group"
+    seed grep -q '^wheel:' "${MNT}/etc/group" || builtin echo "wheel:x:10:" >> "${MNT}/etc/group"
 
-    echo "${NEW_USER}:x:1000:1000:${NEW_USER}:/home/${NEW_USER}:/bin/sh" \
+    builtin echo "${NEW_USER}:x:1000:1000:${NEW_USER}:/home/${NEW_USER}:/bin/sh" \
         >> "${MNT}/etc/passwd"
-    echo "${NEW_USER}:!:14871::::::" >> "${MNT}/etc/shadow"
+    builtin echo "${NEW_USER}:!:14871::::::" >> "${MNT}/etc/shadow"
 
-    if grep -q '^wheel:.*:$' "${MNT}/etc/group" {
-        sed -i "s/^wheel:\\(.*\\):\$/wheel:\\1:${NEW_USER}/" "${MNT}/etc/group"
+    if seed grep -q '^wheel:.*:$' "${MNT}/etc/group" {
+        seed sed -i "s/^wheel:\\(.*\\):\$/wheel:\\1:${NEW_USER}/" "${MNT}/etc/group"
     } else {
-        sed -i "s/^wheel:\\(.*\\)/wheel:\\1,${NEW_USER}/" "${MNT}/etc/group"
+        seed sed -i "s/^wheel:\\(.*\\)/wheel:\\1,${NEW_USER}/" "${MNT}/etc/group"
     }
-    echo "${NEW_USER}:x:1000:" >> "${MNT}/etc/group"
+    builtin echo "${NEW_USER}:x:1000:" >> "${MNT}/etc/group"
 
-    mkdir -p "${MNT}/home/${NEW_USER}"
-    chown 1000:1000 "${MNT}/home/${NEW_USER}"
+    seed mkdir -p "${MNT}/home/${NEW_USER}"
+    seed chown 1000:1000 "${MNT}/home/${NEW_USER}"
 
-    echo ""
-    echo "Set password for ${NEW_USER}:"
-    chroot $MNT passwd $NEW_USER
-    echo ""
-    echo "  User '${NEW_USER}' created (wheel group, sudo access)."
+    builtin echo ""
+    builtin echo "Set password for ${NEW_USER}:"
+    seed chroot $MNT passwd $NEW_USER
+    builtin echo ""
+    builtin echo "  User '${NEW_USER}' created (wheel group, sudo access)."
 } else {
-    echo "  Skipped — root-only system."
+    builtin echo "  Skipped — root-only system."
 }
 
-echo ""
-echo "==> WiFi setup"
+builtin echo ""
+builtin echo "==> WiFi setup"
 var WLAN = ''
 for _d in @[glob('/sys/class/net/*/wireless')] {
-    if test -d $_d {
-        setvar WLAN = $(basename $(dirname $_d))
+    if builtin test -d $_d {
+        setvar WLAN = $(seed basename $(seed dirname $_d))
         break
     }
 }
 
 if (WLAN !== '') {
-    if test -f /etc/wifi.conf {
-        printf "Reuse WiFi config from this session on installed system? [Y/n] "
-        var _ans; read --line (&_ans)
+    if builtin test -f /etc/wifi.conf {
+        builtin printf "Reuse WiFi config from this session on installed system? [Y/n] "
+        var _ans; builtin read --line (&_ans)
         if (_ans === 'n' or _ans === 'N') {
             wifi-setup --target $MNT
         } else {
-            cp /etc/wifi.conf "${MNT}/etc/wifi.conf"
-            cp /etc/wpa_supplicant.conf "${MNT}/etc/wpa_supplicant.conf" 2>/dev/null || true
-            chmod 600 "${MNT}/etc/wifi.conf" "${MNT}/etc/wpa_supplicant.conf" 2>/dev/null || true
+            seed cp /etc/wifi.conf "${MNT}/etc/wifi.conf"
+            seed cp /etc/wpa_supplicant.conf "${MNT}/etc/wpa_supplicant.conf" 2>/dev/null || builtin true
+            seed chmod 600 "${MNT}/etc/wifi.conf" "${MNT}/etc/wpa_supplicant.conf" 2>/dev/null || builtin true
         }
     } else {
-        printf "Wireless interface %s detected. Configure WiFi? [y/N] " $WLAN
-        var _ans; read --line (&_ans)
+        builtin printf "Wireless interface %s detected. Configure WiFi? [y/N] " $WLAN
+        var _ans; builtin read --line (&_ans)
         if (_ans === 'y' or _ans === 'Y') { wifi-setup --target $MNT }
     }
 
-    if test -f "${MNT}/etc/wifi.conf" {
-        mkdir -p "${MNT}/var/service"
-        ln -sf /etc/sv/wifi "${MNT}/var/service/wifi"
+    if builtin test -f "${MNT}/etc/wifi.conf" {
+        seed mkdir -p "${MNT}/var/service"
+        seed ln -sf /etc/sv/wifi "${MNT}/var/service/wifi"
     }
 }
 
-echo ""
-echo "==> Unmounting"
-umount "${MNT}/boot"
-umount $MNT
+builtin echo ""
+builtin echo "==> Unmounting"
+seed umount "${MNT}/boot"
+seed umount $MNT
 
-echo ""
-echo "Done! Kominka Linux installed to $DISK."
+builtin echo ""
+builtin echo "Done! Kominka Linux installed to $DISK."
 if (MACHINE_NAME !== '') {
-    echo "Kernel: $MACHINE_PROFILE (built for $MACHINE_NAME)"
+    builtin echo "Kernel: $MACHINE_PROFILE (built for $MACHINE_NAME)"
 }
-echo "Remove installer media and reboot."
+builtin echo "Remove installer media and reboot."

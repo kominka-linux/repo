@@ -19,7 +19,7 @@ proc build(dest) {
     var _kr = ENV => get("KOMINKA_ROOT", "")
     if (_kr === '/') { setvar _kr = '' }
 
-    var CC = $(command -v cc)
+    var CC = $(builtin command -v cc)
     var _libs = "-L${_kr}/usr/lib -lz"
 
     # Include ordering for musl/zig cc (zig rel=11+ appends -I/usr/include):
@@ -60,19 +60,19 @@ proc build(dest) {
     # only the real git programs are compiled. (Command-line variable overrides
     # can't suppress these because the lists are built with += in the Makefile,
     # and GNU make appends to the command-line value on each +=.)
-    sed -i '/^all:: \$(FUZZ_OBJS)$/d; /^all:: \$(TEST_PROGRAMS)/d' Makefile
+    seed sed -i '/^all:: \$(FUZZ_OBJS)$/d; /^all:: \$(TEST_PROGRAMS)/d' Makefile
 
-    make "-j$(nproc)" @make_flags all
+    make "-j$(seed nproc)" @make_flags all
 
-    make "-j$(nproc)" @make_flags DESTDIR=$dest install
+    make "-j$(seed nproc)" @make_flags DESTDIR=$dest install
 
-    if test -d man {
-        mkdir -p "${dest}/usr/share/man"
-        cp -Rf man "${dest}/usr/share/"
+    if builtin test -d man {
+        seed mkdir -p "${dest}/usr/share/man"
+        seed cp -Rf man "${dest}/usr/share/"
     }
 
     # dropbear provides dbclient, not ssh. Point git at it system-wide.
-    mkdir -p "${dest}/etc"
-    echo '[core]' >> "${dest}/etc/gitconfig"
-    echo '	sshCommand = dbclient' >> "${dest}/etc/gitconfig"
+    seed mkdir -p "${dest}/etc"
+    builtin echo '[core]' >> "${dest}/etc/gitconfig"
+    builtin echo '	sshCommand = dbclient' >> "${dest}/etc/gitconfig"
 }

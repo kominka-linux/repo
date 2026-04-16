@@ -21,15 +21,15 @@ proc build(dest) {
     # cargo — precompiled Rust toolchain (rustc, cargo, std) from rust-lang.org.
 
     # Binaries
-    mkdir -p "${dest}/usr/bin"
-    cp rustc/bin/rustc "${dest}/usr/bin/"
-    cp rustc/bin/rustdoc "${dest}/usr/bin/"
-    cp cargo/bin/cargo "${dest}/usr/bin/"
+    seed mkdir -p "${dest}/usr/bin"
+    seed cp rustc/bin/rustc "${dest}/usr/bin/"
+    seed cp rustc/bin/rustdoc "${dest}/usr/bin/"
+    seed cp cargo/bin/cargo "${dest}/usr/bin/"
 
     # Libraries (rustc libs + std)
-    mkdir -p "${dest}/usr/lib"
-    cp -a rustc/lib/* "${dest}/usr/lib/"
+    seed mkdir -p "${dest}/usr/lib"
+    seed cp -a rustc/lib/* "${dest}/usr/lib/"
     for d in @[glob("rust-std-*/lib/*")] {
-        cp -a $d "${dest}/usr/lib/" 2>/dev/null || true
+        seed cp -a $d "${dest}/usr/lib/" 2>/dev/null || builtin true
     }
 }

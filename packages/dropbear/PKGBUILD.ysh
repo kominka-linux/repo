@@ -10,7 +10,7 @@ var sources    = ['https://github.com/mkj/dropbear/archive/f5d44406ef2952ca69a68
 var checksums  = ['ca55783baa7a67e57de4c234d43711349b7b3f8c17b15a04fd58a6e88700572c']
 
 proc build(dest) {
-    var CC = $(command -v cc)
+    var CC = $(builtin command -v cc)
     var kr = ENV => get('KOMINKA_ROOT', '')
     if (kr === '/') { setvar kr = '' }
 
@@ -22,7 +22,7 @@ proc build(dest) {
     # this embedded use case; the server stays root throughout.
     # Disable LOCALSTREAMFWD — it requires either DROP_PRIVS or !MULTIUSER;
     # since we have neither, drop the feature rather than disabling MULTIUSER.
-    printf '%s\n' \
+    builtin printf '%s\n' \
         '#define DROPBEAR_SVR_PASSWORD_AUTH 0' \
         '#define DROPBEAR_SVR_DROP_PRIVS 0' \
         '#define DROPBEAR_SVR_LOCALSTREAMFWD 0' \
@@ -31,7 +31,7 @@ proc build(dest) {
     # The libtomcrypt sub-make uses a static Makefile (no -I${_src}), so without
     # a copy here the include search falls through only to system paths and misses
     # our override, leaving PASSWORD_AUTH and DROP_PRIVS at their default of 1.
-    cp localoptions.h src/localoptions.h
+    seed cp localoptions.h src/localoptions.h
 
     # Busybox grep fails autoconf's long-line test; setting GREP/EGREP/FGREP in
     # the environment makes AC_PROG_GREP skip its detection and use these values
@@ -49,7 +49,7 @@ proc build(dest) {
     # Pre-cache configure results that zig cc (strict Clang) gets wrong.
     # AC_CHECK_FUNCS calls functions without the correct #include; zig cc
     # treats implicit declarations as errors, causing false negatives.
-    printf '%s\n' \
+    builtin printf '%s\n' \
         'ac_cv_func_memcmp_working=yes' \
         'ac_cv_func_setresgid=yes' \
         'ac_cv_func_setresuid=yes' \
@@ -73,7 +73,7 @@ proc build(dest) {
     # This sed-based wrapper replaces that logic entirely.  configure finds it
     # first (PATH: /usr/local/bin before /usr/bin); non-autoconf awk calls fall
     # through to /usr/bin/awk.
-    cat > /usr/local/bin/awk << 'ENDAWK'
+    seed cat > /usr/local/bin/awk << 'ENDAWK'
 #!/bin/sh
 prev= script= inputs=
 for a; do
@@ -109,7 +109,7 @@ if [ -n "$script" ] && grep -qF '"]="' "$script" 2>/dev/null; then
 fi
 exec /usr/bin/awk "$@"
 ENDAWK
-    chmod 0755 /usr/local/bin/awk
+    seed chmod 0755 /usr/local/bin/awk
 
     # Run configure with --no-create: generates config.status but does NOT run it.
     # This lets us patch config.status before execution.
@@ -119,8 +119,8 @@ ENDAWK
     # -DHAVE_CONFIG_H is normally in DEFS (not CFLAGS), but libtommath/Makefile
     # only passes CFLAGS to its compiler, missing DEFS. Adding it here ensures
     # sub-makes include config.h and pick up HAVE_SETRESGID and friends.
-    var _src = $(pwd)
-    env CC="$CC" \
+    var _src = $(builtin pwd)
+    seed env CC="$CC" \
         GREP=/usr/bin/grep \
         EGREP="/usr/bin/grep -E" \
         FGREP="/usr/bin/grep -F" \
@@ -140,13 +140,13 @@ ENDAWK
     # heredoc; replace with '\$0' so the shell produces literal '$0' in subs.awk.
     # (Our sed wrapper ignores $0 entirely, but patch to keep config.status
     # self-consistent in case it's ever re-run directly.)
-    sed -i 's/\$ 0/\\$0/g' config.status
+    seed sed -i 's/\$ 0/\\$0/g' config.status
 
     # Now generate Makefile and config.h
     try { ./config.status }
     if failed {
         var _ec = _error.code
-        echo "=== config.status exit: $_ec ==="
+        builtin echo "=== config.status exit: $_ec ==="
         exit 1
     }
 
@@ -160,7 +160,7 @@ ENDAWK
     # a function name — "redefinition of 'uint64_t' as different kind of symbol".
     # HAVE_STRUCT_*: musl provides these in <netdb.h>/<sys/socket.h>; without
     # the guards fake-rfc2553.h redefines them causing redefinition errors.
-    printf '%s\n' \
+    builtin printf '%s\n' \
         '#undef HAVE_HTOLE64'             '#define HAVE_HTOLE64 1' \
         '#undef HAVE_DECL_HTOLE64'        '#define HAVE_DECL_HTOLE64 1' \
         '#undef HAVE_LE64TOH'             '#define HAVE_LE64TOH 1' \
@@ -191,10 +191,10 @@ ENDAWK
     make -j1 "CFLAGS=$cflags" "LDFLAGS=-L${kr}/usr/lib"
     make -j1 DESTDIR=$dest "CFLAGS=$cflags" "LDFLAGS=-L${kr}/usr/lib" install
 
-    mkdir -p "${dest}/etc/dropbear"
+    seed mkdir -p "${dest}/etc/dropbear"
 
     # runit service: -F foreground, -E log to stderr, -R auto-generate host keys
-    mkdir -p "${dest}/etc/sv/dropbear"
-    printf '#!/bin/sh\nexec dropbear -F -E -R\n' > "${dest}/etc/sv/dropbear/run"
-    chmod 0755 "${dest}/etc/sv/dropbear/run"
+    seed mkdir -p "${dest}/etc/sv/dropbear"
+    builtin printf '#!/bin/sh\nexec dropbear -F -E -R\n' > "${dest}/etc/sv/dropbear/run"
+    seed chmod 0755 "${dest}/etc/sv/dropbear/run"
 }

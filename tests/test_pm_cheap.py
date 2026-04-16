@@ -41,8 +41,17 @@ class CheapPMTestCase(unittest.TestCase):
         (self.kominka_root / "var/db/kominka/installed").mkdir(parents=True)
         (self.kominka_root / "var/db/kominka/choices").mkdir(parents=True)
 
+        # On the dev host (not inside a kominka container), `seed` isn't on
+        # PATH.  Provide a shim that dispatches `seed CMD args…` → `CMD args…`
+        # so pm.ysh's `seed uname`, `seed grep`, etc. work against system tools.
+        seed_bin_dir = Path(self.tmpdir) / "seed-shim"
+        seed_bin_dir.mkdir()
+        seed_shim = seed_bin_dir / "seed"
+        seed_shim.write_text('#!/bin/sh\ncmd="$1"; shift; exec "$cmd" "$@"\n')
+        seed_shim.chmod(0o755)
+
         self.env = {
-            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "PATH": str(seed_bin_dir) + ":" + os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": self.tmpdir,
             "LOGNAME": os.environ.get("LOGNAME", "testuser"),
             "KOMINKA_PATH": str(REPO),

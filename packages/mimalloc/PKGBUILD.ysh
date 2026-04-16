@@ -14,8 +14,8 @@ var checksums = [
 ]
 
 proc build(dest) {
-    var ARCH   = $(uname -m)
-    var zig_bin = $(command -v zig)
+    var ARCH   = $(seed uname -m)
+    var zig_bin = $(builtin command -v zig)
     var target = "${ARCH}-linux-musl"
 
     # mimalloc ships src/static.c which #includes every source file — no build
@@ -29,17 +29,17 @@ proc build(dest) {
         src/static.c \
         -o "libmimalloc.so.${ver}"
 
-    mkdir -p "${dest}/usr/lib"
-    cp "libmimalloc.so.${ver}" "${dest}/usr/lib/"
-    ln -sf "libmimalloc.so.${ver}" "${dest}/usr/lib/libmimalloc.so.2"
-    ln -sf "libmimalloc.so.${ver}" "${dest}/usr/lib/libmimalloc.so"
+    seed mkdir -p "${dest}/usr/lib"
+    seed cp "libmimalloc.so.${ver}" "${dest}/usr/lib/"
+    seed ln -sf "libmimalloc.so.${ver}" "${dest}/usr/lib/libmimalloc.so.2"
+    seed ln -sf "libmimalloc.so.${ver}" "${dest}/usr/lib/libmimalloc.so"
 
     # Include headers for packages that link against mimalloc directly.
-    mkdir -p "${dest}/usr/include"
-    cp -r include/. "${dest}/usr/include/"
+    seed mkdir -p "${dest}/usr/include"
+    seed cp -r include/. "${dest}/usr/include/"
 
     # Wire up system-wide preload so all programs use mimalloc's allocator.
     # ld.so.preload is processed by musl's dynamic linker at startup.
-    mkdir -p "${dest}/etc"
-    echo /usr/lib/libmimalloc.so.2 > "${dest}/etc/ld.so.preload"
+    seed mkdir -p "${dest}/etc"
+    builtin echo /usr/lib/libmimalloc.so.2 > "${dest}/etc/ld.so.preload"
 }

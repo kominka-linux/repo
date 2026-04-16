@@ -14,6 +14,6 @@ var checksums = [
 ]
 
 proc build(dest) {
-    mkdir -p "${dest}/usr/bin"
-    install -m755 install.ysh "${dest}/usr/bin/pm-install"
+    seed mkdir -p "${dest}/usr/bin"
+    seed install -m755 install.ysh "${dest}/usr/bin/pm-install"
 }

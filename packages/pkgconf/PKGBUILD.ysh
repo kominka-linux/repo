@@ -18,8 +18,8 @@ proc build(dest) {
     make
     make DESTDIR=$dest install
 
-    ln -s pkgconf "${dest}/usr/bin/pkg-config"
+    seed ln -s pkgconf "${dest}/usr/bin/pkg-config"
 
     # Remove documentation.
-    rm -rf "${dest}/usr/share/doc"
+    seed rm -rf "${dest}/usr/share/doc"
 }

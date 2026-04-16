@@ -21,15 +21,15 @@ var checksums = [
 
 proc build(dest) {
 
-    mkdir -p \
+    seed mkdir -p \
         "${dest}/usr/bin" \
         "${dest}/usr/lib/wifi" \
         "${dest}/etc/sv/wifi"
 
-    install -m755 wifi-setup   "${dest}/usr/bin/wifi-setup"
-    install -m755 action.ysh    "${dest}/usr/lib/wifi/action.sh"
-    install -m755 wifi.run     "${dest}/etc/sv/wifi/run"
-    install -m755 wifi.finish.ysh  "${dest}/etc/sv/wifi/finish"
+    seed install -m755 wifi-setup   "${dest}/usr/bin/wifi-setup"
+    seed install -m755 action.ysh    "${dest}/usr/lib/wifi/action.sh"
+    seed install -m755 wifi.run     "${dest}/etc/sv/wifi/run"
+    seed install -m755 wifi.finish.ysh  "${dest}/etc/sv/wifi/finish"
 
-    ln -sf "/run/runit/supervise.wifi" "${dest}/etc/sv/wifi/supervise"
+    seed ln -sf "/run/runit/supervise.wifi" "${dest}/etc/sv/wifi/supervise"
 }

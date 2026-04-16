@@ -35,13 +35,13 @@ proc build(dest) {
         -DCMAKE_SHARED_LINKER_FLAGS=$_ldflags
     ninja -C build
 
-    mkdir -p "${dest}/usr/lib/pkgconfig" "${dest}/usr/include" "${dest}/etc/ssl"
+    seed mkdir -p "${dest}/usr/lib/pkgconfig" "${dest}/usr/include" "${dest}/etc/ssl"
 
-    cp -r include/openssl "${dest}/usr/include/"
-    cp build/libssl.so "${dest}/usr/lib/"
-    cp build/libcrypto.so "${dest}/usr/lib/"
+    seed cp -r include/openssl "${dest}/usr/include/"
+    seed cp build/libssl.so "${dest}/usr/lib/"
+    seed cp build/libcrypto.so "${dest}/usr/lib/"
 
-    cp -f update-certdata.ysh "${dest}/etc/ssl"
+    seed cp -f update-certdata.ysh "${dest}/etc/ssl"
 
     # pkg-config files for curl and other consumers.
     write -- '''prefix=/usr

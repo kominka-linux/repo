@@ -153,15 +153,15 @@ func contains(list, item) {
 proc tmp_file (name, suffix) {
     ### Create a uniquely named temporary file, appending to the stack.
     var f = "${tmp_dir}/${name}-${suffix}"
-    true > $f || die $name "Failed to create temporary file"
+    builtin true > $f || die $name "Failed to create temporary file"
     call tf->append(f)
 }
 
 proc tmp_file_copy (name, suffix, src) {
     ### Create a temp file and copy src into it if it exists.
     tmp_file $name $suffix
-    if test -f $src {
-        cp -f $src $[tf[-1]]
+    if builtin test -f $src {
+        seed cp -f $src $[tf[-1]]
     }
 }
 
@@ -172,11 +172,11 @@ proc prompt (msg='') {
         log $msg
     }
     log "Continue?: Press Enter to continue or Ctrl+C to abort"
-    read --raw-line || exit 1
+    builtin read --raw-line || exit 1
 }
 
 proc mkcd (...dirs) {
-    mkdir -p @dirs && cd $[dirs[0]]
+    seed mkdir -p @dirs && builtin cd $[dirs[0]]
 }
 
 proc _fnr_step (old, new) {
@@ -239,10 +239,10 @@ proc am_owner (path) {
     if (LOGNAME === 'root') { return 0 }
 
     var inf = ''
-    try { setvar inf = $(ls -ld $path) }
+    try { setvar inf = $(seed ls -ld $path) }
     if failed { return 1 }  # can't stat path; treat as not-owner
 
-    read --raw-line (&line) <<< $inf
+    builtin read --raw-line (&line) <<< $inf
     var fields = line => split(/ ' '+ /)
     setglobal user = fields[2]
 
@@ -268,7 +268,7 @@ proc pkg_owner (...args) {
         call args->extend(manifests)
     }
 
-    try { setglobal _owns = $(grep -lxF @args) }
+    try { setglobal _owns = $(seed grep -lxF @args) }
     if failed { setglobal _owns = '' }
     setglobal _owns = ${_owns%/*}
     setglobal _owns = ${_owns##*/}
@@ -281,9 +281,9 @@ proc pkg_owner (...args) {
 proc resolve_path (path) {
     var rpath = "${KOMINKA_ROOT}/${path#/}"
 
-    if cd -P "${rpath%/*}" 2>/dev/null {
+    if builtin cd -P "${rpath%/*}" 2>/dev/null {
         var parent = PWD
-        cd $OLDPWD
+        builtin cd $OLDPWD
     } else {
         setvar parent = ${rpath%/*}
     }
@@ -305,24 +305,24 @@ proc run_hook (hook_name, ...args) {
 
 proc run_hook_pkg (hook_name, pkg_name) {
     ### Run a hook from the package's database files.
-    if test -x "${sys_db}/${pkg_name}/${hook_name}" {
+    if builtin test -x "${sys_db}/${pkg_name}/${hook_name}" {
         log $pkg_name "Running $hook_name hook"
         "${sys_db}/${pkg_name}/${hook_name}" \
             || war $pkg_name "$hook_name hook failed (exit=$?)"
 
-    } elif test -f "${sys_db}/${pkg_name}/${hook_name}" {
+    } elif builtin test -f "${sys_db}/${pkg_name}/${hook_name}" {
         war $pkg_name "skipping $hook_name hook: not executable"
     }
 }
 
 proc decompress (file) {
     case (file) {
-        *.tbz | *.bz2 { bzip2 -d }
-        *.lzma         { lzma -dc }
+        *.tbz | *.bz2 { seed bzip2 -d }
+        *.lzma         { seed lzma -dc }
         *.lz           { lzip -dc }
-        *.tar          { cat }
-        *.tgz | *.gz   { gzip -d }
-        *.xz | *.txz   { xz -dc }
+        *.tar          { seed cat }
+        *.tgz | *.gz   { seed gzip -d }
+        *.xz | *.txz   { seed xz -dc }
         *.zst          { zstd -dc }
     } < $file
 }
@@ -331,7 +331,7 @@ proc sh256 (...files) {
     ### Higher level sha256 — filters out non-existent files and directories.
     var real_files = []
     for f in (files) {
-        if ! test -d $f && test -e $f {
+        if ! builtin test -d $f && builtin test -e $f {
             call real_files->append(f)
         }
     }
@@ -360,7 +360,7 @@ proc _sh256 (...files) {
     if failed { die "Failed to generate checksums" }
 
     var result = []
-    for line in @(echo $raw) {
+    for line in @(builtin echo $raw) {
         call result->append(${line%% *})
     }
 
@@ -371,14 +371,14 @@ proc _sh256 (...files) {
 proc _download (dest, url) {
     ### Download a URL to a local file. Returns 1 on failure.
     try { wget  -q -O $dest $url }
-    if failed { rm -f $dest; return 1 }
+    if failed { seed rm -f $dest; return 1 }
 }
 
 proc index_load () {
     ### Load the cached remote package index into _remote_index.
     if (_remote_loaded) { return }
     var idx_file = "${cac_dir}/packages.json"
-    if ! test -f $idx_file { return }
+    if ! builtin test -f $idx_file { return }
     json read < $idx_file
     setglobal _remote_index = _reply["packages"]
     setglobal _remote_loaded = true
@@ -420,8 +420,8 @@ proc auth_token_load (; result Ref) {
     if (_t !== '') { call result->setValue(_t); return }
     # 3. File fallback.
     var _tf = "${HOME}/.config/kominka/token"
-    if test -f $_tf {
-        read -r _t < $_tf
+    if builtin test -f $_tf {
+        builtin read -r _t < $_tf
         call result->setValue(_t)
         return
     }
@@ -435,10 +435,10 @@ proc auth_token_store (token) {
     if ! failed { return }
     # File fallback.
     var _dir = "${HOME}/.config/kominka"
-    mkdir -p $_dir
-    chmod 700 $_dir
+    seed mkdir -p $_dir
+    seed chmod 700 $_dir
     write -- $token > "${_dir}/token"
-    chmod 600 "${_dir}/token"
+    seed chmod 600 "${_dir}/token"
 }
 
 proc pm_auth () {
@@ -447,7 +447,7 @@ proc pm_auth () {
     if (KOMINKA_REPO === '') { die "KOMINKA_REPO not set" }
 
     log "Enter your API token for ${KOMINKA_REPO}:"
-    read -r _token
+    builtin read -r _token
     if (_token === '') { die "Empty token" }
 
     auth_token_store $_token
@@ -459,7 +459,7 @@ proc pkg_load (pkg_dir; result Ref = null) {
     # Supports both PKGBUILD.ysh (repo packages) and version/depends files
     # (installed db entries).
     var d = {}
-    if test -f "${pkg_dir}/PKGBUILD.ysh" {
+    if builtin test -f "${pkg_dir}/PKGBUILD.ysh" {
         # Declare required fields as locals so stale values don't leak if
         # PKGBUILD.ysh somehow omits them. Optional fields (nostrip,
         # checksums_aarch64, checksums_x86_64) fall back to the globals
@@ -472,7 +472,7 @@ proc pkg_load (pkg_dir; result Ref = null) {
         var sources   = []
         var checksums = []
 
-        source "${pkg_dir}/PKGBUILD.ysh"
+        builtin source "${pkg_dir}/PKGBUILD.ysh"
 
         setvar d = {
             dir:              pkg_dir,
@@ -487,19 +487,19 @@ proc pkg_load (pkg_dir; result Ref = null) {
             checksums_aarch64: checksums_aarch64,
             checksums_x86_64:  checksums_x86_64,
         }
-    } elif test -f "${pkg_dir}/version" {
+    } elif builtin test -f "${pkg_dir}/version" {
         # Installed db entry — read old-format files.
         var _vline = ''
-        read -r _vline < "${pkg_dir}/version"
+        builtin read -r _vline < "${pkg_dir}/version"
         var _vparts = _vline => split(" ")
         var _ver = _vparts[0]
         var _rel = _vparts[1] if (len(_vparts) > 1) else ''
 
         var _deps   = []
         var _mkdeps = []
-        if test -f "${pkg_dir}/depends" {
-            while true {
-                try { read -r _dep _dtype }
+        if builtin test -f "${pkg_dir}/depends" {
+            while builtin true {
+                try { builtin read -r _dep _dtype }
                 if (_dep === '' and _status !== 0) { break }
                 if (_dtype === 'make') {
                     call _mkdeps->append(_dep)
@@ -581,7 +581,7 @@ proc _pkg_find (name, mode='', test_flag='', search_path='') {
 
     for find_path in (paths) {
         for find_pkg in @[glob("${find_path}/${name}")] {
-            if test $flag $find_pkg {
+            if builtin test $flag $find_pkg {
                 call results->append(find_pkg)
             }
         }
@@ -615,29 +615,29 @@ proc _pkg_find (name, mode='', test_flag='', search_path='') {
 
 proc db_installed (name) {
     ### Return 0 if package is installed, 1 otherwise.
-    test -d "${sys_db}/${name}"
+    builtin test -d "${sys_db}/${name}"
 }
 
 proc db_version (name) {
     ### Print "ver rel" of installed package, or die if not installed.
-    if ! test -f "${sys_db}/${name}/version" {
+    if ! builtin test -f "${sys_db}/${name}/version" {
         die $name "Not installed"
     }
-    cat "${sys_db}/${name}/version"
+    seed cat "${sys_db}/${name}/version"
 }
 
 proc db_register (name, ver, rel) {
     ### Create a minimal DB entry for a metapackage or pre-registered package.
-    mkdir -p "${sys_db}/${name}"
+    seed mkdir -p "${sys_db}/${name}"
     write -- "$ver $rel" > "${sys_db}/${name}/version"
-    printf '#!/bin/sh\n:\n' > "${sys_db}/${name}/build"
-    chmod +x "${sys_db}/${name}/build"
-    true > "${sys_db}/${name}/manifest"
+    builtin printf '#!/bin/sh\n:\n' > "${sys_db}/${name}/build"
+    seed chmod +x "${sys_db}/${name}/build"
+    builtin true > "${sys_db}/${name}/manifest"
 }
 
 proc db_remove (name) {
     ### Remove a package's DB entry.
-    rm -rf "${sys_db}/${name}"
+    seed rm -rf "${sys_db}/${name}"
 }
 
 proc db_all_installed () {
@@ -649,9 +649,9 @@ proc db_all_installed () {
 
 proc db_dependents (name) {
     ### Print installed packages that depend on name, one per line.
-    cd $sys_db
-    try { grep -lFx -- $name */depends }
-    cd $OLDPWD
+    builtin cd $sys_db
+    try { seed grep -lFx -- $name */depends }
+    builtin cd $OLDPWD
 }
 
 proc pkg_list_version (...pkgs) {
@@ -674,7 +674,7 @@ proc pkg_info (pkg) {
     pkg_find_and_load $pkg (&p)
 
     var status = 'not installed'
-    if test -d "${sys_db}/$[p.name]" { setvar status = 'installed' }
+    if builtin test -d "${sys_db}/$[p.name]" { setvar status = 'installed' }
 
     write -- "name     $[p.name]"
     write -- "version  $[p.ver]-$[p.rel]"
@@ -706,7 +706,7 @@ proc pkg_upload (pkg) {
 
     case (pkg) {
         *.tar.* {
-            if ! test -f $pkg { die "File '$pkg' does not exist" }
+            if ! builtin test -f $pkg { die "File '$pkg' does not exist" }
             setvar _tarball = pkg
             var _base = ${pkg##*/}
             setvar _pkg = ${_base%%@*}
@@ -734,12 +734,12 @@ proc pkg_upload (pkg) {
             }
 
             setvar _tarball = "${bin_dir}/${pkg}@$[_p.ver]-$[_p.rel].tar.${KOMINKA_COMPRESS}"
-            if ! test -f $_tarball {
+            if ! builtin test -f $_tarball {
                 for f in @[glob("${bin_dir}/${pkg}@$[_p.ver]-$[_p.rel].tar.*")] {
                     setvar _tarball = f
                 }
             }
-            if ! test -f $_tarball {
+            if ! builtin test -f $_tarball {
                 die $pkg "No tarball found — build it first"
             }
         }
@@ -764,7 +764,7 @@ proc pkg_upload (pkg) {
 
     # For files > 50 MB use presigned direct-to-R2 upload to bypass the
     # Cloudflare proxy's 100 MB request body limit.
-    var _size = $(stat -c %s $_tarball 2>/dev/null || wc -c < $_tarball)
+    var _size = $(seed stat -c %s $_tarball 2>/dev/null || seed wc -c < $_tarball)
     var _resp_tmp = "/tmp/pm_upload_resp_$$"
 
     if (_size > 50 * 1024 * 1024) {
@@ -779,10 +779,10 @@ proc pkg_upload (pkg) {
             -O $_resp_tmp \
             "${KOMINKA_REPO}/api/upload-url" \
             || die $_pkg "Upload URL request failed"
-        var _presign_body = $(cat $_resp_tmp)
-        rm -f $_resp_tmp
+        var _presign_body = $(seed cat $_resp_tmp)
+        seed rm -f $_resp_tmp
         # Extract URL from {"url":"..."}
-        var _put_url = $(echo $_presign_body | grep -o '"url":"[^"]*"' | sed 's/"url":"//;s/"//')
+        var _put_url = $(builtin echo $_presign_body | seed grep -o '"url":"[^"]*"' | seed sed 's/"url":"//;s/"//')
         if (_put_url === '') { die $_pkg "Could not parse presigned URL from server response" }
 
         # Step 2: PUT directly to R2 (bypasses Cloudflare proxy).
@@ -795,7 +795,7 @@ proc pkg_upload (pkg) {
             || die $_pkg "Direct R2 upload failed"
 
         # Step 3: register the package in the server index.
-        var _sha256 = $(sha256sum $_tarball | awk '{print $1}')
+        var _sha256 = $(seed sha256sum $_tarball | seed awk '{print $1}')
         wget -q \
             --method=POST \
             --header="Authorization: Bearer ${_token}" \
@@ -846,7 +846,7 @@ proc pkg_cache (pkg) {
 
     setglobal tar_file = "${bin_dir}/${pkg}@${_cver}-${_crel}.tar.${KOMINKA_COMPRESS}"
 
-    if test -f $tar_file { return 0 }
+    if builtin test -f $tar_file { return 0 }
 
     for f in @[glob("${bin_dir}/${pkg}@${_cver}-${_crel}.tar.*")] {
         setglobal tar_file = f
@@ -926,7 +926,7 @@ proc pkg_source_resolve (src, dest='', quiet=''; p Dict) {
 
     # Remote source (cached).
     var cached = "${src_dir}/$[p.name]/${clean_dest:+"${clean_dest}/"}${resolved_src##*/}"
-    if test -f $cached {
+    if builtin test -f $cached {
         setglobal _res = cached
         _resolve_found $quiet
         return
@@ -943,28 +943,28 @@ proc pkg_source_resolve (src, dest='', quiet=''; p Dict) {
     }
 
     # Local relative directory.
-    if test -d "$[p.dir]/${resolved_src}" {
+    if builtin test -d "$[p.dir]/${resolved_src}" {
         setglobal _res = "$[p.dir]/${resolved_src}/."
         _resolve_found $quiet
         return
     }
 
     # Local absolute directory.
-    if test -d "/${resolved_src##/}" {
+    if builtin test -d "/${resolved_src##/}" {
         setglobal _res = "/${resolved_src##/}/."
         _resolve_found $quiet
         return
     }
 
     # Local relative file.
-    if test -f "$[p.dir]/${resolved_src}" {
+    if builtin test -f "$[p.dir]/${resolved_src}" {
         setglobal _res = "$[p.dir]/${resolved_src}"
         _resolve_found $quiet
         return
     }
 
     # Local absolute file.
-    if test -f "/${resolved_src##/}" {
+    if builtin test -f "/${resolved_src##/}" {
         setglobal _res = "/${resolved_src##/}"
         _resolve_found $quiet
         return
@@ -1017,10 +1017,10 @@ proc pkg_source_url (dest, url, fatal='y'; p Dict) {
         setvar attempt += 1
         try { wget  -q -O $dest $url }
         if (_status === 0) { return }
-        rm -f $dest
+        seed rm -f $dest
         if (attempt < max_attempts) {
             war $[p.name] "Download failed (attempt $attempt/$max_attempts), retrying in ${delay}s…"
-            sleep $delay
+            seed sleep $delay
             setvar delay = delay * 2
         }
     }
@@ -1036,7 +1036,7 @@ proc pkg_source_git (dest, url; p Dict) {
 
     log $[p.name] "Checking out ${com:-FETCH_HEAD}"
 
-    if ! test -d .git {
+    if ! builtin test -d .git {
         git init
     }
 
@@ -1066,36 +1066,36 @@ proc pkg_source_tar (file; p Dict) {
     try { decompress $file > $[tf[-2]] }
     if failed { die $[p.name] "Failed to decompress $file" }
 
-    try { tar xf $[tf[-2]] }
+    try { seed tar xf $[tf[-2]] }
     if failed { die $[p.name] "Failed to extract $file" }
 
     # Get unique top-level directories.
-    try { tar tf $[tf[-2]] | sort -ut / -k1,1 > $[tf[-1]] }
+    try { seed tar tf $[tf[-2]] | seed sort -ut / -k1,1 > $[tf[-1]] }
     if failed { die $[p.name] "Failed to extract manifest" }
 
-    while read --raw-line {
+    while builtin read --raw-line {
         var _parts = _reply => split('/')
         var dir = _parts[0]
         var dir_stripped = ${dir#.}
         case (dir_stripped) {
             ?* {
-                if ! test -d $dir { continue }
+                if ! builtin test -d $dir { continue }
 
-                mv -f $dir "${KOMINKA_PID}-${dir}"
+                seed mv -f $dir "${KOMINKA_PID}-${dir}"
 
                 # Move each direct child to the current directory.
                 # Using find -exec mv directly avoids any sh/$0/$@ semantics.
-                find "${KOMINKA_PID}-${dir}/." ! -name . -prune \
+                seed find "${KOMINKA_PID}-${dir}/." ! -name . -prune \
                     -exec mv -f {} . \; 2>/dev/null \
-                || find "${KOMINKA_PID}-${dir}/." ! -name . -prune \
+                || seed find "${KOMINKA_PID}-${dir}/." ! -name . -prune \
                     -exec cp -fRp {} . \;
 
-                rm -rf "${KOMINKA_PID}-${dir}"
+                seed rm -rf "${KOMINKA_PID}-${dir}"
             }
         }
     } < $[tf[-1]]
 
-    rm -f $[tf[-2]]
+    seed rm -f $[tf[-2]]
 }
 
 proc pkg_extract (; p Dict) {
@@ -1116,9 +1116,9 @@ proc pkg_extract (; p Dict) {
         }
 
         case (_res) {
-            git+*                                        { cp -LRf "${_des}/." . }
+            git+*                                        { seed cp -LRf "${_des}/." . }
             *.tar | *.tar.?? | *.tar.??? | *.tar.???? | *.t?z { pkg_source_tar $_res (p) }
-            ?*                                           { cp -LRf $_res . }
+            ?*                                           { seed cp -LRf $_res . }
         }
     }
 }
@@ -1136,10 +1136,10 @@ proc pkg_mirror_use (; p Dict) {
 
     var _local = "${mir_dir}/$[p.name]@$[p.ver]-$[p.rel].tar.bz2"
 
-    if ! test -f $_local {
+    if ! builtin test -f $_local {
         var _url = "${KOMINKA_REPO}/src/$[p.name]/$[p.ver]-$[p.rel].tar.bz2"
         log $[p.name] "Downloading mirror source"
-        mkdir -p $mir_dir
+        seed mkdir -p $mir_dir
         try { pkg_source_url $_local $_url (p) }
         if failed { return 1 }
     }
@@ -1148,29 +1148,29 @@ proc pkg_mirror_use (; p Dict) {
     _sh256 $_local >/dev/null
     if (hash !== _src_sha) {
         war $[p.name] "Mirror source checksum mismatch, falling back to upstream"
-        rm -f $_local
+        seed rm -f $_local
         return 1
     }
 
     log $[p.name] "Extracting mirror source"
-    mkdir -p "${mak_dir}/$[p.name]"
-    tar xjf $_local -C "${mak_dir}/$[p.name]"
+    seed mkdir -p "${mak_dir}/$[p.name]"
+    seed tar xjf $_local -C "${mak_dir}/$[p.name]"
 }
 
 proc pkg_git_strip (; p Dict) {
     ### Remove .git directories from the source tree before processing and packing.
-    find "${mak_dir}/$[p.name]" -name .git -type d -prune -exec rm -rf {} + 2>/dev/null || true
+    seed find "${mak_dir}/$[p.name]" -name .git -type d -prune -exec rm -rf {} + 2>/dev/null || builtin true
 }
 
 proc pkg_source_process (; p Dict) {
     ### Call process() from PKGBUILD.ysh if defined, to prune the source tree.
-    if ! grep -q '^proc process[( ]' "$[p.dir]/PKGBUILD.ysh" { return }
+    if ! seed grep -q '^proc process[( ]' "$[p.dir]/PKGBUILD.ysh" { return }
     log $[p.name] "Processing sources"
     var _src = "${mak_dir}/$[p.name]"
     try {
         forkwait {
-            source "$[p.dir]/PKGBUILD.ysh"
-            cd $_src
+            builtin source "$[p.dir]/PKGBUILD.ysh"
+            builtin cd $_src
             process $_src
         }
     }
@@ -1180,9 +1180,9 @@ proc pkg_source_process (; p Dict) {
 proc pkg_source_pack (; p Dict) {
     ### Pack the build directory into a processed source tarball (.tar.bz2).
     log $[p.name] "Packing source tarball"
-    mkdir -p $mir_dir
+    seed mkdir -p $mir_dir
     var _out = "${mir_dir}/$[p.name]@$[p.ver]-$[p.rel].tar.bz2"
-    tar cf - -C "${mak_dir}/$[p.name]" . | bzip2 -z > $_out
+    seed tar cf - -C "${mak_dir}/$[p.name]" . | seed bzip2 -z > $_out
 }
 
 var tree_seen = {}
@@ -1199,7 +1199,7 @@ proc _pkg_tree_node (pkg, prefix, is_last) {
 
     # Mark installed packages.
     var tag = ''
-    if test -d "${sys_db}/${pkg}" { setvar tag = " ${c2}✓${c3}" }
+    if builtin test -d "${sys_db}/${pkg}" { setvar tag = " ${c2}✓${c3}" }
 
     if (pkg in tree_seen) {
         write -- "${prefix}${icon}${c1}${pkg}${c3}${tag} [...]"
@@ -1248,8 +1248,8 @@ proc pkg_tree (...pkgs) {
         # installed package.  These form the forest tops.
         var depended_on = {}
         for d in (installed) {
-            if test -f "${d}/depends" {
-                while read -r _dep _dtype {
+            if builtin test -f "${d}/depends" {
+                while builtin read -r _dep _dtype {
                     if (_dep !== '' and _dtype !== 'make') {
                         setglobal depended_on[_dep] = true
                     }
@@ -1288,7 +1288,7 @@ proc pkg_depends (pkg, mode='', filter='', chain='', dep_type='') {
 
     # Filter out non-explicit, already installed packages.
     if (filter !== '' and mode === '' and not (pkg in explicit_seen)) {
-        if test -d "${sys_db}/${pkg}" { return }
+        if builtin test -d "${sys_db}/${pkg}" { return }
     }
 
     # Circular dependency detection (5 repeats max).
@@ -1316,7 +1316,7 @@ proc pkg_depends (pkg, mode='', filter='', chain='', dep_type='') {
         var p = null
         pkg_load $repo_dir (&p)
         for dep in (p.deps) {
-            if test -d "${sys_db}/${dep}" { continue }
+            if builtin test -d "${sys_db}/${dep}" { continue }
             pkg_depends $dep '' $filter "$chain $pkg" ''
         }
         # Only pull in makedeps if we actually need to build this package.
@@ -1332,7 +1332,7 @@ proc pkg_depends (pkg, mode='', filter='', chain='', dep_type='') {
         }
         if (not _cached) {
             for dep in (p.mkdeps) {
-                if test -d "${sys_db}/${dep}" { continue }
+                if builtin test -d "${sys_db}/${dep}" { continue }
                 pkg_depends $dep '' $filter "$chain $pkg" 'make'
             }
         }
@@ -1376,7 +1376,7 @@ proc pkg_order (...pkgs) {
         if (contains(pkgs, pkg) or contains(pkgs, base)) {
             call order->append(pkg)
             call redro->insert(0, pkg)
-        } elif ! test -d "${sys_db}/${base}" {
+        } elif ! builtin test -d "${sys_db}/${base}" {
             call order->append(pkg)
             call redro->insert(0, pkg)
         }
@@ -1400,26 +1400,26 @@ proc pkg_clean_dev (pkg) {
             setvar has_so = true
             break
         }
-        if (has_so) { rm -f $f }
+        if (has_so) { seed rm -f $f }
     }
     # Libtool files — never needed.
-    for f in @[glob("${pd}/usr/lib/*.la")] { rm -f $f }
+    for f in @[glob("${pd}/usr/lib/*.la")] { seed rm -f $f }
 
     # pkgconfig and headers are kept — needed by packages that build
     # against this library.  Will move to -dev splits later.
 
     # Info pages, man pages, doc — not useful in a minimal system.
-    rm -rf "${pd}/usr/share/info" "${pd}/usr/share/man" "${pd}/usr/share/doc"
+    seed rm -rf "${pd}/usr/share/info" "${pd}/usr/share/man" "${pd}/usr/share/doc"
 
     # Locale data (i18n definitions) — large, not needed at runtime.
-    rm -rf "${pd}/usr/share/i18n"
+    seed rm -rf "${pd}/usr/share/i18n"
 
     # gconv charset modules — keep only UTF-8 and UNICODE.
-    if test -d "${pd}/usr/lib/gconv" {
+    if builtin test -d "${pd}/usr/lib/gconv" {
         for f in @[glob("${pd}/usr/lib/gconv/*.so")] {
             case (f) {
-                *UTF* | *UNICODE* { true }
-                * { rm -f $f }
+                *UTF* | *UNICODE* { builtin true }
+                * { seed rm -f $f }
             }
         }
     }
@@ -1428,20 +1428,20 @@ proc pkg_clean_dev (pkg) {
 proc pkg_strip (; p Dict) {
     ### Strip package binaries and libraries.
     if (p.nostrip === true) { return }
-    if test -f "${mak_dir}/$[p.name]/nostrip" { return }
+    if builtin test -f "${mak_dir}/$[p.name]/nostrip" { return }
     if (KOMINKA_STRIP === '0') {
         return
     }
 
     log $[p.name] "Stripping binaries and libraries"
 
-    while read -r file {
-        if test -h "${pkg_dir}/$[p.name]${file}" { continue }
+    while builtin read -r file {
+        if builtin test -h "${pkg_dir}/$[p.name]${file}" { continue }
 
         case (file) {
             */sbin/?*[!/] | */bin/?*[!/] | */lib/?*[!/] | \
             */lib??/?*[!/] | */lib???/?*[!/] | */lib????/?*[!/] {
-                var od_out = $(od -A o -t c -N 18 "${pkg_dir}/$[p.name]${file}")
+                var od_out = $(seed od -A o -t c -N 18 "${pkg_dir}/$[p.name]${file}")
 
                 # REL (object files (.o), static libraries (.a)).
                 if (od_out ~ / '177' dot* 'E' dot* 'L' dot* 'F' dot* '0000020 001' / or
@@ -1470,8 +1470,8 @@ proc pkg_fix_deps (...manifests; p Dict) {
 
     var fdep_seen = {}
 
-    while read -r _file {
-        if test -h $_file { continue }
+    while builtin read -r _file {
+        if builtin test -h $_file { continue }
 
         case (_file) {
             */sbin/?*[!/] | */bin/?*[!/] | */lib/?*[!/] | \
@@ -1485,7 +1485,7 @@ proc pkg_fix_deps (...manifests; p Dict) {
                 try { setvar elf_out = $($cmd_elf -d "${pkg_dir}/$[p.name]${_file}" 2>/dev/null) }
                 if failed { setvar elf_out = ldd_out }
 
-                for lib_line in @(echo $elf_out) {
+                for lib_line in @(builtin echo $elf_out) {
                     case (lib_line) {
                         *NEEDED*[*]* | *=\>* {
                             var lib = ${lib_line##*\[}
@@ -1534,11 +1534,11 @@ proc pkg_fix_deps (...manifests; p Dict) {
     } < manifest |
 
     # Sort and deduplicate.
-    sort -uk1,1 $[tf[-2]] - > $[tf[-1]]
+    seed sort -uk1,1 $[tf[-2]] - > $[tf[-1]]
 
-    if test -s $[tf[-1]] {
-        diff -U 3 $[tf[-2]] $[tf[-1]] 2>/dev/null || true
-        mv -f $[tf[-1]] depends
+    if builtin test -s $[tf[-1]] {
+        seed diff -U 3 $[tf[-2]] $[tf[-1]] 2>/dev/null || builtin true
+        seed mv -f $[tf[-1]] depends
         pkg_manifest "${PWD##*/}" $pkg_dir
     }
 }
@@ -1552,18 +1552,18 @@ proc pkg_manifest (pkg, base_dir) {
     {
         write -- "${base_dir}/${pkg}/${pkg_db}/${pkg}/manifest"
 
-        if test -d "${base_dir}/${pkg}/etc" {
+        if builtin test -d "${base_dir}/${pkg}/etc" {
             write -- "${base_dir}/${pkg}/${pkg_db}/${pkg}/etcsums"
         }
 
-        find "${base_dir}/${pkg}" ! -path "${base_dir}/${pkg}" \
+        seed find "${base_dir}/${pkg}" ! -path "${base_dir}/${pkg}" \
             -type d -exec printf '%s/\n' {} + \
             -o \( ! -type d -a ! -name '*.la' -a ! -name charset.alias \) -print
 
-    } | sort -ur > $[tf[-1]]
+    } | seed sort -ur > $[tf[-1]]
 
     # Remove the prefix from each line.
-    while read -r file {
+    while builtin read -r file {
         write -- "${file#"${base_dir}/${pkg}"}"
     } < $[tf[-1]] > "${base_dir}/${pkg}/${pkg_db}/${pkg}/manifest"
 }
@@ -1572,8 +1572,8 @@ proc pkg_manifest_validate (pkg) {
     log $pkg "Checking if manifest valid"
 
     var missing = 0
-    while read -r line {
-        if ! test -e "${tar_dir}/${pkg}${line}" && ! test -h "${tar_dir}/${pkg}${line}" {
+    while builtin read -r line {
+        if ! builtin test -e "${tar_dir}/${pkg}${line}" && ! builtin test -h "${tar_dir}/${pkg}${line}" {
             write -- $line
             setvar missing += 1
         }
@@ -1588,27 +1588,27 @@ proc pkg_manifest_replace (pkg, old_entry, new_entry) {
     ### Replace a line in a package's manifest.
     tmp_file $pkg "manifest-replace-${old_entry##*/}"
 
-    while read --raw-line {
+    while builtin read --raw-line {
         var out = _reply
         if (out === old_entry) {
             setvar out = new_entry
         }
         write -- $out
-    } < "${sys_db}/${pkg}/manifest" | sort -r > $[tf[-1]]
+    } < "${sys_db}/${pkg}/manifest" | seed sort -r > $[tf[-1]]
 
-    mv -f $[tf[-1]] "${sys_db}/${pkg}/manifest"
+    seed mv -f $[tf[-1]] "${sys_db}/${pkg}/manifest"
 }
 
 proc pkg_etcsums (; p Dict) {
     ### Generate checksums for /etc/ configuration files.
     log $[p.name] "Generating etcsums"
 
-    if ! test -d "${pkg_dir}/$[p.name]/etc" {
+    if ! builtin test -d "${pkg_dir}/$[p.name]/etc" {
         return
     }
 
     var etc_files = []
-    while read -r etc {
+    while builtin read -r etc {
         # Match /etc/ files that don't end in /
         if (etc => startsWith('/etc/') and not etc => endsWith('/')) {
             call etc_files->insert(0, "${pkg_dir}/$[p.name]/${etc}")
@@ -1624,18 +1624,18 @@ proc pkg_tar (; p Dict) {
 
     var tf_path = "${bin_dir}/$[p.name]@$[p.ver]-$[p.rel].tar.${KOMINKA_COMPRESS}"
 
-    cd "${pkg_dir}/$[p.name]"
+    builtin cd "${pkg_dir}/$[p.name]"
 
-    tar cf - . | case (KOMINKA_COMPRESS) {
-        bz2  { bzip2 -z }
-        gz   { gzip -6 }
-        lzma { lzma -z }
+    seed tar cf - . | case (KOMINKA_COMPRESS) {
+        bz2  { seed bzip2 -z }
+        gz   { seed gzip -6 }
+        lzma { seed lzma -z }
         lz   { lzip -z }
-        xz   { xz -z }
+        xz   { seed xz -z }
         zst  { zstd -z }
     } > $tf_path
 
-    cd $OLDPWD
+    builtin cd $OLDPWD
 
     log $[p.name] "Successfully created tarball"
 
@@ -1646,7 +1646,7 @@ proc pkg_source_upload (pkg; p Dict) {
     ### Upload the processed source tarball to the repository server.
     if (KOMINKA_REPO === '') { die "KOMINKA_REPO not set" }
     var _tarball = "${mir_dir}/${pkg}@$[p.ver]-$[p.rel].tar.bz2"
-    if ! test -f $_tarball {
+    if ! builtin test -f $_tarball {
         log $pkg "No source tarball cached — run 'pm src $pkg' first to generate it" WARNING
         return
     }
@@ -1677,8 +1677,8 @@ proc pkg_source_upload (pkg; p Dict) {
         -O $_resp_tmp \
         "${KOMINKA_REPO}/api/upload-src" \
         || { war $pkg "Source upload failed"; return }
-    var _resp_body = $(cat $_resp_tmp)
-    rm -f $_resp_tmp
+    var _resp_body = $(seed cat $_resp_tmp)
+    seed rm -f $_resp_tmp
     var _resp = null
     json read (&_resp) <<< $_resp_body
     if (_resp !== null and not _resp['indexed']) {
@@ -1842,7 +1842,7 @@ proc pkg_build_all (...pkgs) {
         pkg_manifest $pkg $pkg_dir
         pkg_strip (p)
 
-        cd "${pkg_dir}/${pkg}/${pkg_db}/${pkg}"
+        builtin cd "${pkg_dir}/${pkg}/${pkg_db}/${pkg}"
 
         pkg_fix_deps (p)
         pkg_etcsums (p)
@@ -1875,12 +1875,12 @@ proc pkg_build (; p Dict) {
     run_hook pre-build $[p.name] "${mak_dir}/$[p.name]"
 
     # Create log file early to catch permission errors.
-    true > "${log_dir}/$[p.name]-${time_str}-${KOMINKA_PID}"
+    builtin true > "${log_dir}/$[p.name]-${time_str}-${KOMINKA_PID}"
 
     # Source PKGBUILD.ysh inside the pipe subshell so its `var` declarations
     # stay local to the subshell and don't shadow pm globals.
     {
-        source "$[p.dir]/PKGBUILD.ysh"
+        builtin source "$[p.dir]/PKGBUILD.ysh"
 
         setglobal ENV.AR          = "${AR:-ar}"
         setglobal ENV.MAKEFLAGS   = "${MAKEFLAGS:--j${_nproc}}"
@@ -1906,10 +1906,10 @@ proc pkg_build (; p Dict) {
 
         build "${pkg_dir}/$[p.name]" 2>&1
         write -- $? > "${log_dir}/$[p.name]-${time_str}-${KOMINKA_PID}.exit"
-    } | tee "${log_dir}/$[p.name]-${time_str}-${KOMINKA_PID}"
+    } | seed tee "${log_dir}/$[p.name]-${time_str}-${KOMINKA_PID}"
 
-    var _build_exit = $(cat "${log_dir}/$[p.name]-${time_str}-${KOMINKA_PID}.exit" 2>/dev/null || echo 1)
-    rm -f "${log_dir}/$[p.name]-${time_str}-${KOMINKA_PID}.exit"
+    var _build_exit = $(seed cat "${log_dir}/$[p.name]-${time_str}-${KOMINKA_PID}.exit" 2>/dev/null || builtin echo 1)
+    seed rm -f "${log_dir}/$[p.name]-${time_str}-${KOMINKA_PID}.exit"
 
     if (_build_exit !== '0') {
         log $[p.name] "Build failed"
@@ -1918,18 +1918,18 @@ proc pkg_build (; p Dict) {
         try { forkwait { run_hook build-fail $[p.name] "${mak_dir}/$[p.name]" } }
 
         pkg_clean
-        kill 0
+        seed kill 0
     }
 
     if (KOMINKA_KEEPLOG !== '1') {
-        rm -f "${log_dir}/$[p.name]-${time_str}-${KOMINKA_PID}"
+        seed rm -f "${log_dir}/$[p.name]-${time_str}-${KOMINKA_PID}"
     }
 
-    cp -LRf $[p.dir] "${pkg_dir}/$[p.name]/${pkg_db}/"
+    seed cp -LRf $[p.dir] "${pkg_dir}/$[p.name]/${pkg_db}/"
 
     # Generate a depends file from p.deps/p.mkdeps for pkg_installable.
     var _deps_path = "${pkg_dir}/$[p.name]/${pkg_db}/$[p.name]/depends"
-    true > $_deps_path
+    builtin true > $_deps_path
     for d in (p.deps)   { write -- $d        >> $_deps_path }
     for d in (p.mkdeps) { write -- "$d make" >> $_deps_path }
 
@@ -1994,7 +1994,7 @@ proc pkg_verify (; p Dict) {
 
     pkg_checksum_gen >/dev/null (p)
 
-    var new_sums = @(echo $hash)
+    var new_sums = @(builtin echo $hash)
     var idx = 0
 
     if (len(new_sums) === 0) { return }
@@ -2025,7 +2025,7 @@ proc pkg_conflicts (pkg) {
     tmp_file $pkg found-conflicts
 
     # Collect resolved file paths from the tarball manifest.
-    while read -r file {
+    while builtin read -r file {
         case (file) {
             *[!/] {
                 resolve_path $file
@@ -2034,7 +2034,7 @@ proc pkg_conflicts (pkg) {
         }
     } < "${PWD}/${pkg_db}/${pkg}/manifest" > $[tf[-2]]
 
-    cd "${tar_dir}/${pkg}"
+    builtin cd "${tar_dir}/${pkg}"
 
     var manifests = @[glob("${sys_db}/*/manifest")]
 
@@ -2047,25 +2047,25 @@ proc pkg_conflicts (pkg) {
 
     if (len(other_manifests) === 0) { return }
 
-    grep -Fxf $[tf[-2]] -- @other_manifests 2>/dev/null > $[tf[-1]] || true
+    seed grep -Fxf $[tf[-2]] -- @other_manifests 2>/dev/null > $[tf[-1]] || builtin true
 
     # Check if it's safe to auto-enable alternatives.
     var safe = ''
-    if ! grep -q ":/var/db/kominka/installed/" $[tf[-1]] 2>/dev/null {
+    if ! seed grep -q ":/var/db/kominka/installed/" $[tf[-1]] 2>/dev/null {
         setvar safe = '1'
     }
 
-    if test -s $[tf[-1]] {
+    if builtin test -s $[tf[-1]] {
         if (KOMINKA_CHOICE !== '1' and safe === '1') {
-            while IFS=: read -r _ con {
+            while IFS=: builtin read -r _ con {
                 write -- "Found conflict $con"
 
-                mkdir -p "${PWD}/${cho_db}"
+                seed mkdir -p "${PWD}/${cho_db}"
 
                 fnr $con '/' '>'
 
                 try {
-                    mv -f "${PWD}${con}" "${PWD}/${cho_db}/${pkg}${_fnr_val}" 2>/dev/null
+                    seed mv -f "${PWD}${con}" "${PWD}/${cho_db}/${pkg}${_fnr_val}" 2>/dev/null
                 }
                 if failed {
                     log "File must be in ${con%/*} and not a symlink to it"
@@ -2087,7 +2087,7 @@ proc pkg_conflicts (pkg) {
 
 proc pkg_alternatives (...args) {
     if (len(args) > 0 and args[0] === '-') {
-        while read -r pkg path {
+        while builtin read -r pkg path {
             pkg_swap $pkg $path
         }
 
@@ -2104,27 +2104,27 @@ proc pkg_alternatives (...args) {
 
 proc pkg_swap (pkg, path='') {
     ### Swap between package alternatives.
-    if ! test -d "${sys_db}/${pkg}" {
+    if ! builtin test -d "${sys_db}/${pkg}" {
         die "'$pkg' not found"
     }
 
     fnr "${pkg}${path}" '/' '>'
 
-    if ! test -f "${sys_ch}/${_fnr_val}" && ! test -h "${sys_ch}/${_fnr_val}" {
+    if ! builtin test -f "${sys_ch}/${_fnr_val}" && ! builtin test -h "${sys_ch}/${_fnr_val}" {
         die "Alternative '$pkg ${path:-null}' doesn't exist"
     }
 
-    if test -f "${KOMINKA_ROOT}${path}" {
+    if builtin test -f "${KOMINKA_ROOT}${path}" {
         try { pkg_owner "/${path#/}" }
         if failed { die "File '$path' exists on filesystem but isn't owned" }
 
         log "Swapping '$path' from '$_owns' to '$pkg'"
 
-        cp -Pf "${KOMINKA_ROOT}${path}" "${sys_ch}/${_owns}>${_fnr_val#*>}"
+        seed cp -Pf "${KOMINKA_ROOT}${path}" "${sys_ch}/${_owns}>${_fnr_val#*>}"
         pkg_manifest_replace $_owns $path "/${cho_db}/${_owns}>${_fnr_val#*>}"
     }
 
-    mv -f "${sys_ch}/${_fnr_val}" "${KOMINKA_ROOT}/${path}"
+    seed mv -f "${sys_ch}/${_fnr_val}" "${KOMINKA_ROOT}/${path}"
     pkg_manifest_replace $pkg "/${cho_db}/${_fnr_val}" $path
 }
 
@@ -2133,7 +2133,7 @@ proc file_rwx (path) {
     setglobal oct = ''
     var o = 0
 
-    var rwx = $(ls -ld $path)
+    var rwx = $(seed ls -ld $path)
 
     for c in 14 22 31 44 52 61 74 82 91 {
         setvar rwx = ${rwx#?}
@@ -2152,32 +2152,32 @@ proc file_rwx (path) {
 
 proc pkg_install_files (test_flag, src_dir) {
     ### Copy files and create directories, preserving permissions.
-    while read -r file {
+    while builtin read -r file {
         setglobal _file = "${KOMINKA_ROOT}${file}"
 
         case (file) {
             */ {
-                if ! test -d $_file {
+                if ! builtin test -d $_file {
                     file_rwx "${src_dir}/${file#/}"
-                    mkdir -m $oct $_file
+                    seed mkdir -m $oct $_file
                 }
             }
 
             * {
-                if test -d $_file { continue }
-                if test $test_flag $_file { continue }
+                if builtin test -d $_file { continue }
+                if builtin test $test_flag $_file { continue }
 
                 if (file => startsWith('/etc/') and not file => endsWith('/')) {
                     try { pkg_etc $file }
                     if failed { continue }
                 }
 
-                if test -h $_file {
-                    cp -fP "${src_dir}${file}" "${_file%/*}/."
+                if builtin test -h $_file {
+                    seed cp -fP "${src_dir}${file}" "${_file%/*}/."
                 } else {
                     var __tmp = "${_file%/*}/__kominka-tmp-${_install_pkg_name}-${file##*/}-${KOMINKA_PID}"
-                    cp -fP "${src_dir}${file}" $__tmp \
-                        && mv -f $__tmp $_file
+                    seed cp -fP "${src_dir}${file}" $__tmp \
+                        && seed mv -f $__tmp $_file
                 }
             }
         }
@@ -2188,11 +2188,11 @@ proc pkg_remove_files () {
     ### Remove a file list from the system.
     var dir_symlinks = []
 
-    while read -r file {
+    while builtin read -r file {
         if (file => startsWith('/etc/') and len(file) > 5 and not file => endsWith('/')) {
             sh256 "${KOMINKA_ROOT}/${file}" >/dev/null
 
-            read -r sum_pkg <&3 || true
+            builtin read -r sum_pkg <&3 || builtin true
 
             if (hash !== sum_pkg) {
                 write -- "Skipping $file (modified)"
@@ -2202,23 +2202,23 @@ proc pkg_remove_files () {
 
         var _file = "${KOMINKA_ROOT:+"${KOMINKA_ROOT}/"}${file%%/}"
 
-        if test -h $_file {
-            if test -d $_file {
+        if builtin test -h $_file {
+            if builtin test -d $_file {
                 var parts = file => split('/')
                 if (len(parts) >= 3 and file => endsWith('/')) {
                     call dir_symlinks->append(_file)
                 }
             }
-        } elif test -d $_file {
-            try { rmdir $_file 2>/dev/null }
+        } elif builtin test -d $_file {
+            try { seed rmdir $_file 2>/dev/null }
         } else {
-            rm -f $_file
+            seed rm -f $_file
         }
     }
 
     for sym in (dir_symlinks) {
-        if ! test -e $sym {
-            rm -f $sym
+        if ! builtin test -e $sym {
+            seed rm -f $sym
         }
     }
 }
@@ -2233,7 +2233,7 @@ proc pkg_etc (file) {
     if (len(hash_parts) > 1) { setvar sum_sys = hash_parts[1] }
 
     var sum_old = ''
-    read -r sum_old <&3 2>/dev/null || true
+    builtin read -r sum_old <&3 2>/dev/null || builtin true
 
     var sum_old_d = 'null'
     if (sum_old !== '') { setvar sum_old_d = sum_old }
@@ -2248,11 +2248,11 @@ proc pkg_etc (file) {
     # old=sys=new (all same), or old=X sys=Y new=Y (user didn't change, pkg updated),
     # or old=sys and new differs (normal update) → overwrite
     if (sum_old_d === sum_old and sum_sys_d === sum_old and sum_new === sum_old) {
-        true  # all same, overwrite is fine
+        builtin true  # all same, overwrite is fine
     } elif (sum_sys_d === sum_new) {
-        true  # sys matches new, overwrite is fine
+        builtin true  # sys matches new, overwrite is fine
     } elif (sum_old_d === sum_sys_d) {
-        true  # user didn't modify, overwrite
+        builtin true  # user didn't modify, overwrite
     } else {
         # All other cases — save as .new to not clobber user changes
         war $_install_pkg_name "saving $file as ${file}.new"
@@ -2264,10 +2264,10 @@ proc pkg_removable (pkg) {
     ### Check if a package can be removed (has no dependents).
     log $pkg "Checking if package removable"
 
-    cd $sys_db
+    builtin cd $sys_db
     var dependents = ''
-    try { setvar dependents = $(grep -lFx -- $pkg */depends) }
-    cd $OLDPWD
+    try { setvar dependents = $(seed grep -lFx -- $pkg */depends) }
+    builtin cd $OLDPWD
 
     if (dependents !== '') {
         die $pkg "Not removable, has dependents"
@@ -2276,7 +2276,7 @@ proc pkg_removable (pkg) {
 
 proc pkg_remove (pkg) {
     ### Remove a package and all of its files.
-    if ! test -d "${sys_db}/${pkg}" {
+    if ! builtin test -d "${sys_db}/${pkg}" {
         die "'$pkg' not installed"
     }
 
@@ -2302,16 +2302,16 @@ proc pkg_installable (pkg, depends_file) {
     ### Check if all dependencies are satisfied for installation.
     log $pkg "Checking if package installable"
 
-    if ! test -f $depends_file { return }
+    if ! builtin test -f $depends_file { return }
 
     var missing = 0
-    while true {
-        try { read -r dep dep_type }
+    while builtin true {
+        try { builtin read -r dep dep_type }
         if (dep === '' and _status !== 0) { break }
         if (dep === '' or dep => startsWith('#')) { continue }
         if (dep_type === 'make') { continue }
 
-        if ! test -d "${sys_db}/${dep}" {
+        if ! builtin test -d "${sys_db}/${dep}" {
             write -- "$dep $dep_type"
             setvar missing += 1
         }
@@ -2372,7 +2372,7 @@ proc pkg_install_all (...pkgs) {
         var _dest = "${bin_dir}/${_name}"
 
         # Already cached locally — skip.
-        if test -f $_dest { continue }
+        if builtin test -f $_dest { continue }
         var _found = false
         for f in @[glob("${bin_dir}/${pkg}@${_dver}-${_drel}.tar.*")] {
             setvar _found = true
@@ -2413,12 +2413,12 @@ proc pkg_install_all (...pkgs) {
 
                 # Check if process finished.
                 var alive = true
-                try { kill -0 $[pids[pkg]] 2>/dev/null }
+                try { seed kill -0 $[pids[pkg]] 2>/dev/null }
                 if failed { setvar alive = false }
 
                 var sz = 0
-                if test -f $[dests[pkg]] {
-                    try { setvar sz = $(wc -c < $[dests[pkg]]) }
+                if builtin test -f $[dests[pkg]] {
+                    try { setvar sz = $(seed wc -c < $[dests[pkg]]) }
                 }
                 _fmt_bytes $sz
 
@@ -2428,8 +2428,8 @@ proc pkg_install_all (...pkgs) {
                     # Reap the process.
                     try { wait $[pids[pkg]] }
                     if failed {
-                        printf '\n' >&2
-                        rm -f $[dests[pkg]]
+                        builtin printf '\n' >&2
+                        seed rm -f $[dests[pkg]]
                         die $pkg "Download failed"
                     }
                     call parts->append("${pkg} ${_res} ok")
@@ -2446,10 +2446,10 @@ proc pkg_install_all (...pkgs) {
                     setvar line = p
                 }
             }
-            printf '\r\e[K%s' "-> ${line}" >&2
-            if (n_done < n_total) { sleep 0.3 }
+            builtin printf '\r\e[K%s' "-> ${line}" >&2
+            if (n_done < n_total) { seed sleep 0.3 }
         }
-        printf '\n' >&2
+        builtin printf '\n' >&2
     }
 
     # Install sequentially — file installations can race on shared dirs.
@@ -2463,7 +2463,7 @@ proc pkg_install (pkg) {
     var _ipkg = ''
     case (pkg) {
         *.tar.* {
-            if ! test -f $pkg { die "File '$pkg' does not exist" }
+            if ! builtin test -f $pkg { die "File '$pkg' does not exist" }
             setglobal tar_file = pkg
             setvar _ipkg = ${pkg##*/}
             setvar _ipkg = ${_ipkg%@*}
@@ -2475,14 +2475,14 @@ proc pkg_install (pkg) {
                 var p = null
                 pkg_find_and_load $pkg (&p)
                 if (len(p.sources) === 0 and ('sha256' not in p or p.sha256 === '')) {
-                    mkdir -p "${sys_db}/${pkg}"
+                    seed mkdir -p "${sys_db}/${pkg}"
                     write -- "$[p.ver] $[p.rel]" > "${sys_db}/${pkg}/version"
-                    true > "${sys_db}/${pkg}/depends"
+                    builtin true > "${sys_db}/${pkg}/depends"
                     for d in (p.deps)   { write -- $d        >> "${sys_db}/${pkg}/depends" }
                     for d in (p.mkdeps) { write -- "$d make"  >> "${sys_db}/${pkg}/depends" }
-                    printf '#!/bin/sh\n:\n' > "${sys_db}/${pkg}/build"
-                    chmod +x "${sys_db}/${pkg}/build"
-                    true > "${sys_db}/${pkg}/manifest"
+                    builtin printf '#!/bin/sh\n:\n' > "${sys_db}/${pkg}/build"
+                    seed chmod +x "${sys_db}/${pkg}/build"
+                    builtin true > "${sys_db}/${pkg}/manifest"
                     log $pkg "Registered metapackage"
                     return
                 }
@@ -2496,9 +2496,9 @@ proc pkg_install (pkg) {
     trap_off
     mkcd "${tar_dir}/${_ipkg}"
 
-    decompress $tar_file | tar xf -
+    decompress $tar_file | seed tar xf -
 
-    if ! test -f "${PWD}/${pkg_db}/${_ipkg}/manifest" {
+    if ! builtin test -f "${PWD}/${pkg_db}/${_ipkg}/manifest" {
         die "Not a valid package"
     }
 
@@ -2519,11 +2519,11 @@ proc pkg_install (pkg) {
 
     var tar_man = "${PWD}/${pkg_db}/${_ipkg}/manifest"
 
-    grep -vFxf $tar_man $[tf[-3]] > $[tf[-1]] 2>/dev/null || true
+    seed grep -vFxf $tar_man $[tf[-3]] > $[tf[-1]] 2>/dev/null || builtin true
 
     # Reverse the manifest for shallow-first installation.
     tmp_file $_ipkg manifest-reverse
-    sort $tar_man > $[tf[-1]]
+    seed sort $tar_man > $[tf[-1]]
 
     try {
         pkg_install_files -z $PWD < $[tf[-1]] 3< $[tf[-4]]
@@ -2562,7 +2562,7 @@ proc pkg_update () {
             } else {
                 setvar repo = $(git -C $repo rev-parse --show-toplevel)
             }
-        } elif ! test -d $repo {
+        } elif ! builtin test -d $repo {
             continue
         }
 
@@ -2573,7 +2573,7 @@ proc pkg_update () {
 }
 
 proc pkg_update_repo (repo, repo_type) {
-    cd $repo || die "Repository '$repo' inaccessible"
+    builtin cd $repo || die "Repository '$repo' inaccessible"
 
     if (PWD in repos_seen) { return }
     setglobal repos_seen[PWD] = true
@@ -2686,8 +2686,8 @@ proc pkg_upgrade () {
 proc pkg_clean () {
     ### Clean up build files. Top-level process removes everything.
     case ("${KOMINKA_DEBUG:-0}-${_KOMINKA_LVL:-1}") {
-        0-1 { rm -rf $proc_dir }
-        0-* { rm -rf $tar_dir }
+        0-1 { seed rm -rf $proc_dir }
+        0-* { seed rm -rf $tar_dir }
     }
 }
 
@@ -2715,24 +2715,24 @@ proc pkg_help_ext () {
 
         var cmt = ''
         {
-            read --raw-line
-            read --raw-line (&cmt)
+            builtin read --raw-line
+            builtin read --raw-line (&cmt)
         } < $path
         setvar cmt = ${cmt#*\#}
 
-        printf "%b->%b %-${max_len}s %s\\n" \
+        builtin printf "%b->%b %-${max_len}s %s\\n" \
             $c1 $c3 $p "$cmt" >&2
     }
 }
 
 proc trap_on () {
-    trap --add INT { run_hook SIGINT; exit 1 }
-    trap --add EXIT { pkg_clean; run_hook SIGEXIT }
+    builtin trap --add INT { run_hook SIGINT; exit 1 }
+    builtin trap --add EXIT { pkg_clean; run_hook SIGEXIT }
 }
 
 proc trap_off () {
-    trap --remove INT
-    trap --remove EXIT
+    builtin trap --remove INT
+    builtin trap --remove EXIT
 }
 
 proc args (action='', ...pkgs) {
@@ -2742,7 +2742,7 @@ proc args (action='', ...pkgs) {
     case (action) {
         a | alternatives {
             for arg in (pkgs) {
-                try { echo $arg | grep -q '[][!* /]' }
+                try { builtin echo $arg | seed grep -q '[][!* /]' }
                 if ! failed {
                     die "Invalid argument ($arg)"
                 }
@@ -2754,10 +2754,10 @@ proc args (action='', ...pkgs) {
                 var bad = ''
                 case (action) {
                     i | install | p | upload {
-                        try { setvar bad = $(echo $arg | grep '[][!* ]') } 2>/dev/null
+                        try { setvar bad = $(builtin echo $arg | seed grep '[][!* ]') } 2>/dev/null
                     }
                     * {
-                        try { setvar bad = $(echo $arg | grep '[][!* /]') } 2>/dev/null
+                        try { setvar bad = $(builtin echo $arg | seed grep '[][!* /]') } 2>/dev/null
                     }
                 }
                 if (bad !== '') {
@@ -2767,7 +2767,7 @@ proc args (action='', ...pkgs) {
 
             # When no arguments given, use current directory as the package.
             case (action) {
-                l | list | t | tree { true }
+                l | list | t | tree { builtin true }
                 * {
                     if (len(pkgs) === 0) {
                         var _new_path = "${PWD%/*}:${KOMINKA_PATH}"
@@ -2796,7 +2796,7 @@ proc args (action='', ...pkgs) {
             # list here would mark implicit make-deps as "explicit", bypassing
             # the pre-built binary cache check.
             case (action) {
-                b | build | c | checksum | src | p | upload { true }
+                b | build | c | checksum | src | p | upload { builtin true }
                 *                                            { setvar pkgs = order }
             }
         }
@@ -2903,7 +2903,7 @@ proc create_tmp_dirs () {
     # Normalize KOMINKA_ROOT — strip trailing slashes.
     setglobal KOMINKA_ROOT = ${KOMINKA_ROOT%"${KOMINKA_ROOT##*[!/]}"}
 
-    mkdir -p "${KOMINKA_ROOT}/" 2>/dev/null || true
+    seed mkdir -p "${KOMINKA_ROOT}/" 2>/dev/null || builtin true
 
     setglobal pkg_db = 'var/db/kominka/installed'
     setglobal cho_db = 'var/db/kominka/choices'
@@ -2928,7 +2928,7 @@ proc create_tmp_dirs () {
     setglobal tar_dir = "${proc_dir}/extract"
     setglobal tmp_dir = "${proc_dir}/tmp"
 
-    mkdir -p $src_dir $log_dir $bin_dir $mir_dir \
+    seed mkdir -p $src_dir $log_dir $bin_dir $mir_dir \
              $mak_dir $pkg_dir $tar_dir $tmp_dir
 }
 
@@ -2939,7 +2939,7 @@ proc _discover_tool (env_override, ...fallbacks) {
         return
     }
     for cmd in (fallbacks) {
-        try { command -v $cmd 2>/dev/null }
+        try { builtin command -v $cmd 2>/dev/null }
         if ! failed { return }
     }
 }
@@ -2979,12 +2979,12 @@ proc main (...argv) {
     setglobal GOFLAGS        = ENV => get("GOFLAGS", "")
     setglobal KOMINKA_COMPRESS  = ENV => get("KOMINKA_COMPRESS", "")
 
-    setglobal PWD = $(pwd)
+    setglobal PWD = $(builtin pwd)
     setglobal ppwd = PWD
 
     # Color setup — disabled via KOMINKA_COLOR=0 or non-tty stderr.
     if (KOMINKA_COLOR !== '0') {
-      if test -t 2 {
+      if builtin test -t 2 {
         setglobal c1 = u'\u{1b}[1;33m'
         setglobal c2 = u'\u{1b}[1;34m'
         setglobal c3 = u'\u{1b}[m'
@@ -2998,7 +2998,7 @@ proc main (...argv) {
     if (KOMINKA_ARCH !== '') {
         setglobal sys_arch = KOMINKA_ARCH
     } else {
-        var _uname = $(uname -m)
+        var _uname = $(seed uname -m)
         case (_uname) {
             aarch64 | arm64 { setglobal sys_arch = 'aarch64-linux-gnu' }
             x86_64          { setglobal sys_arch = 'x86_64-linux-gnu' }
@@ -3011,7 +3011,7 @@ proc main (...argv) {
     }
 
     # CPU count for parallel make.
-    try { setglobal _nproc = $(nproc 2>/dev/null || grep -c '^processor' /proc/cpuinfo 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) }
+    try { setglobal _nproc = $(seed nproc 2>/dev/null || seed grep -c '^processor' /proc/cpuinfo 2>/dev/null || seed sysctl -n hw.ncpu 2>/dev/null || builtin echo 4) }
 
 
     # Discover tools via fallback chains.
@@ -3041,7 +3041,7 @@ proc main (...argv) {
         elf:        cmd_elf,
     }
 
-    setglobal time_str = $(date +%Y-%m-%d-%H:%M)
+    setglobal time_str = $(seed date +%Y-%m-%d-%H:%M)
 
     setglobal build_install = '1'
     setglobal prefer_cache = ''

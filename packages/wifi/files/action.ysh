@@ -11,14 +11,14 @@ var pid_file = "/run/udhcpc-${iface}.pid"
 case ($1) {
     CONNECTED {
         # Kill any stale udhcpc for this interface.
-        if test -f $pid_file { kill $(cat $pid_file) 2>/dev/null || true }
+        if builtin test -f $pid_file { seed kill $(seed cat $pid_file) 2>/dev/null || builtin true }
         # -f: run forever (retry on lease loss).
-        udhcpc -b -i $iface -p $pid_file -s /etc/udhcpc.sh \
-               -x "hostname:$(hostname)" 2>/dev/null || true
+        seed udhcpc -b -i $iface -p $pid_file -s /etc/udhcpc.sh \
+               -x "hostname:$(seed hostname)" 2>/dev/null || builtin true
     }
     DISCONNECTED {
-        if test -f $pid_file { kill $(cat $pid_file) 2>/dev/null || true }
-        rm -f $pid_file
-        ip addr flush dev $iface 2>/dev/null || true
+        if builtin test -f $pid_file { seed kill $(seed cat $pid_file) 2>/dev/null || builtin true }
+        seed rm -f $pid_file
+        seed ip addr flush dev $iface 2>/dev/null || builtin true
     }
 }

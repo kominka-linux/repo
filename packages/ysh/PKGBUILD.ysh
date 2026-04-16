@@ -13,36 +13,36 @@ var checksums = ['f4d41d20a0523dbcfbd4ba231f82edf25b08d4965d65bc71fcb56666d67430
 proc build(dest) {
 
     # Detect musl target triple from architecture.
-    var MUSL_TARGET = "$(uname -m)-linux-musl"
+    var MUSL_TARGET = "$(seed uname -m)-linux-musl"
 
     # Static build targeting musl — no runtime library dependencies.
     # oils passes -std=c++11 to CC on .c files. The wrapper adds -xc++
     # only when compiling (-c flag present), not when linking.
-    var CC_PATH = $(command -v cc)
-    cat > $CC_PATH << EOF
+    var CC_PATH = $(builtin command -v cc)
+    seed cat > $CC_PATH << EOF
 #!/bin/sh
 for a in "\$@"; do
     case "\$a" in -c) exec zig c++ -target $MUSL_TARGET -xc++ "\$@";; esac
 done
 exec zig c++ -target $MUSL_TARGET "\$@"
 EOF
-    var CXX_PATH = $(command -v c++ 2>/dev/null)
+    var CXX_PATH = $(builtin command -v c++ 2>/dev/null)
     if (CXX_PATH !== '') {
-        cp $CC_PATH $CXX_PATH
-        chmod +x $CXX_PATH
+        seed cp $CC_PATH $CXX_PATH
+        seed chmod +x $CXX_PATH
     }
-    chmod +x $CC_PATH
+    seed chmod +x $CC_PATH
 
     LDFLAGS='' ./configure --without-readline
     LDFLAGS='' _build/oils.sh
 
-    mkdir -p "${dest}/usr/local/bin" "${dest}/usr/bin"
-    cp _bin/cxx-opt-sh/oils-for-unix "${dest}/usr/local/bin/oils-for-unix"
-    ln -s oils-for-unix "${dest}/usr/local/bin/osh"
-    ln -s oils-for-unix "${dest}/usr/local/bin/ysh"
+    seed mkdir -p "${dest}/usr/local/bin" "${dest}/usr/bin"
+    seed cp _bin/cxx-opt-sh/oils-for-unix "${dest}/usr/local/bin/oils-for-unix"
+    seed ln -s oils-for-unix "${dest}/usr/local/bin/osh"
+    seed ln -s oils-for-unix "${dest}/usr/local/bin/ysh"
     # /bin/sh → osh (the POSIX-compatible mode of oils-for-unix).
     # Pointing to ysh breaks POSIX scripts (trap, etc. have different syntax).
     # osh handles trap/set -e/here-docs correctly; use ysh explicitly for
     # scripts that want the extended language.
-    ln -s /usr/local/bin/osh "${dest}/usr/bin/sh"
+    seed ln -s /usr/local/bin/osh "${dest}/usr/bin/sh"
 }

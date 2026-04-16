@@ -1,0 +1,260 @@
+#!/usr/bin/env python3
+# Lint ysh files for bare seed-applet or builtin calls.
+#
+# Uses `ysh -n --ast-format text` for AST-based command detection — no regex
+# parsing of ysh source text.
+#
+# Rules:
+#   - seed applets (e.g. grep, ls, cp) must be called as `seed CMD`
+#   - ysh builtins (e.g. echo, read, test) must be called as `builtin CMD`
+#   - builtins take precedence over applets when both match (e.g. test, echo)
+#   - `wget` is exempt from the seed-prefix rule (stays bare)
+#   - `[` and `[[` are banned; use `builtin test` instead
+#
+# Exit 0 if clean, 1 if violations found.
+#
+# Usage: lint-ysh-calls [file.ysh ...]
+#   With no args, globs **/*.ysh from cwd.
+
+import re
+import sys
+import subprocess
+from collections import defaultdict
+from glob import glob
+
+# Seed applets inlined from ~/d/seed/src/applet_list.rs
+APPLETS = frozenset([
+    '[', '[[',
+    'acpid', 'addgroup', 'adduser', 'awk', 'base32', 'base64', 'basename',
+    'blkid', 'bunzip2', 'bzcat', 'bzip2', 'cat', 'chattr', 'chgrp', 'chmod',
+    'chown', 'chroot', 'cmp', 'cp', 'cpio', 'cut', 'date', 'dd', 'delgroup',
+    'deluser', 'depmod', 'df', 'diff', 'dirname', 'dmesg', 'du', 'echo',
+    'egrep', 'env', 'expr', 'false', 'fdisk', 'fgrep', 'find', 'flock',
+    'fold', 'free', 'fsck', 'fsync', 'getopt', 'getty', 'grep', 'gunzip',
+    'gzip', 'halt', 'head', 'hexdump', 'hostname', 'hwclock', 'id', 'ifconfig',
+    'init', 'insmod', 'install', 'ip', 'kill', 'killall', 'killall5', 'less',
+    'link', 'ln', 'login', 'losetup', 'ls', 'lsattr', 'lsmod', 'lsof',
+    'lzcat', 'lzma', 'man', 'md5sum', 'mdev', 'mkdir', 'mkfifo', 'mknod',
+    'mkswap', 'mktemp', 'modinfo', 'modprobe', 'mount', 'mountpoint', 'mv',
+    'netstat', 'nohup', 'nologin', 'nproc', 'nslookup', 'ntpd', 'od',
+    'passwd', 'paste', 'patch', 'pgrep', 'pidof', 'ping', 'ping6',
+    'pivot_root', 'pkill', 'poweroff', 'printenv', 'printf', 'ps', 'pstree',
+    'pwd', 'readlink', 'realpath', 'reboot', 'rev', 'rfkill', 'rm', 'rmdir',
+    'rmmod', 'run-parts', 'sed', 'seq', 'setsid', 'sha1sum', 'sha256sum',
+    'sha512sum', 'shuf', 'sleep', 'sort', 'split', 'stat', 'strings', 'stty',
+    'su', 'sulogin', 'swapoff', 'swapon', 'switch_root', 'sync', 'sysctl',
+    'tail', 'tar', 'tee', 'test', 'time', 'timeout', 'touch', 'tr', 'tree',
+    'true', 'truncate', 'tty', 'udhcpc', 'udhcpd', 'umount', 'uname', 'uniq',
+    'unlink', 'unlzma', 'unxz', 'unzip', 'uptime', 'watch', 'wc', 'wget',
+    'which', 'whoami', 'xargs', 'xz', 'xzcat', 'yes', 'zcat',
+])
+
+# ysh builtins — must be prefixed with `builtin`; take precedence over applets
+BUILTINS = frozenset([
+    'cd', 'command', 'echo', 'eval', 'exec', 'false', 'popd', 'printf',
+    'pushd', 'pwd', 'read', 'readarray', 'source', 'test', 'trap', 'true',
+])
+
+# `[` and `[[` are banned entirely; use `builtin test`
+BANNED = frozenset(['[', '[['])
+
+# Exempt from the seed-prefix rule
+SEED_EXEMPT = frozenset(['wget'])
+
+# Token IDs for bare static words (the only kind that can be a command name)
+_STATIC_IDS = frozenset(['Lit_Chars', 'Lit_LBracket'])
+
+_RE_COMPACT_SRCLINE = re.compile(
+    r'line:\(SourceLine line_num:(\d+) content:"((?:[^"\\]|\\.)*)"'
+)
+_RE_LINE_NUM      = re.compile(r'^line_num:(\d+)$')
+_RE_CONTENT       = re.compile(r'^content:"((?:[^"\\]|\\.)*)"$')
+_RE_BLAME_COMPACT = re.compile(
+    r'^blame_tok:\(Token id:(\S+) length:(\d+) col:(\d+) line:(.*)\)$'
+)
+
+
+def _unescape(s):
+    """Decode backslash sequences in an AST content:"..." field."""
+    return (s.replace('\\"', '"')
+             .replace('\\\\', '\\')
+             .replace('\\n', '\n')
+             .replace('\\t', '\t'))
+
+
+def _iter_blame_toks(ast_text):
+    """Yield (line_num, col, length, content) for the blame_tok of every
+    command.Simple node in the ysh AST text output.
+
+    blame_tok is the first field of command.Simple and pins the source
+    position (col, length) of the command-name token.  Two forms exist:
+
+      Multi-line:  blame_tok:(Token\\n  id:X\\n  length:N\\n  col:M\\n  line:...)
+      Compact:     blame_tok:(Token id:X length:N col:M line:...)
+
+    The compact form occurs when the SourceLine was already serialized
+    earlier and is referenced by pointer.  We maintain last_ln/last_src
+    throughout so pointer references can be resolved.
+    """
+    last_ln, last_src = 0, ''
+    want_blame = False
+    in_blame = in_srcline = False
+    is_static = False
+    bl_col = bl_len = 0
+
+    for raw in ast_text.split('\n'):
+        s = raw.strip()
+
+        # Keep last_ln/last_src current for pointer-reference resolution.
+        if not in_blame:
+            if m := _RE_COMPACT_SRCLINE.search(s):
+                last_ln, last_src = int(m.group(1)), _unescape(m.group(2))
+            else:
+                if m := _RE_LINE_NUM.match(s):
+                    last_ln = int(m.group(1))
+                if m := _RE_CONTENT.match(s):
+                    last_src = _unescape(m.group(1))
+
+        if s.endswith('(command.Simple'):
+            want_blame = True
+            in_blame = in_srcline = False
+            continue
+
+        if want_blame:
+            want_blame = False
+            if s == 'blame_tok:(Token':
+                in_blame, is_static, bl_col, bl_len, in_srcline = True, False, 0, 0, False
+            elif m := _RE_BLAME_COMPACT.match(s):
+                tok_id, length, col, lp = m.group(1), int(m.group(2)), int(m.group(3)), m.group(4)
+                if tok_id in _STATIC_IDS:
+                    if ms := _RE_COMPACT_SRCLINE.search(lp):
+                        last_ln, last_src = int(ms.group(1)), _unescape(ms.group(2))
+                        yield last_ln, col, length, last_src
+                    elif lp.startswith('...') and last_src:
+                        yield last_ln, col, length, last_src
+            continue
+
+        if in_blame and not in_srcline:
+            if s.startswith('id:'):
+                is_static = s[3:] in _STATIC_IDS
+            elif s.startswith('length:'):
+                bl_len = int(s[7:])
+            elif s.startswith('col:'):
+                bl_col = int(s[4:])
+            elif s == 'line:(SourceLine':
+                in_srcline = True
+            elif s.startswith('line:(SourceLine '):
+                if ms := _RE_COMPACT_SRCLINE.search(s):
+                    last_ln, last_src = int(ms.group(1)), _unescape(ms.group(2))
+                if is_static:
+                    yield last_ln, bl_col, bl_len, last_src
+                in_blame = False
+            elif s.startswith('line:...'):
+                if is_static and last_src:
+                    yield last_ln, bl_col, bl_len, last_src
+                in_blame = False
+            continue
+
+        if in_srcline:
+            if m := _RE_LINE_NUM.match(s):
+                last_ln = int(m.group(1))
+            if m := _RE_CONTENT.match(s):
+                last_src = _unescape(m.group(1))
+                if in_blame and is_static:
+                    yield last_ln, bl_col, bl_len, last_src
+                in_blame = in_srcline = False
+
+
+def _extract_commands(ast_text):
+    """Yield (line_num, col, cmd_name) for every command.Simple."""
+    for ln, col, length, src in _iter_blame_toks(ast_text):
+        yield ln, col, src[col:col + length]
+
+
+def _prefix_for(cmd):
+    """Return the required prefix string for cmd, or None if no violation."""
+    if cmd in BANNED:
+        return 'banned'
+    if cmd in BUILTINS:
+        return 'builtin'
+    if cmd in APPLETS and cmd not in SEED_EXEMPT:
+        return 'seed'
+    return None
+
+
+def check_file(path):
+    """Return sorted list of (line_num, col, cmd, prefix) violations."""
+    r = subprocess.run(
+        ['ysh', '-n', '--ast-format', 'text', path],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        print(f'{path}: ysh parse error:', file=sys.stderr)
+        print(r.stderr.rstrip(), file=sys.stderr)
+        return []
+    return [
+        (ln, col, cmd, prefix)
+        for ln, col, cmd in _extract_commands(r.stdout)
+        if (prefix := _prefix_for(cmd))
+    ]
+
+
+def fix_file(path, violations):
+    """Apply prefix insertions in-place, working back-to-front to preserve offsets."""
+    with open(path) as f:
+        src_lines = f.readlines()
+
+    by_line = defaultdict(list)
+    for line_num, col, cmd, prefix in violations:
+        by_line[line_num].append((col, cmd, prefix))
+
+    changed = False
+    for line_num, fixes in by_line.items():
+        line = src_lines[line_num - 1]
+        for col, cmd, prefix in sorted(fixes, key=lambda x: -x[0]):
+            if prefix == 'banned':
+                print(f'{path}:{line_num}: cannot auto-fix banned '
+                      f"'{cmd}' — replace with 'builtin test'", file=sys.stderr)
+                continue
+            if line[col:col + len(cmd)] != cmd:
+                print(f'{path}:{line_num}:{col}: fix mismatch — '
+                      f'expected {repr(cmd)}, got {repr(line[col:col+len(cmd)])}',
+                      file=sys.stderr)
+                continue
+            line = line[:col] + prefix + ' ' + line[col:]
+            changed = True
+        src_lines[line_num - 1] = line
+
+    if changed:
+        with open(path, 'w') as f:
+            f.writelines(src_lines)
+
+
+def main():
+    fix_mode = '--fix' in sys.argv
+    paths = [a for a in sys.argv[1:] if a != '--fix'] or sorted(glob('**/*.ysh', recursive=True))
+    if not paths:
+        print('lint-ysh-calls: no .ysh files found', file=sys.stderr)
+        sys.exit(0)
+
+    total = 0
+    for path in paths:
+        violations = check_file(path)
+        if fix_mode:
+            fix_file(path, violations)
+        else:
+            for line_num, col, cmd, prefix in sorted(violations):
+                if prefix == 'banned':
+                    msg = f"banned '{cmd}' — use 'builtin test'"
+                elif prefix == 'builtin':
+                    msg = f"bare '{cmd}' — use 'builtin {cmd}'"
+                else:
+                    msg = f"bare '{cmd}' — use 'seed {cmd}'"
+                print(f'{path}:{line_num}: {msg}')
+            total += len(violations)
+
+    sys.exit(1 if total else 0)
+
+
+if __name__ == '__main__':
+    main()

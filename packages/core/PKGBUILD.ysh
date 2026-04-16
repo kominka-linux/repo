@@ -11,5 +11,5 @@ var checksums = []
 
 proc build(dest) {
     # Metapackage — no build step. Dependencies are pulled in via 'depends'.
-    true
+    builtin true
 }

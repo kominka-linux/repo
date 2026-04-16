@@ -25,13 +25,13 @@ var checksums = [
 ]
 
 proc build(dest) {
-    mkdir -p \
+    seed mkdir -p \
         "${dest}/usr/lib/init" \
         "${dest}/etc"
 
-    install -m755 rc.lib      "${dest}/usr/lib/init/rc.lib"
-    install -m755 rc.boot     "${dest}/usr/lib/init/rc.boot"
-    install -m755 rc.shutdown "${dest}/usr/lib/init/rc.shutdown"
-    install -m644 inittab     "${dest}/etc/inittab"
-    install -m644 rc.conf     "${dest}/etc/rc.conf"
+    seed install -m755 rc.lib      "${dest}/usr/lib/init/rc.lib"
+    seed install -m755 rc.boot     "${dest}/usr/lib/init/rc.boot"
+    seed install -m755 rc.shutdown "${dest}/usr/lib/init/rc.shutdown"
+    seed install -m644 inittab     "${dest}/etc/inittab"
+    seed install -m644 rc.conf     "${dest}/etc/rc.conf"
 }

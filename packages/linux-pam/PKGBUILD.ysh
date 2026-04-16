@@ -20,7 +20,7 @@ proc build(dest) {
     # Patch the version script before configure: lld requires all symbols listed
     # in version scripts to be defined. The original lists all 6 pam_sm_* symbols
     # but PAM modules only implement the subset they need. Replace with a wildcard.
-    cp modules.map modules/modules.map
+    seed cp modules.map modules/modules.map
 
     # lld is strict about undefined symbols in shared libs; needed for PAM
     # modules that only implement a subset of the pam_sm_* interface.
@@ -51,6 +51,6 @@ proc build(dest) {
     # -k0: keep going even if some targets (test binaries) fail.
     # The pam_warn tst-* binary fails due to an empty lib arg from muon,
     # but the actual PAM libraries and modules build fine.
-    samu -k0 -C build || true
+    samu -k0 -C build || builtin true
     DESTDIR=$dest muon -C build install
 }

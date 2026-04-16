@@ -12,7 +12,7 @@ var checksums = ['634f23c8c4d1d440043be0fe928ddf904626289e97bfe7c5826e93aaf2cc6f
 proc build(dest) {
     var CC = ENV => get("CC", "cc")
 
-    cd runit-2.3.1
+    builtin cd runit-2.3.1
 
     # Override compiler and linker.
     # -D_GNU_SOURCE exposes setgroups() in the libc headers.
@@ -21,14 +21,14 @@ proc build(dest) {
     write -- "${CC} -s"        > src/conf-ld
 
     # runit defaults to -static; remove it for dynamic linking.
-    sed -i 's/ -static//g' src/Makefile
+    seed sed -i 's/ -static//g' src/Makefile
 
     # Build using runit's own build system.
     package/compile
 
     # Install supervision binaries.
-    mkdir -p "${dest}/usr/bin"
+    seed mkdir -p "${dest}/usr/bin"
     for bin in (:| chpst runsv runsvdir sv svlogd |) {
-        cp -f "command/${bin}" "${dest}/usr/bin/"
+        seed cp -f "command/${bin}" "${dest}/usr/bin/"
     }
 }

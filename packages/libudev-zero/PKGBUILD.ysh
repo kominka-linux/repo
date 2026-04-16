@@ -15,6 +15,6 @@ proc build(dest) {
     make PREFIX=/usr
     make PREFIX=/usr DESTDIR="${dest}" install
 
-    mkdir -p "${dest}/usr/bin"
+    seed mkdir -p "${dest}/usr/bin"
     $CC -o "${dest}/usr/bin/libudev-zero-helper" contrib/helper.c
 }

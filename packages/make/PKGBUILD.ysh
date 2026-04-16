@@ -20,13 +20,13 @@ proc build(dest) {
 
     # Fix gnulib compat: replace all K&R-style zero-arg prototypes that
     # conflict with strict POSIX declarations in modern libc headers.
-    find . \( -name '*.c' -o -name '*.h' \) -exec sed -i \
+    seed find . \( -name '*.c' -o -name '*.h' \) -exec sed -i \
         -e 's/extern char \*getenv ();/\/* getenv *\//' \
         -e 's/^extern int getopt ();/\/* getopt *\//' \
         {} +
 
     # Bootstrap: use build.sh if make isn't installed yet.
-    if command -v make >/dev/null 2>&1 {
+    if builtin command -v make >/dev/null 2>&1 {
         make
         make DESTDIR=$dest install
     } else {

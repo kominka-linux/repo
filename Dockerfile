@@ -41,7 +41,9 @@ RUN chmod +x /usr/bin/pm && \
     /usr/bin/wget -q -O - "$R2_PUBLIC_URL/$KARCH/ysh/0.37.0-4.tar.gz" | tar xzf - -C /kominka-root/ && \
     cp /usr/bin/wget /kominka-root/usr/bin/wget && \
     cp /usr/bin/pm /kominka-root/usr/bin/pm && \
-    cp /etc/ssl/certs/ca-certificates.crt /kominka-root/etc/ssl/certs/ca-certificates.crt
+    cp /etc/ssl/certs/ca-certificates.crt /kominka-root/etc/ssl/certs/ca-certificates.crt && \
+    printf '#!/bin/sh\ncmd="$1"; shift; exec "$cmd" "$@"\n' > /usr/bin/seed && \
+    chmod +x /usr/bin/seed
 
 SHELL ["/usr/local/bin/ysh", "-c"]
 
@@ -51,12 +53,9 @@ ENV KOMINKA_REPO=${REPO_URL} \
     HOME=/root
 
 # Install seed into kominka-root via pm (statically linked multicall binary).
-# seed includes wget; copy our TLS-capable wget over the applet so scratch
-# has working HTTPS for pm i.
 RUN KOMINKA_ROOT=/kominka-root \
     KOMINKA_COLOR=0 KOMINKA_PROMPT=0 KOMINKA_STRIP=0 KOMINKA_FORCE=1 \
-    pm i seed && \
-    cp /usr/bin/wget /kominka-root/usr/bin/wget
+    pm i seed
 
 FROM scratch
 

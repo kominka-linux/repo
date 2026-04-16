@@ -25,14 +25,14 @@ var checksums = [
 
 proc build(dest) {
     # uname -m returns aarch64/x86_64; kernel ARCH uses arm64/x86_64.
-    var MACH = $(uname -m)
+    var MACH = $(seed uname -m)
     var ARCH = MACH
     if (MACH === 'aarch64') { setvar ARCH = 'arm64' }
 
     # zig objcopy doesn't implement -S (strip-all) used by the arm64 vdso strip
     # step. Use Alpine's binutils objcopy saved in Dockerfile.bootstrap.
     var OBJCOPY = '/usr/local/bin/gnu-objcopy'
-    if ! test -f $OBJCOPY { setvar OBJCOPY = $(command -v objcopy) }
+    if ! builtin test -f $OBJCOPY { setvar OBJCOPY = $(builtin command -v objcopy) }
 
     # x86 realmode trampoline (arch/x86/realmode/rm/) uses a linker script
     # that lld can't handle (pa_* physical-address symbols). GNU ld required.
@@ -40,7 +40,7 @@ proc build(dest) {
     var ld_args = []
     if (MACH === 'x86_64') {
         var gnu_ld = '/usr/local/bin/gnu-ld'
-        if test -f $gnu_ld { setvar ld_args = ["LD=$gnu_ld"] }
+        if builtin test -f $gnu_ld { setvar ld_args = ["LD=$gnu_ld"] }
     }
 
     # Merge tinyconfig with our arch-specific fragment.
@@ -53,37 +53,37 @@ proc build(dest) {
 
     make ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args olddefconfig
 
-    var _nproc = $(nproc 2>/dev/null || echo 4)
+    var _nproc = $(seed nproc 2>/dev/null || builtin echo 4)
 
     # Build the kernel image.
     case (MACH) {
         x86_64 {
             make -j$_nproc ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args bzImage
-            mkdir -p "${dest}/usr/share/kominka"
-            cp arch/x86/boot/bzImage "${dest}/usr/share/kominka/Image"
+            seed mkdir -p "${dest}/usr/share/kominka"
+            seed cp arch/x86/boot/bzImage "${dest}/usr/share/kominka/Image"
         }
         * {
             make -j$_nproc ARCH=$ARCH OBJCOPY=$OBJCOPY Image
-            mkdir -p "${dest}/usr/share/kominka"
-            cp arch/arm64/boot/Image "${dest}/usr/share/kominka/Image"
+            seed mkdir -p "${dest}/usr/share/kominka"
+            seed cp arch/arm64/boot/Image "${dest}/usr/share/kominka/Image"
         }
     }
 
     # Install kernel headers.
     make ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args headers
 
-    find usr/include -name '*.h' -type f | while read -r file {
-        mkdir -p "${dest}/${file%/*}"
-        cp -f $file "${dest}/${file}"
+    seed find usr/include -name '*.h' -type f | while builtin read -r file {
+        seed mkdir -p "${dest}/${file%/*}"
+        seed cp -f $file "${dest}/${file}"
     }
 
     # Save the final .config for reference.
-    mkdir -p "${dest}/usr/share/kominka"
-    cp .config "${dest}/usr/share/kominka/kernel.config"
+    seed mkdir -p "${dest}/usr/share/kominka"
+    seed cp .config "${dest}/usr/share/kominka/kernel.config"
 
     # Install machine profiles so the installer can build machine-specific kernels.
-    mkdir -p "${dest}/usr/share/kominka/machines"
-    cp -f dell-xps13-9343.config  "${dest}/usr/share/kominka/machines/"
-    cp -f generic-x86_64.config   "${dest}/usr/share/kominka/machines/"
-    cp -f index                    "${dest}/usr/share/kominka/machines/"
+    seed mkdir -p "${dest}/usr/share/kominka/machines"
+    seed cp -f dell-xps13-9343.config  "${dest}/usr/share/kominka/machines/"
+    seed cp -f generic-x86_64.config   "${dest}/usr/share/kominka/machines/"
+    seed cp -f index                    "${dest}/usr/share/kominka/machines/"
 }

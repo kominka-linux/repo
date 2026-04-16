@@ -11,21 +11,21 @@ var dns_   = ENV => get("dns", "")
 
 case (event) {
     bound|renew {
-        ip addr flush dev $iface
-        ip addr add "${ip_}/${mask}" dev $iface
-        if (router !== '') { ip route add default via $router dev $iface }
+        seed ip addr flush dev $iface
+        seed ip addr add "${ip_}/${mask}" dev $iface
+        if (router !== '') { seed ip route add default via $router dev $iface }
         if (dns_ !== '') {
-            true > /etc/resolv.conf
+            builtin true > /etc/resolv.conf
             for ns in @[split(dns_)] {
-                echo "nameserver $ns" >> /etc/resolv.conf
+                builtin echo "nameserver $ns" >> /etc/resolv.conf
             }
         }
         # Signal that the network is up for dependent services (ntpd etc.).
-        mkdir -p /run
-        true > /run/network-up
+        seed mkdir -p /run
+        builtin true > /run/network-up
     }
     deconfig {
-        ip addr flush dev $iface
-        rm -f /run/network-up
+        seed ip addr flush dev $iface
+        seed rm -f /run/network-up
     }
 }

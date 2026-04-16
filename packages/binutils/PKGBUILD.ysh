@@ -21,8 +21,8 @@ proc build(dest) {
         --disable-gold \
         --disable-gprof
 
-    make -j$(nproc)
+    make -j$(seed nproc)
 
-    install -Dm755 binutils/strip-new "${dest}/usr/bin/strip"
-    install -Dm755 binutils/nm-new    "${dest}/usr/bin/nm"
+    seed install -Dm755 binutils/strip-new "${dest}/usr/bin/strip"
+    seed install -Dm755 binutils/nm-new    "${dest}/usr/bin/nm"
 }

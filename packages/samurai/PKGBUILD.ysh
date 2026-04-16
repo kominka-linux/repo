@@ -17,5 +17,5 @@ proc build(dest) {
     make PREFIX=/usr DESTDIR=$dest install
 
     # Provide a 'ninja' symlink so cmake -GNinja works.
-    ln -sf samu "${dest}/usr/bin/ninja"
+    seed ln -sf samu "${dest}/usr/bin/ninja"
 }

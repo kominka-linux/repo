@@ -17,10 +17,10 @@ var checksums = [
 
 proc build(dest) {
 
-    mkdir -p "${dest}/etc/ssl/certs"
-    cp cacert.pem "${dest}/etc/ssl/certs/ca-certificates.crt"
+    seed mkdir -p "${dest}/etc/ssl/certs"
+    seed cp cacert.pem "${dest}/etc/ssl/certs/ca-certificates.crt"
 
-    mkdir -p "${dest}/usr/bin"
-    cp update-certdata.ysh "${dest}/usr/bin/update-certdata"
-    chmod +x "${dest}/usr/bin/update-certdata"
+    seed mkdir -p "${dest}/usr/bin"
+    seed cp update-certdata.ysh "${dest}/usr/bin/update-certdata"
+    seed chmod +x "${dest}/usr/bin/update-certdata"
 }

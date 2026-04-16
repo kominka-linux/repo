@@ -22,6 +22,6 @@ proc build(dest) {
 
     samu
 
-    mkdir -p "${dest}/usr/bin"
-    cp tmux "${dest}/usr/bin/tmux"
+    seed mkdir -p "${dest}/usr/bin"
+    seed cp tmux "${dest}/usr/bin/tmux"
 }

@@ -21,5 +21,5 @@ proc build(dest) {
 
     # Drop docs/man; keep headers + pkgconfig so packages that depend on
     # libnl (wpa_supplicant) can find them at build time via KOMINKA_ROOT.
-    rm -rf "${dest}/usr/share"
+    seed rm -rf "${dest}/usr/share"
 }

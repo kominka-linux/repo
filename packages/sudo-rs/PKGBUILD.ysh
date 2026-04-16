@@ -16,15 +16,15 @@ proc build(dest) {
 
     cargo build --release
 
-    install -Dm4755 target/release/sudo "${dest}/usr/bin/sudo"
-    install -Dm4755 target/release/su "${dest}/usr/bin/su"
-    install -Dm755 target/release/visudo "${dest}/usr/bin/visudo"
+    seed install -Dm4755 target/release/sudo "${dest}/usr/bin/sudo"
+    seed install -Dm4755 target/release/su "${dest}/usr/bin/su"
+    seed install -Dm755 target/release/visudo "${dest}/usr/bin/visudo"
 
-    mkdir -p "${dest}/etc"
+    seed mkdir -p "${dest}/etc"
 
-    cat > "${dest}/etc/sudoers" << 'EOF'
+    seed cat > "${dest}/etc/sudoers" << 'EOF'
 root ALL=(ALL:ALL) ALL
 %wheel ALL=(ALL:ALL) ALL
 EOF
-    chmod 440 "${dest}/etc/sudoers"
+    seed chmod 440 "${dest}/etc/sudoers"
 }

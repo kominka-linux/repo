@@ -19,29 +19,29 @@ var checksums = [
 ]
 
 proc build(dest) {
-    var ARCH   = $(uname -m)
-    var zig_bin = $(command -v zig)
+    var ARCH   = $(seed uname -m)
+    var zig_bin = $(builtin command -v zig)
 
     # ld.so.preload patch temporarily disabled for crash diagnosis.
     # patch -p1 < patch/ld-so-preload.patch
 
-    mkdir -p musl-build
-    cd musl-build
+    seed mkdir -p musl-build
+    builtin cd musl-build
 
-    env CC="$zig_bin cc" ../configure \
+    seed env CC="$zig_bin cc" ../configure \
         --prefix=/usr \
         --libdir=/usr/lib \
         --syslibdir=/usr/lib \
         --disable-gcc-wrapper
 
-    sed -i 's/-Wl,--gc-sections//' config.mak
+    seed sed -i 's/-Wl,--gc-sections//' config.mak
     # -U_FORTIFY_SOURCE: zig cc enables _FORTIFY_SOURCE by default, injecting
     # LOCAL __memcpy_chk wrappers that shadow the assembly GLOBAL memcpy.
     # -fno-sanitize=all: zig cc enables UBSan sanitizers by default during
     # compilation. UBSan instrumentation on functions that call memmove/memset
     # (like bcopy, bzero) introduces HIDDEN memcpy references, which ELF
     # visibility merging demotes to LOCAL HIDDEN (HIDDEN beats DEFAULT).
-    sed -i 's|^CFLAGS_AUTO = |CFLAGS_AUTO = -U_FORTIFY_SOURCE -fno-sanitize=all |' config.mak
+    seed sed -i 's|^CFLAGS_AUTO = |CFLAGS_AUTO = -U_FORTIFY_SOURCE -fno-sanitize=all |' config.mak
 
     # Replace the libc.so link recipe to use zig cc with -fno-sanitize=all.
     #
@@ -84,9 +84,9 @@ proc build(dest) {
     # -fno-sanitize=all in CFLAGS_AUTO means .lo files make no UBSan calls.
     var ldflags = "-Wl,--sort-section,alignment -Wl,--sort-common -Wl,--hash-style=both"
     var recipe  = "${tab}${zig_bin} cc -shared -nostdlib --rtlib=none -fno-sanitize=all ${ldflags} -Wl,-e,_dlstart -o \$@ \$(LOBJS) \$(LDSO_OBJS) ${float_shim_obj}"
-    sed -i "s:${tab}.*-nostdlib -shared.*:${recipe}:" ../Makefile
+    seed sed -i "s:${tab}.*-nostdlib -shared.*:${recipe}:" ../Makefile
 
-    grep -q 'fno-sanitize' ../Makefile || { echo 'ERROR: Makefile patch did not apply' >&2; exit 1; }
+    seed grep -q 'fno-sanitize' ../Makefile || { builtin echo 'ERROR: Makefile patch did not apply' >&2; exit 1; }
 
     make
     make DESTDIR=$dest install
@@ -103,8 +103,8 @@ proc build(dest) {
     if (ldso !== '') {
         # musl installs ld-musl-*.so.1 as a hard link to libc.so.
         # Replace with a symlink so the relationship survives packaging/tar.
-        ln -sf libc.so "${dest}/usr/lib/${ldso}"
+        seed ln -sf libc.so "${dest}/usr/lib/${ldso}"
     }
-    mkdir -p "${dest}/usr/bin"
-    ln -sf "/usr/lib/${ldso}" "${dest}/usr/bin/ldd"
+    seed mkdir -p "${dest}/usr/bin"
+    seed ln -sf "/usr/lib/${ldso}" "${dest}/usr/bin/ldd"
 }

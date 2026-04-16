@@ -262,6 +262,51 @@ forkwait { setglobal x = 1 }
 # x is unchanged here
 ```
 
+## Command calling convention
+
+On Kominka Linux, the standard userland is the `seed` multicall binary (a
+busybox replacement). Every call to a seed applet or a ysh builtin must be
+explicitly prefixed. Enforced by `bin/lint-ysh-calls`.
+
+**seed applets** — prefix with `seed`:
+
+```ysh
+seed grep -r foo /bar
+seed cp -a src/ dest/
+seed mkdir -p /etc/sv/svc
+seed find /usr -name '*.so' -delete
+```
+
+**ysh builtins** — prefix with `builtin`:
+
+```ysh
+builtin echo "hello"
+builtin printf '%s\n' "$val"
+builtin read --raw-line (&line)
+builtin test -f "$path"
+builtin source /usr/lib/init/rc.lib
+builtin cd /tmp
+builtin exec /sbin/init
+builtin true > "$lockfile"     # truncate/create a file
+```
+
+**`[` and `[[` are banned.** Use `builtin test` instead:
+
+```ysh
+# Wrong
+if [ -f "$f" ] { ... }
+
+# Right
+if builtin test -f "$f" { ... }
+```
+
+**`wget` is exempt** from the seed prefix (it's a standalone TLS-capable
+binary, not a seed applet): just use `wget` bare.
+
+**Builtins take precedence** over identically-named applets. `echo`, `printf`,
+`test`, `true`, `false`, `pwd` are builtins — even though seed also ships
+applets with those names.
+
 ## Style
 
 - Name procs with hyphens: `pkg-install`, `run-hook`.  *(Exception: when

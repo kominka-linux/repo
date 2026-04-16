@@ -17,7 +17,7 @@ var checksums = [
 
 proc build(dest) {
 
-    var nproc = $(nproc)
+    var nproc = $(seed nproc)
 
     # Bootstrap build using bundled dependencies.
     # No --system-* flags: uses bundled curl, expat, zlib, bzip2, etc.

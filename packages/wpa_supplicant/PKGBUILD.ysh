@@ -21,18 +21,18 @@ proc build(dest) {
 
     var CC = ENV => get("CC", "cc")
 
-    cd wpa_supplicant
+    builtin cd wpa_supplicant
 
     # pm strips the 'files/' prefix when copying local sources, so .config
     # lands at the root of the build directory (one level above wpa_supplicant/).
-    cp -f ../.config .config
+    seed cp -f ../.config .config
 
     # Isolate libnl into a temp dir so -L only pulls in libnl, not all of
     # KOMINKA_ROOT/usr/lib (which would bring in musl's libc.so etc.).
     var _libnl_dir = "/tmp/wpa-libnl-$$"
-    mkdir -p $_libnl_dir
-    ln -sf "${_kr}/usr/lib/libnl-3.so"      "${_libnl_dir}/"
-    ln -sf "${_kr}/usr/lib/libnl-genl-3.so" "${_libnl_dir}/"
+    seed mkdir -p $_libnl_dir
+    seed ln -sf "${_kr}/usr/lib/libnl-3.so"      "${_libnl_dir}/"
+    seed ln -sf "${_kr}/usr/lib/libnl-genl-3.so" "${_libnl_dir}/"
 
     # CFLAGS via environment so the Makefile's CFLAGS += additions survive.
     # Command-line CFLAGS= would override them, breaking wpa_supplicant's
@@ -45,9 +45,9 @@ proc build(dest) {
         CC=$CC \
         LDFLAGS="-L${_libnl_dir}"
 
-    install -Dm755 wpa_supplicant   "${dest}/usr/sbin/wpa_supplicant"
-    install -Dm755 wpa_cli          "${dest}/usr/sbin/wpa_cli"
-    install -Dm755 wpa_passphrase   "${dest}/usr/bin/wpa_passphrase"
+    seed install -Dm755 wpa_supplicant   "${dest}/usr/sbin/wpa_supplicant"
+    seed install -Dm755 wpa_cli          "${dest}/usr/sbin/wpa_cli"
+    seed install -Dm755 wpa_passphrase   "${dest}/usr/bin/wpa_passphrase"
 
-    rm -rf $_libnl_dir
+    seed rm -rf $_libnl_dir
 }

@@ -16,8 +16,8 @@ proc build(dest) {
 
     # BoringSSL ships openssl/time.h (a compat shim). curl's configure adds
     # -isystem .../openssl which makes that file shadow the real <time.h>.
-    if test -f "${_kr}/usr/include/openssl/time.h" {
-        mv "${_kr}/usr/include/openssl/time.h" "${_kr}/usr/include/openssl/time.h.aside"
+    if builtin test -f "${_kr}/usr/include/openssl/time.h" {
+        seed mv "${_kr}/usr/include/openssl/time.h" "${_kr}/usr/include/openssl/time.h.aside"
     }
 
     var _cflags = ENV => get("CFLAGS", "-O2 -DNDEBUG") ++ " -Wno-error -I${_kr}/usr/include"
@@ -25,7 +25,7 @@ proc build(dest) {
 
     # Use GNU nm if available (saved from Alpine in bootstrap builds) so
     # libtool's global_symbol_pipe detection works correctly.
-    var nm_bin = $(command -v gnu-nm 2>/dev/null || command -v nm)
+    var nm_bin = $(builtin command -v gnu-nm 2>/dev/null || builtin command -v nm)
     NM=$nm_bin \
     CFLAGS=$_cflags LDFLAGS=$_ldflags \
         PKG_CONFIG_PATH="${_kr}/usr/lib/pkgconfig" \

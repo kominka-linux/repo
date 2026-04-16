@@ -18,14 +18,14 @@ var checksums_x86_64  = [
 
 proc build(dest) {
 
-    mkdir -p "${dest}/usr/bin" "${dest}/usr/lib"
-    cp -a zig "${dest}/usr/bin/"
-    cp -a lib "${dest}/usr/lib/zig"
+    seed mkdir -p "${dest}/usr/bin" "${dest}/usr/lib"
+    seed cp -a zig "${dest}/usr/bin/"
+    seed cp -a lib "${dest}/usr/lib/zig"
 
     # cc/c++ wrappers targeting musl — the system libc for Kominka.
     # cc detects c++ flags (-std=c++*) and upgrades to zig c++ automatically.
     # Some build systems (oils) pass -std=c++11 to CC instead of CXX.
-    var ARCH = $(uname -m)
+    var ARCH = $(seed uname -m)
     var MUSL_TRIPLE = "${ARCH}-linux-musl"
     # Append -I/usr/include AFTER user args so zig cc uses installed system
     # headers (musl-dev, boringssl, etc.) instead of zig's bundled musl headers.
@@ -44,6 +44,6 @@ proc build(dest) {
     write -- '#!/bin/sh' 'exec zig ranlib "$@"' > "${dest}/usr/bin/ranlib"
     # objcopy wrapper.
     write -- '#!/bin/sh' 'exec zig objcopy "$@"' > "${dest}/usr/bin/objcopy"
-    chmod +x "${dest}/usr/bin/cc" "${dest}/usr/bin/c++" "${dest}/usr/bin/ld" \
+    seed chmod +x "${dest}/usr/bin/cc" "${dest}/usr/bin/c++" "${dest}/usr/bin/ld" \
              "${dest}/usr/bin/ar" "${dest}/usr/bin/ranlib" "${dest}/usr/bin/objcopy"
 }
