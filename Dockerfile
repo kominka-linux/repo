@@ -13,7 +13,7 @@
 FROM busybox:latest AS bootstrap
 
 ARG KARCH=aarch64-linux-gnu
-ARG WGET_TAG=wget-cf5b51f93186a18d69820cd97d64e72fdb3354b2
+ARG WGET_TAG=wget-c5c83721bb3ab246692318c9c279adea76899aee
 ARG REPO_URL=
 ARG R2_PUBLIC_URL=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
 
