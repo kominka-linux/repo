@@ -1,0 +1,50 @@
+#!/usr/local/bin/ysh
+
+var name    = 'seed'
+var ver     = '72c10c58b956316a4849fa6f6c4f78a2a39108eb'
+var rel     = '1'
+var deps    = []
+var mkdeps  = []
+var nostrip = true
+
+var sources = [
+    'https://github.com/kominka-linux/seed/releases/download/seed-VERSION/seed-linux-ARCH.tar.gz',
+    'files/acpid.run',
+    'files/getty-hvc0.run',
+    'files/getty-tty1.run',
+    'files/mdev.conf',
+    'files/mdev.run',
+    'files/ntpd.run',
+    'files/syslogd.run',
+    'files/udhcpc.run',
+    'files/udhcpc.ysh',
+]
+var checksums_aarch64 = [
+    '762f4ca2263e1862e7860fe888a10681fa26b3ee947e20292383c68d6fa0bb87',
+    'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP',
+]
+var checksums_x86_64  = [
+    'd7ce882049ebc671efabcfcd56bdf3b5d940c26a420b79ac06bfeac085f8bb63',
+    'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP',
+]
+
+proc build(dest) {
+    mkdir -p "${dest}/usr/bin" "${dest}/usr/share/seed"
+    cp -a bin/. "${dest}/usr/bin/"
+    cp share/seed/applets.txt "${dest}/usr/share/seed/applets.txt"
+
+    mkdir -p "${dest}/etc/acpi"
+
+    for s in (:| acpid syslogd mdev ntpd udhcpc getty-hvc0 getty-tty1 |) {
+        mkdir -p "${dest}/etc/sv/${s}"
+        cp -f "${s}.run" "${dest}/etc/sv/${s}/run"
+        chmod +x "${dest}/etc/sv/${s}/run"
+        ln -sf "/run/runit/supervise.${s}" "${dest}/etc/sv/${s}/supervise"
+    }
+
+    cp -f mdev.conf "${dest}/etc/mdev.conf"
+
+    mkdir -p "${dest}/etc"
+    cp -f udhcpc.ysh "${dest}/etc/udhcpc.sh"
+    chmod +x "${dest}/etc/udhcpc.sh"
+}
