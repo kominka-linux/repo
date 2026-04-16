@@ -26,6 +26,7 @@ RUN mkdir -p /kominka-root/usr/bin /kominka-root/etc/ssl/certs && \
     SARCH=$(echo "$KARCH" | cut -d- -f1) && \
     wget -q -O - "https://github.com/kominka-linux/seed/releases/download/seed-$SEED_VER/seed-linux-$SARCH.tar.gz" | tar xzf - --strip-components=1 -C /kominka-root/usr/ && \
     cp /usr/bin/pm /kominka-root/usr/bin/pm && \
+    cp -L /usr/bin/wget /kominka-root/usr/bin/wget && \
     find /kominka-root/usr/bin /kominka-root/usr/local/bin -maxdepth 1 -type f -exec chmod +x {} + && \
     cp /etc/ssl/certs/ca-certificates.crt /kominka-root/etc/ssl/certs/ca-certificates.crt
 
@@ -46,6 +47,7 @@ ENV KOMINKA_REPO=${REPO_URL} \
     KOMINKA_PATH=/usr/lib/kominka/packages
 
 RUN KOMINKA_COLOR=0 KOMINKA_PROMPT=0 KOMINKA_STRIP=0 KOMINKA_FORCE=1 \
-    pm i core build-essential
+    pm i core build-essential && \
+    find /usr/bin /usr/local/bin -maxdepth 1 -type f -exec chmod +x {} +
 
 CMD ["/bin/sh"]
