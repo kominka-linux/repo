@@ -47,6 +47,6 @@ ENV KOMINKA_REPO=${REPO_URL} \
 
 RUN KOMINKA_COLOR=0 KOMINKA_PROMPT=0 KOMINKA_STRIP=0 KOMINKA_FORCE=1 \
     pm i core build-essential && \
-    find /usr/bin /usr/local/bin -maxdepth 1 -type f -exec chmod +x {} +
+    seed find /usr/bin /usr/local/bin -maxdepth 1 -type f -exec chmod +x {} +
 
 CMD ["/bin/sh"]
