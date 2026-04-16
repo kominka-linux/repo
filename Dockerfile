@@ -1,6 +1,6 @@
 # Build environment: core + build-essential
-# Bootstrap installs ysh + seed (via pm, statically linked) + wget + pm
-# into kominka-root. pm i then runs inside the scratch container.
+# Bootstrap downloads ysh + seed from R2 directly into kominka-root,
+# then pm i runs inside the scratch container.
 #
 # KARCH: architecture string passed by the caller.
 #   x86_64-linux-gnu  or  aarch64-linux-gnu
@@ -14,6 +14,7 @@ FROM busybox:latest AS bootstrap
 
 ARG KARCH=aarch64-linux-gnu
 ARG WGET_TAG=wget-c5c83721bb3ab246692318c9c279adea76899aee
+ARG SEED_TAG=2138a1ae863d05591ecda011703364ebc0f05958-1
 ARG REPO_URL=
 ARG R2_PUBLIC_URL=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
 
@@ -39,23 +40,10 @@ COPY pm.ysh /usr/bin/pm
 RUN chmod +x /usr/bin/pm && \
     mkdir -p /kominka-root/usr/bin /kominka-root/etc/ssl/certs && \
     /usr/bin/wget -q -O - "$R2_PUBLIC_URL/$KARCH/ysh/0.37.0-4.tar.gz" | tar xzf - -C /kominka-root/ && \
+    /usr/bin/wget -q -O - "$R2_PUBLIC_URL/$KARCH/seed/$SEED_TAG.tar.gz" | tar xzf - -C /kominka-root/ && \
     cp /usr/bin/wget /kominka-root/usr/bin/wget && \
     cp /usr/bin/pm /kominka-root/usr/bin/pm && \
-    cp /etc/ssl/certs/ca-certificates.crt /kominka-root/etc/ssl/certs/ca-certificates.crt && \
-    printf '#!/bin/sh\ncmd="$1"; shift; exec "$cmd" "$@"\n' > /usr/bin/seed && \
-    chmod +x /usr/bin/seed
-
-SHELL ["/usr/local/bin/ysh", "-c"]
-
-ENV KOMINKA_REPO=${REPO_URL} \
-    R2_PUBLIC_URL=${R2_PUBLIC_URL} \
-    LOGNAME=root \
-    HOME=/root
-
-# Install seed into kominka-root via pm (statically linked multicall binary).
-RUN KOMINKA_ROOT=/kominka-root \
-    KOMINKA_COLOR=0 KOMINKA_PROMPT=0 KOMINKA_STRIP=0 KOMINKA_FORCE=1 \
-    pm i seed
+    cp /etc/ssl/certs/ca-certificates.crt /kominka-root/etc/ssl/certs/ca-certificates.crt
 
 FROM scratch
 
