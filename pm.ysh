@@ -22,6 +22,7 @@ var KOMINKA_TMPDIR = ''
 var KOMINKA_KEEPLOG = ''
 var KOMINKA_SU = ''
 var KOMINKA_ELF = ''
+var KOMINKA_AUDITDEPS = ''
 var KOMINKA_CHK = ''
 var KOMINKA_BIN_MIRROR = ''
 var KOMINKA_REPO = ''
@@ -1849,7 +1850,7 @@ proc pkg_build_all (...pkgs) {
 
         builtin cd "${pkg_dir}/${pkg}/${pkg_db}/${pkg}"
 
-        pkg_fix_deps (p)
+        if (KOMINKA_AUDITDEPS === '1') { pkg_fix_deps (p) }
         pkg_etcsums (p)
         pkg_tar (p)
 
@@ -2969,6 +2970,7 @@ proc main (...argv) {
     setglobal KOMINKA_KEEPLOG   = ENV => get("KOMINKA_KEEPLOG", "")
     setglobal KOMINKA_SU        = ENV => get("KOMINKA_SU", "")
     setglobal KOMINKA_ELF       = ENV => get("KOMINKA_ELF", "")
+    setglobal KOMINKA_AUDITDEPS   = ENV => get("KOMINKA_AUDITDEPS", "0")
     setglobal KOMINKA_CHK       = ENV => get("KOMINKA_CHK", "")
     setglobal KOMINKA_BIN_MIRROR  = ENV => get("KOMINKA_BIN_MIRROR", "")
     setglobal KOMINKA_REPO        = ENV => get("KOMINKA_REPO", "")
