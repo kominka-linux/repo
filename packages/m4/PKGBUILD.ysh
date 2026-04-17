@@ -7,24 +7,26 @@ var deps    = ['musl']
 var mkdeps  = ['zig', 'make']
 
 var sources = ['https://ftp.gnu.org/gnu/m4/m4-VERSION.tar.xz']
-var checksums = ['f25c6ab51548a73a75558742fb031e0625d6485fe5f9155949d6486a2408ab66']
+var checksums = [
+    'f25c6ab51548a73a75558742fb031e0625d6485fe5f9155949d6486a2408ab66',
+]
 
 proc build(dest) {
-    var zig_bin = $(builtin command -v zig)
+var zig_bin = $(builtin command -v zig)
 
-    # EGREP_TRADITIONAL and GREP: if these env vars are non-empty, configure
-    # skips the tool-detection tests entirely. Avoids seed egrep -Ee failure.
-    # --disable-dependency-tracking + --disable-nls: reduce substitutions in
-    # config.status; seed sed fails on the full gnulib-generated set.
-    seed env CC="$zig_bin cc" EGREP_TRADITIONAL=egrep GREP=grep ./configure \
-        --prefix=/usr \
-        --disable-dependency-tracking \
-        --disable-nls
+# EGREP_TRADITIONAL and GREP: if these env vars are non-empty, configure
+# skips the tool-detection tests entirely. Avoids seed egrep -Ee failure.
+# --disable-dependency-tracking + --disable-nls: reduce substitutions in
+# config.status; seed sed fails on the full gnulib-generated set.
+seed env CC="$zig_bin cc" EGREP_TRADITIONAL=egrep GREP=grep ./configure \
+--prefix=/usr \
+--disable-dependency-tracking \
+--disable-nls
 
-    # Fix gnulib _GL_ATTRIBUTE_NODISCARD incompatibility with newer GCC.
-    seed find lib -name '*.h' -exec sed -i \
-        's/^\(# *define _GL_ATTRIBUTE_NODISCARD\) .*/\1/' {} +
+# Fix gnulib _GL_ATTRIBUTE_NODISCARD incompatibility with newer GCC.
+seed find lib -name '*.h' -exec sed -i \
+'s/^\(# *define _GL_ATTRIBUTE_NODISCARD\) .*/\1/' {} +
 
-    make
-    make DESTDIR=$dest install
+make
+make DESTDIR=$dest install
 }

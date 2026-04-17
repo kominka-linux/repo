@@ -8,43 +8,64 @@ var mkdeps  = []
 var nostrip = true
 
 var sources = [
-    'https://github.com/kominka-linux/seed/releases/download/seed-VERSION/seed-linux-ARCH.tar.gz',
-    'files/acpid.run',
-    'files/getty-hvc0.run',
-    'files/getty-tty1.run',
-    'files/mdev.conf',
-    'files/mdev.run',
-    'files/ntpd.run',
-    'files/syslogd.run',
-    'files/udhcpc.run',
-    'files/udhcpc.ysh',
+'https://github.com/kominka-linux/seed/releases/download/seed-VERSION/seed-linux-ARCH.tar.gz',
+'files/acpid.run',
+'files/getty-hvc0.run',
+'files/getty-tty1.run',
+'files/mdev.conf',
+'files/mdev.run',
+'files/ntpd.run',
+'files/syslogd.run',
+'files/udhcpc.run',
+'files/udhcpc.ysh',
 ]
 var checksums_aarch64 = [
     '237af0395052f5e53d89b517d6f98ee04233577f346571917b97487eed17fd92',
-    'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP',
+    'SKIP',
+    'SKIP',
+    'SKIP',
+    'SKIP',
+    'SKIP',
+    'SKIP',
+    'SKIP',
+    'SKIP',
+    'SKIP',
 ]
 var checksums_x86_64  = [
-    'c0362ed2bb3e257236ad722ccae15788e3a99ca203e975a3d2faf8028e05924e',
-    'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP',
+'c0362ed2bb3e257236ad722ccae15788e3a99ca203e975a3d2faf8028e05924e',
+'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP',
 ]
 
 proc build(dest) {
-    seed mkdir -p "${dest}/usr/bin" "${dest}/usr/share/seed"
-    seed chmod +x bin/*
-    seed cp -a bin/. "${dest}/usr/bin/"
+seed mkdir -p "${dest}/usr/bin" "${dest}/usr/share/seed"
 
-    seed mkdir -p "${dest}/etc/acpi"
+# Copy standalone binaries directly.
+seed cp bin/seed "${dest}/usr/bin/seed"
+seed cp bin/wget "${dest}/usr/bin/wget"
+seed chmod +x "${dest}/usr/bin/seed" "${dest}/usr/bin/wget"
 
-    for s in (:| acpid syslogd mdev ntpd udhcpc getty-hvc0 getty-tty1 |) {
-        seed mkdir -p "${dest}/etc/sv/${s}"
-        seed cp -f "${s}.run" "${dest}/etc/sv/${s}/run"
-        seed chmod +x "${dest}/etc/sv/${s}/run"
-        seed ln -sf "/run/runit/supervise.${s}" "${dest}/etc/sv/${s}/supervise"
-    }
+# All other files in bin/ are applets — hardlinks to seed in the release
+# tarball. Install them as symlinks so bind-mounting /usr/bin/seed at
+# build time overrides all applet paths, not just /usr/bin/seed itself.
+for f in (glob('bin/*')) {
+    var applet = $(seed basename $f)
+    if test $applet = seed { continue }
+    if test $applet = wget { continue }
+    seed ln -sf seed "${dest}/usr/bin/$applet"
+}
 
-    seed cp -f mdev.conf "${dest}/etc/mdev.conf"
+seed mkdir -p "${dest}/etc/acpi"
 
-    seed mkdir -p "${dest}/etc"
-    seed cp -f udhcpc.ysh "${dest}/etc/udhcpc.sh"
-    seed chmod +x "${dest}/etc/udhcpc.sh"
+for s in (:| acpid syslogd mdev ntpd udhcpc getty-hvc0 getty-tty1 |) {
+seed mkdir -p "${dest}/etc/sv/${s}"
+seed cp -f "${s}.run" "${dest}/etc/sv/${s}/run"
+seed chmod +x "${dest}/etc/sv/${s}/run"
+seed ln -sf "/run/runit/supervise.${s}" "${dest}/etc/sv/${s}/supervise"
+}
+
+seed cp -f mdev.conf "${dest}/etc/mdev.conf"
+
+seed mkdir -p "${dest}/etc"
+seed cp -f udhcpc.ysh "${dest}/etc/udhcpc.sh"
+seed chmod +x "${dest}/etc/udhcpc.sh"
 }

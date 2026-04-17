@@ -7,20 +7,20 @@ var deps    = []
 var mkdeps  = []
 
 var sources = [
-    'files/crypttab',
-    'files/fstab',
-    'files/group',
-    'files/host.conf',
-    'files/hosts',
-    'files/issue',
-    'files/mime.types',
-    'files/os-release',
-    'files/passwd',
-    'files/profile',
-    'files/securetty',
-    'files/shadow',
-    'files/shells',
-    'files/resolv.conf',
+'files/crypttab',
+'files/fstab',
+'files/group',
+'files/host.conf',
+'files/hosts',
+'files/issue',
+'files/mime.types',
+'files/os-release',
+'files/passwd',
+'files/profile',
+'files/securetty',
+'files/shadow',
+'files/shells',
+'files/resolv.conf',
 ]
 var checksums = [
     '3698c87cc3af757f0302f6d7f034350b1b22a7f25b2f71944292d0fb3de67cd7',
@@ -41,66 +41,66 @@ var checksums = [
 
 proc build(dest) {
 
-    seed mkdir -m 755 \
-        "${dest}/boot" \
-        "${dest}/dev" \
-        "${dest}/etc" \
-        "${dest}/home" \
-        "${dest}/mnt" \
-        "${dest}/opt" \
-        "${dest}/run" \
-        "${dest}/usr" \
-        "${dest}/usr/bin" \
-        "${dest}/usr/include" \
-        "${dest}/usr/lib" \
-        "${dest}/usr/share" \
-        "${dest}/usr/share/man" \
-        "${dest}/usr/share/man/man1" \
-        "${dest}/usr/share/man/man2" \
-        "${dest}/usr/share/man/man3" \
-        "${dest}/usr/share/man/man4" \
-        "${dest}/usr/share/man/man5" \
-        "${dest}/usr/share/man/man6" \
-        "${dest}/usr/share/man/man7" \
-        "${dest}/usr/share/man/man8" \
-        "${dest}/var/cache" \
-        "${dest}/var/local" \
-        "${dest}/var/opt" \
-        "${dest}/var/log" \
-        "${dest}/var/log/old" \
-        "${dest}/var/lib" \
-        "${dest}/var/lib/misc" \
-        "${dest}/var/empty" \
-        "${dest}/var/service" \
-        "${dest}/var/spool"
+seed mkdir -m 755 \
+"${dest}/boot" \
+"${dest}/dev" \
+"${dest}/etc" \
+"${dest}/home" \
+"${dest}/mnt" \
+"${dest}/opt" \
+"${dest}/run" \
+"${dest}/usr" \
+"${dest}/usr/bin" \
+"${dest}/usr/include" \
+"${dest}/usr/lib" \
+"${dest}/usr/share" \
+"${dest}/usr/share/man" \
+"${dest}/usr/share/man/man1" \
+"${dest}/usr/share/man/man2" \
+"${dest}/usr/share/man/man3" \
+"${dest}/usr/share/man/man4" \
+"${dest}/usr/share/man/man5" \
+"${dest}/usr/share/man/man6" \
+"${dest}/usr/share/man/man7" \
+"${dest}/usr/share/man/man8" \
+"${dest}/var/cache" \
+"${dest}/var/local" \
+"${dest}/var/opt" \
+"${dest}/var/log" \
+"${dest}/var/log/old" \
+"${dest}/var/lib" \
+"${dest}/var/lib/misc" \
+"${dest}/var/empty" \
+"${dest}/var/service" \
+"${dest}/var/spool"
 
-    seed mkdir -m 555 \
-        "${dest}/proc" \
-        "${dest}/sys"
+seed mkdir -m 555 \
+"${dest}/proc" \
+"${dest}/sys"
 
-    seed mkdir -m 0750 \
-        "${dest}/root"
+seed mkdir -m 0750 \
+"${dest}/root"
 
-    seed mkdir -m 1777 \
-        "${dest}/tmp" \
-        "${dest}/var/tmp" \
-        "${dest}/var/spool/mail"
+seed mkdir -m 1777 \
+"${dest}/tmp" \
+"${dest}/var/tmp" \
+"${dest}/var/spool/mail"
 
-    seed ln -sf usr/bin "${dest}/bin"
-    seed ln -sf usr/bin "${dest}/sbin"
-    seed ln -sf bin     "${dest}/usr/sbin"
-    seed ln -sf usr/lib "${dest}/lib"
-    seed ln -sf usr/lib "${dest}/lib64"
+seed ln -sf usr/bin "${dest}/bin"
+seed ln -sf usr/bin "${dest}/sbin"
+seed ln -sf bin     "${dest}/usr/sbin"
+seed ln -sf usr/lib "${dest}/lib"
+seed ln -sf usr/lib "${dest}/lib64"
 
-    seed ln -sf lib               "${dest}/usr/lib64"
-    seed ln -sf spool/mail        "${dest}/var/mail"
-    seed ln -sf ../run            "${dest}/var/run"
-    seed ln -sf ../run/lock       "${dest}/var/lock"
-    seed ln -sf /proc/self/mounts "${dest}/etc/mtab"
+seed ln -sf lib               "${dest}/usr/lib64"
+seed ln -sf spool/mail        "${dest}/var/mail"
+seed ln -sf ../run            "${dest}/var/run"
+seed ln -sf ../run/lock       "${dest}/var/lock"
+seed ln -sf /proc/self/mounts "${dest}/etc/mtab"
 
-    seed cp -f ./* "${dest}/etc"
+seed cp -f ./* "${dest}/etc"
 
-    seed chmod 600 \
-        "${dest}/etc/crypttab" \
-        "${dest}/etc/shadow"
+seed chmod 600 \
+"${dest}/etc/crypttab" \
+"${dest}/etc/shadow"
 }

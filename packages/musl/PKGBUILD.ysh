@@ -8,9 +8,9 @@ var mkdeps  = ['zig']
 var nostrip = true  # strip removes dynamic symbols needed by the runtime linker
 
 var sources = [
-    'https://musl.libc.org/releases/musl-VERSION.tar.gz',
-    'patches/ld-so-preload.patch patch',
-    'files/float128_shim.c',
+'https://musl.libc.org/releases/musl-VERSION.tar.gz',
+'patches/ld-so-preload.patch patch',
+'files/float128_shim.c',
 ]
 var checksums = [
     'd585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a',
@@ -19,92 +19,92 @@ var checksums = [
 ]
 
 proc build(dest) {
-    var ARCH   = $(seed uname -m)
-    var zig_bin = $(builtin command -v zig)
+var ARCH   = $(seed uname -m)
+var zig_bin = $(builtin command -v zig)
 
-    # ld.so.preload patch temporarily disabled for crash diagnosis.
-    # patch -p1 < patch/ld-so-preload.patch
+# ld.so.preload patch temporarily disabled for crash diagnosis.
+# patch -p1 < patch/ld-so-preload.patch
 
-    seed mkdir -p musl-build
-    builtin cd musl-build
+seed mkdir -p musl-build
+builtin cd musl-build
 
-    seed env CC="$zig_bin cc" ../configure \
-        --prefix=/usr \
-        --libdir=/usr/lib \
-        --syslibdir=/usr/lib \
-        --disable-gcc-wrapper
+seed env CC="$zig_bin cc" ../configure \
+--prefix=/usr \
+--libdir=/usr/lib \
+--syslibdir=/usr/lib \
+--disable-gcc-wrapper
 
-    seed sed -i 's/-Wl,--gc-sections//' config.mak
-    # -U_FORTIFY_SOURCE: zig cc enables _FORTIFY_SOURCE by default, injecting
-    # LOCAL __memcpy_chk wrappers that shadow the assembly GLOBAL memcpy.
-    # -fno-sanitize=all: zig cc enables UBSan sanitizers by default during
-    # compilation. UBSan instrumentation on functions that call memmove/memset
-    # (like bcopy, bzero) introduces HIDDEN memcpy references, which ELF
-    # visibility merging demotes to LOCAL HIDDEN (HIDDEN beats DEFAULT).
-    seed sed -i 's|^CFLAGS_AUTO = |CFLAGS_AUTO = -U_FORTIFY_SOURCE -fno-sanitize=all |' config.mak
+seed sed -i 's/-Wl,--gc-sections//' config.mak
+# -U_FORTIFY_SOURCE: zig cc enables _FORTIFY_SOURCE by default, injecting
+# LOCAL __memcpy_chk wrappers that shadow the assembly GLOBAL memcpy.
+# -fno-sanitize=all: zig cc enables UBSan sanitizers by default during
+# compilation. UBSan instrumentation on functions that call memmove/memset
+# (like bcopy, bzero) introduces HIDDEN memcpy references, which ELF
+# visibility merging demotes to LOCAL HIDDEN (HIDDEN beats DEFAULT).
+seed sed -i 's|^CFLAGS_AUTO = |CFLAGS_AUTO = -U_FORTIFY_SOURCE -fno-sanitize=all |' config.mak
 
-    # Replace the libc.so link recipe to use zig cc with -fno-sanitize=all.
-    #
-    # Problem: zig cc by default links ubsan_rt without --as-needed. ubsan_rt
-    # defines memcpy/memset/memmove as WEAK HIDDEN, which poisons musl's GLOBAL
-    # DEFAULT assembly exports via ELF visibility merging (HIDDEN beats DEFAULT).
-    # -fno-sanitize=all disables all sanitizers → zig cc does not add ubsan_rt.
-    #
-    # Why NOT zig ld.lld directly: zig ld.lld produces different PLT/GOT and
-    # self-relocation layout than musl's ldso expects. Specifically, the ldso's
-    # self-relocation computes base=0 (instead of the actual load address) causing
-    # all RELATIVE relocations to produce link-time addresses instead of runtime
-    # addresses. Crash: any dynamically-linked program crashes immediately.
-    # Alpine's zig cc as link driver produces the correct layout.
-    #
-    # CRITICAL: target ../Makefile — musl-build/Makefile is only a thin wrapper
-    # ("include ../Makefile"); the actual libc.so recipe lives in the source tree.
-    #
-    # compiler_rt (__subtf3 etc. for 128-bit float) is still needed with --as-needed.
-    # Without ubsan_rt, compiler_rt's WEAK HIDDEN memcpy is the only remaining
-    # issue — but with --as-needed, only actually-referenced symbols are pulled in,
-    # and memcpy is not directly called by the float ops.
-    # Compile float128_shim.c: stub definitions for __addtf3, __subtf3 etc.
-    # Providing these symbols prevents compiler_rt (which zig cc adds with
-    # --as-needed) from being pulled in. compiler_rt's object also defines
-    # memcpy/memset/memmove as WEAK HIDDEN which poisons musl's exports.
-    # Only needed on aarch64 (128-bit long double); x86_64 uses 80-bit.
-    var float_shim_obj = ''
-    if (ARCH === 'aarch64') {
-        "$zig_bin" cc -c -fPIC -fvisibility=hidden \
-            -target aarch64-linux-musl \
-            -o /tmp/float128_shim.o ../float128_shim.c
-        setvar float_shim_obj = '/tmp/float128_shim.o'
-    }
+# Replace the libc.so link recipe to use zig cc with -fno-sanitize=all.
+#
+# Problem: zig cc by default links ubsan_rt without --as-needed. ubsan_rt
+# defines memcpy/memset/memmove as WEAK HIDDEN, which poisons musl's GLOBAL
+# DEFAULT assembly exports via ELF visibility merging (HIDDEN beats DEFAULT).
+# -fno-sanitize=all disables all sanitizers → zig cc does not add ubsan_rt.
+#
+# Why NOT zig ld.lld directly: zig ld.lld produces different PLT/GOT and
+# self-relocation layout than musl's ldso expects. Specifically, the ldso's
+# self-relocation computes base=0 (instead of the actual load address) causing
+# all RELATIVE relocations to produce link-time addresses instead of runtime
+# addresses. Crash: any dynamically-linked program crashes immediately.
+# Alpine's zig cc as link driver produces the correct layout.
+#
+# CRITICAL: target ../Makefile — musl-build/Makefile is only a thin wrapper
+# ("include ../Makefile"); the actual libc.so recipe lives in the source tree.
+#
+# compiler_rt (__subtf3 etc. for 128-bit float) is still needed with --as-needed.
+# Without ubsan_rt, compiler_rt's WEAK HIDDEN memcpy is the only remaining
+# issue — but with --as-needed, only actually-referenced symbols are pulled in,
+# and memcpy is not directly called by the float ops.
+# Compile float128_shim.c: stub definitions for __addtf3, __subtf3 etc.
+# Providing these symbols prevents compiler_rt (which zig cc adds with
+# --as-needed) from being pulled in. compiler_rt's object also defines
+# memcpy/memset/memmove as WEAK HIDDEN which poisons musl's exports.
+# Only needed on aarch64 (128-bit long double); x86_64 uses 80-bit.
+var float_shim_obj = ''
+if (ARCH === 'aarch64') {
+"$zig_bin" cc -c -fPIC -fvisibility=hidden \
+-target aarch64-linux-musl \
+-o /tmp/float128_shim.o ../float128_shim.c
+setvar float_shim_obj = '/tmp/float128_shim.o'
+}
 
-    var tab = u'\u{09}'
-    # --rtlib=none: suppresses both ubsan_rt AND compiler_rt entirely.
-    # float128_shim.o provides stub __addtf3/__subtf3/etc. so linker references
-    # to those are satisfied without compiler_rt. ubsan_rt suppressed because
-    # -fno-sanitize=all in CFLAGS_AUTO means .lo files make no UBSan calls.
-    var ldflags = "-Wl,--sort-section,alignment -Wl,--sort-common -Wl,--hash-style=both"
-    var recipe  = "${tab}${zig_bin} cc -shared -nostdlib --rtlib=none -fno-sanitize=all ${ldflags} -Wl,-e,_dlstart -o \$@ \$(LOBJS) \$(LDSO_OBJS) ${float_shim_obj}"
-    seed sed -i "s:${tab}.*-nostdlib -shared.*:${recipe}:" ../Makefile
+var tab = u'\u{09}'
+# --rtlib=none: suppresses both ubsan_rt AND compiler_rt entirely.
+# float128_shim.o provides stub __addtf3/__subtf3/etc. so linker references
+# to those are satisfied without compiler_rt. ubsan_rt suppressed because
+# -fno-sanitize=all in CFLAGS_AUTO means .lo files make no UBSan calls.
+var ldflags = "-Wl,--sort-section,alignment -Wl,--sort-common -Wl,--hash-style=both"
+var recipe  = "${tab}${zig_bin} cc -shared -nostdlib --rtlib=none -fno-sanitize=all ${ldflags} -Wl,-e,_dlstart -o \$@ \$(LOBJS) \$(LDSO_OBJS) ${float_shim_obj}"
+seed sed -i "s:${tab}.*-nostdlib -shared.*:${recipe}:" ../Makefile
 
-    seed grep -q 'fno-sanitize' ../Makefile || { builtin echo 'ERROR: Makefile patch did not apply' >&2; exit 1; }
+seed grep -q 'fno-sanitize' ../Makefile || { builtin echo 'ERROR: Makefile patch did not apply' >&2; exit 1; }
 
-    make
-    make DESTDIR=$dest install
-    # Install C library headers so packages can use our musl headers
-    # instead of zig's bundled musl headers (which can drift from our version).
-    make DESTDIR=$dest install-headers
+make
+make DESTDIR=$dest install
+# Install C library headers so packages can use our musl headers
+# instead of zig's bundled musl headers (which can drift from our version).
+make DESTDIR=$dest install-headers
 
-    # ldd symlink.
-    var ldso = ''
-    case (ARCH) {
-        aarch64 { setvar ldso = 'ld-musl-aarch64.so.1' }
-        x86_64  { setvar ldso = 'ld-musl-x86_64.so.1' }
-    }
-    if (ldso !== '') {
-        # musl installs ld-musl-*.so.1 as a hard link to libc.so.
-        # Replace with a symlink so the relationship survives packaging/tar.
-        seed ln -sf libc.so "${dest}/usr/lib/${ldso}"
-    }
-    seed mkdir -p "${dest}/usr/bin"
-    seed ln -sf "/usr/lib/${ldso}" "${dest}/usr/bin/ldd"
+# ldd symlink.
+var ldso = ''
+case (ARCH) {
+aarch64 { setvar ldso = 'ld-musl-aarch64.so.1' }
+x86_64  { setvar ldso = 'ld-musl-x86_64.so.1' }
+}
+if (ldso !== '') {
+# musl installs ld-musl-*.so.1 as a hard link to libc.so.
+# Replace with a symlink so the relationship survives packaging/tar.
+seed ln -sf libc.so "${dest}/usr/lib/${ldso}"
+}
+seed mkdir -p "${dest}/usr/bin"
+seed ln -sf "/usr/lib/${ldso}" "${dest}/usr/bin/ldd"
 }

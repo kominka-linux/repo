@@ -7,20 +7,20 @@ var deps    = []
 var mkdeps  = []
 
 var sources = [
-    'files/cacert.pem',
-    'files/update-certdata.ysh',
+'files/cacert.pem',
+'files/update-certdata.ysh',
 ]
 var checksums = [
     'b6e66569cc3d438dd5abe514d0df50005d570bfc96c14dca8f768d020cb96171',
-    'a5661ec7b1b9c14cc26c2d05948821b666f94ded3c1273f87e2419bb4dbf9d4c',
+    '490e224f81f523d08790ada4e8b83054c4bc9de5d82bcc2a6d63d67c78ca8280',
 ]
 
 proc build(dest) {
 
-    seed mkdir -p "${dest}/etc/ssl/certs"
-    seed cp cacert.pem "${dest}/etc/ssl/certs/ca-certificates.crt"
+seed mkdir -p "${dest}/etc/ssl/certs"
+seed cp cacert.pem "${dest}/etc/ssl/certs/ca-certificates.crt"
 
-    seed mkdir -p "${dest}/usr/bin"
-    seed cp update-certdata.ysh "${dest}/usr/bin/update-certdata"
-    seed chmod +x "${dest}/usr/bin/update-certdata"
+seed mkdir -p "${dest}/usr/bin"
+seed cp update-certdata.ysh "${dest}/usr/bin/update-certdata"
+seed chmod +x "${dest}/usr/bin/update-certdata"
 }

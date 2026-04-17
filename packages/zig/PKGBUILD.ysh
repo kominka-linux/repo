@@ -7,43 +7,43 @@ var deps    = []
 var mkdeps  = []
 
 var sources = [
-    'https://ziglang.org/download/VERSION/zig-ARCH-linux-VERSION.tar.xz',
+'https://ziglang.org/download/VERSION/zig-ARCH-linux-VERSION.tar.xz',
 ]
 var checksums_aarch64 = [
     '958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f',
 ]
 var checksums_x86_64  = [
-    '02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239',
+'02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239',
 ]
 
 proc build(dest) {
 
-    seed mkdir -p "${dest}/usr/bin" "${dest}/usr/lib"
-    seed cp -a zig "${dest}/usr/bin/"
-    seed cp -a lib "${dest}/usr/lib/zig"
+seed mkdir -p "${dest}/usr/bin" "${dest}/usr/lib"
+seed cp -a zig "${dest}/usr/bin/"
+seed cp -a lib "${dest}/usr/lib/zig"
 
-    # cc/c++ wrappers targeting musl — the system libc for Kominka.
-    # cc detects c++ flags (-std=c++*) and upgrades to zig c++ automatically.
-    # Some build systems (oils) pass -std=c++11 to CC instead of CXX.
-    var ARCH = $(seed uname -m)
-    var MUSL_TRIPLE = "${ARCH}-linux-musl"
-    # Append -I/usr/include AFTER user args so zig cc uses installed system
-    # headers (musl-dev, boringssl, etc.) instead of zig's bundled musl headers.
-    # Appending (not prepending) preserves user include priority: packages can
-    # still put -Icompat/etc before -I/usr/include by ordering their own flags.
-    write -- "#!/bin/sh
-    mode=cc
-    for a in \"\$@\"; do case \"\$a\" in -std=c++*) mode=\"c++\";; esac; done
-    exec zig \$mode -target $MUSL_TRIPLE \"\$@\" -I/usr/include" > "${dest}/usr/bin/cc"
-    write -- "#!/bin/sh" "exec zig c++ -target $MUSL_TRIPLE \"\$@\" -I/usr/include" > "${dest}/usr/bin/c++"
-    # ld — zig's bundled lld, exposed directly.
-    write -- '#!/bin/sh' 'exec zig ld.lld "$@"' > "${dest}/usr/bin/ld"
-    # ar wrapper — autotools and make need it.
-    write -- '#!/bin/sh' 'exec zig ar "$@"' > "${dest}/usr/bin/ar"
-    # ranlib is a no-op with zig's ar.
-    write -- '#!/bin/sh' 'exec zig ranlib "$@"' > "${dest}/usr/bin/ranlib"
-    # objcopy wrapper.
-    write -- '#!/bin/sh' 'exec zig objcopy "$@"' > "${dest}/usr/bin/objcopy"
-    seed chmod +x "${dest}/usr/bin/cc" "${dest}/usr/bin/c++" "${dest}/usr/bin/ld" \
-             "${dest}/usr/bin/ar" "${dest}/usr/bin/ranlib" "${dest}/usr/bin/objcopy"
+# cc/c++ wrappers targeting musl — the system libc for Kominka.
+# cc detects c++ flags (-std=c++*) and upgrades to zig c++ automatically.
+# Some build systems (oils) pass -std=c++11 to CC instead of CXX.
+var ARCH = $(seed uname -m)
+var MUSL_TRIPLE = "${ARCH}-linux-musl"
+# Append -I/usr/include AFTER user args so zig cc uses installed system
+# headers (musl-dev, boringssl, etc.) instead of zig's bundled musl headers.
+# Appending (not prepending) preserves user include priority: packages can
+# still put -Icompat/etc before -I/usr/include by ordering their own flags.
+write -- "#!/bin/sh
+mode=cc
+for a in \"\$@\"; do case \"\$a\" in -std=c++*) mode=\"c++\";; esac; done
+exec zig \$mode -target $MUSL_TRIPLE \"\$@\" -I/usr/include" > "${dest}/usr/bin/cc"
+write -- "#!/bin/sh" "exec zig c++ -target $MUSL_TRIPLE \"\$@\" -I/usr/include" > "${dest}/usr/bin/c++"
+# ld — zig's bundled lld, exposed directly.
+write -- '#!/bin/sh' 'exec zig ld.lld "$@"' > "${dest}/usr/bin/ld"
+# ar wrapper — autotools and make need it.
+write -- '#!/bin/sh' 'exec zig ar "$@"' > "${dest}/usr/bin/ar"
+# ranlib is a no-op with zig's ar.
+write -- '#!/bin/sh' 'exec zig ranlib "$@"' > "${dest}/usr/bin/ranlib"
+# objcopy wrapper.
+write -- '#!/bin/sh' 'exec zig objcopy "$@"' > "${dest}/usr/bin/objcopy"
+seed chmod +x "${dest}/usr/bin/cc" "${dest}/usr/bin/c++" "${dest}/usr/bin/ld" \
+"${dest}/usr/bin/ar" "${dest}/usr/bin/ranlib" "${dest}/usr/bin/objcopy"
 }

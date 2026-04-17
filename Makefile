@@ -1,16 +1,48 @@
-KARCH ?= $(shell uname -m | sed 's/x86_64/x86_64-linux-gnu/;s/aarch64/aarch64-linux-gnu/;s/arm64/aarch64-linux-gnu/')
+KARCH  := aarch64-linux-gnu
+CACHE  ?= $(CURDIR)/.cache
+SEED   ?= $(HOME)/d/seed/target/aarch64-unknown-linux-musl/debug/seed
 
-.PHONY: dev test builder
+ifneq ($(wildcard $(SEED)),)
+# The published tarball has applets as hardlinks; mounting /usr/bin/seed alone
+# does not override them. Derive the full applet list from applet_list.rs and
+# mount the dev binary at each path. Once the builder image is rebuilt with the
+# symlink-based seed package, this reduces to a single -v for /usr/bin/seed.
+_SEED_APPLETS := $(shell grep -E 'name: "[^"]+"' $(HOME)/d/seed/src/applet_list.rs \
+    | sed 's/.*name: "\([^"]*\)".*/\1/' | sort -u)
+_SEED_MOUNT := $(foreach a,$(_SEED_APPLETS),-v "$(SEED):/usr/bin/$(a):ro")
+else
+_SEED_MOUNT :=
+endif
+
+.PHONY: dev test builder build-all build baseline
 
 builder:
 	docker build --build-arg KARCH=$(KARCH) -t kominka:builder .
 
 Makefile: ;
 
+build-all: builder
+	scripts/build-all.sh
+
+build: builder
+	@: $${PACKAGE:?Usage: make build PACKAGE=<name>}
+	ONLY_PKG=$(PACKAGE) scripts/build-all.sh
+
+baseline:
+	@latest=$$(ls -t .cache/runs/*.jsonl 2>/dev/null | head -1); \
+	if [ -z "$$latest" ]; then echo "No run files in .cache/runs/"; exit 1; fi; \
+	cp "$$latest" scripts/build-baseline.jsonl; \
+	echo "Baseline set from $$latest"
+
 %: builder
+	@mkdir -p $(CACHE)/bin $(CACHE)/src $(CACHE)/sources
 	docker run --rm \
 		-v "$(CURDIR)/packages:/packages:ro" \
 		-v "$(CURDIR)/pm.ysh:/usr/bin/pm:ro" \
+		-v "$(CACHE)/bin:/root/.cache/kominka/bin" \
+		-v "$(CACHE)/src:/root/.cache/kominka/src" \
+		-v "$(CACHE)/sources:/root/.cache/kominka/sources" \
+		$(_SEED_MOUNT) \
 		-e KOMINKA_REPO='https://kominka.17166969.xyz' \
 		-e KOMINKA_PATH=/packages \
 		-e KOMINKA_COMPRESS=gz \

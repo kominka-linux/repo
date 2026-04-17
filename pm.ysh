@@ -137,7 +137,7 @@ proc die (name, msg='', prefix='ERROR') {
 
 proc run (...args) {
     ### Print the command, then run it.
-    write -- @args
+    write --sep ' ' -- @args
     @args
 }
 
@@ -1442,11 +1442,12 @@ proc pkg_strip (; p Dict) {
 
     while builtin read -r file {
         if builtin test -h "${pkg_dir}/$[p.name]${file}" { continue }
+        if builtin test -d "${pkg_dir}/$[p.name]${file}" { continue }
 
         case (file) {
             */sbin/?*[!/] | */bin/?*[!/] | */lib/?*[!/] | \
             */lib??/?*[!/] | */lib???/?*[!/] | */lib????/?*[!/] {
-                var od_out = $(seed od -A o -t c -N 18 "${pkg_dir}/$[p.name]${file}")
+                var od_out = $(seed head -c 18 "${pkg_dir}/$[p.name]${file}" | seed od -c)
 
                 # REL (object files (.o), static libraries (.a)).
                 if (od_out ~ / '177' dot* 'E' dot* 'L' dot* 'F' dot* '0000020 001' / or
@@ -1963,6 +1964,96 @@ proc pkg_checksum (pkg) {
     } else {
         log $pkg "No sources needing checksums"
     }
+}
+
+proc pkg_update_checksums (pkg) {
+    ### Recompute checksums and update them in-place in PKGBUILD.ysh.
+    # SKIP entries are preserved; only real hash entries are replaced.
+    var p = null
+    pkg_find_and_load $pkg (&p)
+
+    if (len(p.sources) === 0) {
+        log $pkg "No sources"
+        return
+    }
+
+    pkg_source 'c' (p)
+    pkg_checksum_gen (p)
+
+    var new_sums = @(builtin echo $hash)
+
+    # Choose which field to update based on arch-specific presence.
+    var _arch = ${sys_arch%%-*}
+    var field = 'checksums'
+    var _stored = p.checksums
+    case (_arch) {
+        aarch64 {
+            if (len(p.checksums_aarch64) > 0) {
+                setvar field = 'checksums_aarch64'
+                setvar _stored = p.checksums_aarch64
+            }
+        }
+        x86_64 {
+            if (len(p.checksums_x86_64) > 0) {
+                setvar field = 'checksums_x86_64'
+                setvar _stored = p.checksums_x86_64
+            }
+        }
+    }
+
+    # Merge: SKIP positions stay SKIP, hash positions take the new value.
+    var merged = []
+    var idx = 0
+    for s in (_stored) {
+        if (s === 'SKIP') {
+            call merged->append('SKIP')
+        } else {
+            if (idx < len(new_sums)) {
+                call merged->append(new_sums[idx])
+            } else {
+                call merged->append(s)
+            }
+            setvar idx += 1
+        }
+    }
+
+    var pkgbuild = "${repo_dir}/PKGBUILD.ysh"
+    var tmp      = "${pkgbuild}.tmp"
+
+    # Rewrite the checksum array in-place using a line-by-line pass.
+    # Lines between "var FIELD ..." and the closing "]" are replaced with
+    # the new entries; every other line is passed through unchanged.
+    var in_block = false
+    var found    = false
+
+    while builtin read -r line {
+        if (not in_block) {
+            if (line => startsWith("var $field ") or line => startsWith("var $field=")) {
+                setvar in_block = true
+                setvar found    = true
+                write -- "var $field = ["
+                for h in (merged) {
+                    write -- "    '$h',"
+                }
+                write -- "]"
+                # single-line form: var checksums = ['h1', 'h2']
+                if (line => contains(']')) { setvar in_block = false }
+                continue
+            }
+        } else {
+            if (line => contains(']')) { setvar in_block = false }
+            continue
+        }
+        write -- $line
+    } < $pkgbuild > $tmp
+
+    if (not found) {
+        seed rm -f $tmp
+        die $pkg "field '$field' not found in $pkgbuild"
+    }
+
+    seed mv $tmp $pkgbuild
+    log $pkg "Updated $field in $pkgbuild"
 }
 
 proc pkg_checksum_gen (; p Dict) {
@@ -2756,7 +2847,7 @@ proc args (action='', ...pkgs) {
             }
         }
 
-        b | build | c | checksum | d | download | src | i | install | l | list | p | upload | r | remove | t | tree {
+        b | build | c | checksum | uc | update-checksums | d | download | src | i | install | l | list | p | upload | r | remove | t | tree {
             for arg in (pkgs) {
                 var bad = ''
                 case (action) {
@@ -2803,7 +2894,7 @@ proc args (action='', ...pkgs) {
             # list here would mark implicit make-deps as "explicit", bypassing
             # the pre-built binary cache check.
             case (action) {
-                b | build | c | checksum | src | p | upload { builtin true }
+                b | build | c | checksum | uc | update-checksums | src | p | upload { builtin true }
                 *                                            { setvar pkgs = order }
             }
         }
@@ -2849,7 +2940,8 @@ proc args (action='', ...pkgs) {
         a | alternatives { pkg_alternatives @pkgs }
         b | build        { pkg_build_all @pkgs }
         t | tree         { pkg_tree @pkgs }
-        c | checksum     { for pkg in (pkgs) { pkg_checksum $pkg } }
+        c | checksum        { for pkg in (pkgs) { pkg_checksum $pkg } }
+        uc | update-checksums { for pkg in (pkgs) { pkg_update_checksums $pkg } }
         d | download     {
             var p = null
             for pkg in (pkgs) {
@@ -2879,7 +2971,8 @@ proc args (action='', ...pkgs) {
             log 'alternatives List and swap alternatives'
             log 'auth         Authenticate with repository'
             log 'build        Build packages'
-            log 'checksum     Generate checksums'
+            log 'checksum         Generate checksums'
+            log 'update-checksums Recompute and update checksums in PKGBUILD.ysh'
             log 'download     Download sources (prefers mirror)'
             log 'help         Show this message'
             log 'info         Show package details'

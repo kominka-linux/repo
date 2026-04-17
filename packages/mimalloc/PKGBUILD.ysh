@@ -7,39 +7,39 @@ var deps    = ['musl']
 var mkdeps  = ['zig']
 
 var sources = [
-    'https://github.com/microsoft/mimalloc/archive/refs/tags/vVERSION.tar.gz',
+'https://github.com/microsoft/mimalloc/archive/refs/tags/vVERSION.tar.gz',
 ]
 var checksums = [
     '8e0ed89907a681276bff2e49e9a048b47ba51254ab60daf6b3c220acac456a95',
 ]
 
 proc build(dest) {
-    var ARCH   = $(seed uname -m)
-    var zig_bin = $(builtin command -v zig)
-    var target = "${ARCH}-linux-musl"
+var ARCH   = $(seed uname -m)
+var zig_bin = $(builtin command -v zig)
+var target = "${ARCH}-linux-musl"
 
-    # mimalloc ships src/static.c which #includes every source file — no build
-    # system needed. -DMI_MALLOC_OVERRIDE enables malloc/free/realloc symbols
-    # so the library works as an LD_PRELOAD malloc replacement.
-    zig cc -shared -fPIC -O2 -DNDEBUG \
-        -target $target \
-        -Wno-date-time \
-        -I include \
-        -DMI_MALLOC_OVERRIDE \
-        src/static.c \
-        -o "libmimalloc.so.${ver}"
+# mimalloc ships src/static.c which #includes every source file — no build
+# system needed. -DMI_MALLOC_OVERRIDE enables malloc/free/realloc symbols
+# so the library works as an LD_PRELOAD malloc replacement.
+zig cc -shared -fPIC -O2 -DNDEBUG \
+-target $target \
+-Wno-date-time \
+-I include \
+-DMI_MALLOC_OVERRIDE \
+src/static.c \
+-o "libmimalloc.so.${ver}"
 
-    seed mkdir -p "${dest}/usr/lib"
-    seed cp "libmimalloc.so.${ver}" "${dest}/usr/lib/"
-    seed ln -sf "libmimalloc.so.${ver}" "${dest}/usr/lib/libmimalloc.so.2"
-    seed ln -sf "libmimalloc.so.${ver}" "${dest}/usr/lib/libmimalloc.so"
+seed mkdir -p "${dest}/usr/lib"
+seed cp "libmimalloc.so.${ver}" "${dest}/usr/lib/"
+seed ln -sf "libmimalloc.so.${ver}" "${dest}/usr/lib/libmimalloc.so.2"
+seed ln -sf "libmimalloc.so.${ver}" "${dest}/usr/lib/libmimalloc.so"
 
-    # Include headers for packages that link against mimalloc directly.
-    seed mkdir -p "${dest}/usr/include"
-    seed cp -r include/. "${dest}/usr/include/"
+# Include headers for packages that link against mimalloc directly.
+seed mkdir -p "${dest}/usr/include"
+seed cp -r include/. "${dest}/usr/include/"
 
-    # Wire up system-wide preload so all programs use mimalloc's allocator.
-    # ld.so.preload is processed by musl's dynamic linker at startup.
-    seed mkdir -p "${dest}/etc"
-    builtin echo /usr/lib/libmimalloc.so.2 > "${dest}/etc/ld.so.preload"
+# Wire up system-wide preload so all programs use mimalloc's allocator.
+# ld.so.preload is processed by musl's dynamic linker at startup.
+seed mkdir -p "${dest}/etc"
+builtin echo /usr/lib/libmimalloc.so.2 > "${dest}/etc/ld.so.preload"
 }

@@ -7,30 +7,48 @@ var deps    = ['musl']
 var mkdeps  = ['zig']
 
 var sources = ['https://ftp.gnu.org/gnu/make/make-VERSION.tar.gz']
-var checksums = ['dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3']
+var checksums = [
+    'dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3',
+]
 
 proc build(dest) {
-    var CFLAGS = ENV => get("CFLAGS", "")
-    setglobal ENV.CFLAGS = "${CFLAGS} -Wno-error -Wno-int-conversion -Wno-implicit-function-declaration"
+var CFLAGS = ENV => get("CFLAGS", "")
+setglobal ENV.CFLAGS = "${CFLAGS} -Wno-error -Wno-int-conversion -Wno-implicit-function-declaration"
 
-    ./configure \
-        --prefix=/usr \
-        --disable-nls \
-        --disable-dependency-tracking
+./configure \
+--prefix=/usr \
+--disable-nls \
+--disable-dependency-tracking
 
-    # Fix gnulib compat: replace all K&R-style zero-arg prototypes that
-    # conflict with strict POSIX declarations in modern libc headers.
-    seed find . \( -name '*.c' -o -name '*.h' \) -exec sed -i \
-        -e 's/extern char \*getenv ();/\/* getenv *\//' \
-        -e 's/^extern int getopt ();/\/* getopt *\//' \
-        {} +
+# Fix gnulib compat: replace all K&R-style zero-arg prototypes that
+# conflict with strict POSIX declarations in modern libc headers.
+seed find . \( -name '*.c' -o -name '*.h' \) -exec sed -i \
+-e 's/extern char \*getenv ();/\/* getenv *\//' \
+-e 's/^extern int getopt ();/\/* getopt *\//' \
+{} +
 
-    # Bootstrap: use build.sh if make isn't installed yet.
-    if builtin command -v make >/dev/null 2>&1 {
-        make
-        make DESTDIR=$dest install
-    } else {
-        sh build.sh
-        ./make DESTDIR=$dest install
-    }
+# @MAINT_MAKEFILE@ is an autoconf file-substitution that expands to the
+# contents of maintMakefile (absent in release tarballs, always /dev/null).
+# config.status uses awk getline to do this substitution; strip it directly
+# when it survives unexpanded.
+sed -i '/^@MAINT_MAKEFILE@$/d' Makefile
+
+# Remove doc from SUBDIRS: makeinfo is not installed and seed's sh exits with
+# a non-standard error code that the 'missing' wrapper doesn't recover from.
+# Can't override SUBDIRS on the make command line — that propagates to all
+# recursive invocations and breaks lib/Makefile (which also uses SUBDIRS).
+sed -i 's/^SUBDIRS = .*/SUBDIRS = lib/' Makefile
+
+# Bootstrap: use build.sh if make isn't installed yet.
+# Skip po (NLS disabled) but keep lib (required for libgnu.a).
+# The tarball has sources newer than derived outputs, triggering aclocal/
+# autoconf/automake rules.  -o flags don't propagate to recursive makes;
+# override the tools with 'true' instead — that propagates via MAKEFLAGS.
+if builtin command -v make >/dev/null 2>&1 {
+make ACLOCAL=true AUTOCONF=true AUTOMAKE=true
+make ACLOCAL=true AUTOCONF=true AUTOMAKE=true DESTDIR=$dest install
+} else {
+sh build.sh
+./make SUBDIRS='lib' DESTDIR=$dest install
+}
 }
