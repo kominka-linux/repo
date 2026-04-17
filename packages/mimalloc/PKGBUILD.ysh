@@ -14,15 +14,10 @@ var checksums = [
 ]
 
 proc build(dest) {
-var ARCH   = $(seed uname -m)
-var zig_bin = $(builtin command -v zig)
-var target = "${ARCH}-linux-musl"
-
 # mimalloc ships src/static.c which #includes every source file — no build
 # system needed. -DMI_MALLOC_OVERRIDE enables malloc/free/realloc symbols
 # so the library works as an LD_PRELOAD malloc replacement.
-zig cc -shared -fPIC -O2 -DNDEBUG \
--target $target \
+cc -shared -fPIC -O2 -DNDEBUG \
 -Wno-date-time \
 -I include \
 -DMI_MALLOC_OVERRIDE \
