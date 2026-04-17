@@ -30,11 +30,12 @@ setglobal ENV.GREP = 'grep'
 # outputs in the tarball; override the tools so recursive makes don't fail.
 sed -i '/^@MAINT_MAKEFILE@$/d' Makefile
 sed -i 's/^SUBDIRS = .*/SUBDIRS = lib src/' Makefile
+touch Makefile
 
 # Fix gnulib _GL_ATTRIBUTE_NODISCARD incompatibility with newer GCC.
 seed find lib -name '*.h' -exec sed -i \
 's/^\(# *define _GL_ATTRIBUTE_NODISCARD\) .*/\1/' {} +
 
-make ACLOCAL=true AUTOCONF=true AUTOMAKE=true
-make ACLOCAL=true AUTOCONF=true AUTOMAKE=true DESTDIR=$dest install
+make ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true
+make ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true DESTDIR=$dest install
 }
