@@ -12,21 +12,29 @@ var checksums = [
 ]
 
 proc build(dest) {
-var zig_bin = $(builtin command -v zig)
-
 # EGREP_TRADITIONAL and GREP: if these env vars are non-empty, configure
 # skips the tool-detection tests entirely. Avoids seed egrep -Ee failure.
 # --disable-dependency-tracking + --disable-nls: reduce substitutions in
 # config.status; seed sed fails on the full gnulib-generated set.
-seed env CC="$zig_bin cc" EGREP_TRADITIONAL=egrep GREP=grep ./configure \
+# Use system cc (/usr/bin/cc, the zig wrapper with -target ARCH-linux-musl)
+# rather than raw zig cc: the wrapper targets the correct arch, so configure
+# conftest programs execute without SIGILL.
+setglobal ENV.EGREP_TRADITIONAL = 'egrep'
+setglobal ENV.GREP = 'grep'
+./configure \
 --prefix=/usr \
 --disable-dependency-tracking \
 --disable-nls
+
+# Same autotools timestamp cascade as make: sources are newer than derived
+# outputs in the tarball; override the tools so recursive makes don't fail.
+sed -i '/^@MAINT_MAKEFILE@$/d' Makefile
+sed -i 's/^SUBDIRS = .*/SUBDIRS = lib src/' Makefile
 
 # Fix gnulib _GL_ATTRIBUTE_NODISCARD incompatibility with newer GCC.
 seed find lib -name '*.h' -exec sed -i \
 's/^\(# *define _GL_ATTRIBUTE_NODISCARD\) .*/\1/' {} +
 
-make
-make DESTDIR=$dest install
+make ACLOCAL=true AUTOCONF=true AUTOMAKE=true
+make ACLOCAL=true AUTOCONF=true AUTOMAKE=true DESTDIR=$dest install
 }
