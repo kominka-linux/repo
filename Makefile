@@ -52,7 +52,7 @@ baseline:
 		-e LD_LIBRARY_PATH=/usr/lib \
 		-e LOGNAME=root \
 		-e HOME=/root \
-		kominka:builder /usr/local/bin/ysh -c 'pm b $@'
+		kominka:builder /usr/local/bin/ysh /usr/bin/pm b $@
 
 .PHONY: dev test
 

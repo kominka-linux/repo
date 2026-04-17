@@ -29,13 +29,23 @@ setglobal ENV.GREP = 'grep'
 # Same autotools timestamp cascade as make: sources are newer than derived
 # outputs in the tarball; override the tools so recursive makes don't fail.
 sed -i '/^@MAINT_MAKEFILE@$/d' Makefile
-sed -i 's/^SUBDIRS = .*/SUBDIRS = lib src/' Makefile
 touch Makefile
+
+# Stub doc/ and checks/: no help2man, makeinfo, or gnulib test infra available.
+# Stubbing Makefile.in ensures config.status regeneration also produces a stub.
+for d in doc checks; do
+    printf 'all m4.1 stamp-checks:\n\t@:\ninstall install-data install-exec install-man install-binPROGRAMS am--refresh Makefile:\n\t@:\n' > $d/Makefile
+    printf 'all m4.1 stamp-checks:\n\t@:\ninstall install-data install-exec install-man install-binPROGRAMS am--refresh Makefile:\n\t@:\n' > $d/Makefile.in
+done
 
 # Fix gnulib _GL_ATTRIBUTE_NODISCARD incompatibility with newer GCC.
 seed find lib -name '*.h' -exec sed -i \
 's/^\(# *define _GL_ATTRIBUTE_NODISCARD\) .*/\1/' {} +
 
-make ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true
-make ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true DESTDIR=$dest install
+make SUBDIRS='lib src' \
+ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true HELP2MAN=true
+
+make -C src DESTDIR=$dest \
+ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true HELP2MAN=true \
+install-binPROGRAMS
 }

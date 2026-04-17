@@ -2310,10 +2310,10 @@ proc pkg_install_files (test_flag, src_dir) {
                 }
 
                 if builtin test -h $_file {
-                    seed cp -fP "${src_dir}${file}" "${_file%/*}/."
+                    seed cp -fPp "${src_dir}${file}" "${_file%/*}/."
                 } else {
                     var __tmp = "${_file%/*}/__kominka-tmp-${_install_pkg_name}-${file##*/}-${KOMINKA_PID}"
-                    seed cp -fP "${src_dir}${file}" $__tmp \
+                    seed cp -fPp "${src_dir}${file}" $__tmp \
                         && seed mv -f $__tmp $_file
                 }
             }
