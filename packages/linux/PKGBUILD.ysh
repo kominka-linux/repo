@@ -4,7 +4,7 @@ var name    = 'linux'
 var ver     = '6.19.12'
 var rel     = '10'
 var deps    = []
-var mkdeps  = ['make', 'bison', 'binutils']
+var mkdeps  = ['make', 'bison', 'flex', 'm4', 'binutils']
 
 var sources = [
     'https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-VERSION.tar.xz',
@@ -43,34 +43,51 @@ proc build(dest) {
         if builtin test -f $gnu_ld { setvar ld_args = ["LD=$gnu_ld"] }
     }
 
+    var host_args = ['HOSTCC=cc']
+
+    # -fintegrated-as: prevents Makefile.clang from adding --target=... and
+    # -Werror=unused-command-line-argument to KBUILD_CPPFLAGS, which break
+    # non-clang host tool compilation.
+    var clang_flags = ['CLANG_FLAGS=-fintegrated-as']
+
+    # arch/arm64/tools scripts use gawk extensions; seed awk can't handle them.
+    # Override with no-ops since we supply pre-generated headers in sources[].
+    var gen_overrides = ['cmd_gen_cpucaps=:', 'cmd_gen_sysreg=:']
+
+    # zig cc -S + -MMD produces no output (zig bug). Strip -Wp% dep flags and
+    # emit a minimal dep file manually so assembly compilation succeeds.
+    var cc_s_c_override = [
+        "cmd_cc_s_c=\$(CC) \$(filter-out -Wp%,\$(c_flags)) -fno-integrated-as -Wa,-gdwarf-2 -S -o \$@ \$< && echo \"\$@:\" > \$(depfile)"
+    ]
+
     # Merge tinyconfig with our arch-specific fragment.
-    make ARCH=$ARCH tinyconfig
+    make ARCH=$ARCH @host_args @clang_flags tinyconfig
 
     case (MACH) {
         x86_64  { scripts/kconfig/merge_config.sh -m .config kernel-x86_64.config }
         *       { scripts/kconfig/merge_config.sh -m .config kernel.config }
     }
 
-    make ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args olddefconfig
+    make ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args @host_args @clang_flags olddefconfig
 
     var _nproc = $(seed nproc 2>/dev/null || builtin echo 4)
 
     # Build the kernel image.
     case (MACH) {
         x86_64 {
-            make -j$_nproc ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args bzImage
+            make -j$_nproc ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args @host_args @clang_flags @gen_overrides @cc_s_c_override bzImage
             seed mkdir -p "${dest}/usr/share/kominka"
             seed cp arch/x86/boot/bzImage "${dest}/usr/share/kominka/Image"
         }
         * {
-            make -j$_nproc ARCH=$ARCH OBJCOPY=$OBJCOPY Image
+            make -j$_nproc ARCH=$ARCH OBJCOPY=$OBJCOPY @host_args @clang_flags @gen_overrides @cc_s_c_override Image
             seed mkdir -p "${dest}/usr/share/kominka"
             seed cp arch/arm64/boot/Image "${dest}/usr/share/kominka/Image"
         }
     }
 
     # Install kernel headers.
-    make ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args headers
+    make ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args @host_args @clang_flags headers
 
     seed find usr/include -name '*.h' -type f | while builtin read -r file {
         seed mkdir -p "${dest}/${file%/*}"
