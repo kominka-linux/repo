@@ -10,7 +10,6 @@ var sources    = ['https://github.com/mkj/dropbear/archive/f5d44406ef2952ca69a68
 var checksums  = ['ca55783baa7a67e57de4c234d43711349b7b3f8c17b15a04fd58a6e88700572c']
 
 proc build(dest) {
-    var CC = $(builtin command -v cc)
     var kr = ENV => get('KOMINKA_ROOT', '')
     if (kr === '/') { setvar kr = '' }
 
@@ -120,7 +119,7 @@ ENDAWK
     # only passes CFLAGS to its compiler, missing DEFS. Adding it here ensures
     # sub-makes include config.h and pick up HAVE_SETRESGID and friends.
     var _src = $(builtin pwd)
-    seed env CC="$CC" \
+    seed env \
         GREP=/usr/bin/grep \
         EGREP="/usr/bin/grep -E" \
         FGREP="/usr/bin/grep -F" \

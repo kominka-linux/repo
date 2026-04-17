@@ -34,8 +34,12 @@ var MUSL_TRIPLE = "${ARCH}-linux-musl"
 write -- "#!/bin/sh
 mode=cc
 for a in \"\$@\"; do case \"\$a\" in -std=c++*) mode=\"c++\";; esac; done
-exec zig \$mode -target $MUSL_TRIPLE \"\$@\" -I/usr/include" > "${dest}/usr/bin/cc"
-write -- "#!/bin/sh" "exec zig c++ -target $MUSL_TRIPLE \"\$@\" -I/usr/include" > "${dest}/usr/bin/c++"
+if [ \"\$mode\" = \"c++\" ]; then
+  exec zig \$mode -target $MUSL_TRIPLE \"\$@\" -isystem /usr/include
+else
+  exec zig \$mode -target $MUSL_TRIPLE \"\$@\" -I/usr/include
+fi" > "${dest}/usr/bin/cc"
+write -- "#!/bin/sh" "exec zig c++ -target $MUSL_TRIPLE \"\$@\" -isystem /usr/include" > "${dest}/usr/bin/c++"
 # ld — zig's bundled lld, exposed directly.
 write -- '#!/bin/sh' 'exec zig ld.lld "$@"' > "${dest}/usr/bin/ld"
 # ar wrapper — autotools and make need it.

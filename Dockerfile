@@ -42,4 +42,11 @@ RUN KOMINKA_COLOR=0 KOMINKA_PROMPT=0 KOMINKA_STRIP=0 KOMINKA_FORCE=1 \
     pm i core build-essential && \
     seed chmod +x /usr/bin/* /usr/local/bin/*
 
+# Fix c++ wrapper include order: -I/usr/include (user include) is searched
+# before zig's libc++ headers (system includes), causing <cstring> to find
+# musl's string.h instead of libc++'s wrapper. Use -isystem so zig's libc++
+# headers are searched first. The zig PKGBUILD is fixed for future installs.
+RUN sed -i 's| -I/usr/include| -isystem /usr/include|g' /usr/bin/c++
+
+
 CMD ["/bin/sh"]

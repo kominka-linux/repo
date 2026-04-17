@@ -19,7 +19,6 @@ proc build(dest) {
     var _kr = ENV => get("KOMINKA_ROOT", "")
     if (_kr === '/') { setvar _kr = '' }
 
-    var CC = $(builtin command -v cc)
     var _libs = "-L${_kr}/usr/lib -lz"
 
     # Include ordering for musl/zig cc (zig rel=11+ appends -I/usr/include):
@@ -34,7 +33,7 @@ proc build(dest) {
     # otherwise re-evaluate PROGRAM_OBJS without them and try to build
     # git-http-push (needs expat) and git-credential-gnome-keyring, etc.
     var make_flags = [
-        "CC=$CC",
+        "CC=$[ENV => get('CC', 'cc')]",
         'NO_REGEX=NeedsStartEnd',
         'NO_CURL=YesPlease',
         'NO_OPENSSL=YesPlease',

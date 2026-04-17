@@ -17,8 +17,11 @@ proc build(dest) {
     # Override compiler and linker.
     # -D_GNU_SOURCE exposes setgroups() in the libc headers.
     # -Wno-implicit-function-declaration tolerates runit's old C style.
-    write -- "${CC} -O2 -Wall -D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types" > src/conf-cc
-    write -- "${CC} -s"        > src/conf-ld
+    builtin printf '%s\n' "${CC} -O2 -Wall -D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types" > src/conf-cc
+    builtin printf '%s\n' "${CC} -s" > src/conf-ld
+
+    # seed head doesn't support -n; patch scripts to use the traditional form.
+    seed sed -i 's/head -n1/head -1/g' src/print-cc.sh src/print-ld.sh
 
     # runit defaults to -static; remove it for dynamic linking.
     seed sed -i 's/ -static//g' src/Makefile

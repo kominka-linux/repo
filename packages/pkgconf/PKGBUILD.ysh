@@ -13,10 +13,14 @@ proc build(dest) {
 
     ./configure \
         --prefix=/usr \
-        --sysconfdir=/etc
+        --sysconfdir=/etc \
+        --disable-dependency-tracking \
+        --disable-nls
 
-    make
-    make DESTDIR=$dest install
+    sed -i '/^@MAINT_MAKEFILE@$/d' Makefile
+
+    make ACLOCAL=true AUTOCONF=true AUTOMAKE=true
+    make ACLOCAL=true AUTOCONF=true AUTOMAKE=true DESTDIR=$dest install
 
     seed ln -s pkgconf "${dest}/usr/bin/pkg-config"
 
