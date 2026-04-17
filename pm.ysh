@@ -929,12 +929,14 @@ proc pkg_source_resolve (src, dest='', quiet=''; p Dict) {
         return
     }
 
-    # Remote source (cached).
+    # Remote source (cached) — skip in checksum mode to force a fresh download.
     var cached = "${src_dir}/$[p.name]/${clean_dest:+"${clean_dest}/"}${resolved_src##*/}"
-    if builtin test -f $cached {
-        setglobal _res = cached
-        _resolve_found $quiet
-        return
+    if (quiet !== 'c') {
+        if builtin test -f $cached {
+            setglobal _res = cached
+            _resolve_found $quiet
+            return
+        }
     }
 
     # Remote source (not yet downloaded).
@@ -1128,6 +1130,14 @@ proc pkg_extract (; p Dict) {
     }
 }
 
+proc _src_arch_suffix (; p Dict) {
+    ### Set _arch_suffix to '' for arch-independent packages, '-aarch64'/'-x86_64' otherwise.
+    setglobal _arch_suffix = ''
+    if (len(p.checksums_aarch64) > 0 or len(p.checksums_x86_64) > 0) {
+        setglobal _arch_suffix = "-${sys_arch%%-*}"
+    }
+}
+
 proc pkg_mirror_use (; p Dict) {
     ### Download and extract the mirror source tarball if available.
     ### Returns non-zero if no mirror exists, version mismatches, or verification fails.
@@ -1139,10 +1149,11 @@ proc pkg_mirror_use (; p Dict) {
     if (_src_sha === '') { return 1 }
     if (_ri['ver'] !== p.ver or _ri['rel'] !== p.rel) { return 1 }
 
-    var _local = "${mir_dir}/$[p.name]@$[p.ver]-$[p.rel].tar.bz2"
+    _src_arch_suffix (p)
+    var _local = "${mir_dir}/$[p.name]@$[p.ver]-$[p.rel]${_arch_suffix}.tar.bz2"
 
     if ! builtin test -f $_local {
-        var _url = "${KOMINKA_REPO}/src/$[p.name]/$[p.ver]-$[p.rel].tar.bz2"
+        var _url = "${KOMINKA_REPO}/src/$[p.name]/$[p.ver]-$[p.rel]${_arch_suffix}.tar.bz2"
         log $[p.name] "Downloading mirror source"
         seed mkdir -p $mir_dir
         try { pkg_source_url $_local $_url (p) }
@@ -1184,9 +1195,10 @@ proc pkg_source_process (; p Dict) {
 
 proc pkg_source_pack (; p Dict) {
     ### Pack the build directory into a processed source tarball (.tar.bz2).
+    _src_arch_suffix (p)
     log $[p.name] "Packing source tarball"
     seed mkdir -p $mir_dir
-    var _out = "${mir_dir}/$[p.name]@$[p.ver]-$[p.rel].tar.bz2"
+    var _out = "${mir_dir}/$[p.name]@$[p.ver]-$[p.rel]${_arch_suffix}.tar.bz2"
     seed tar cf - -C "${mak_dir}/$[p.name]" . | seed bzip2 -z > $_out
 }
 
@@ -1652,19 +1664,20 @@ proc pkg_tar (; p Dict) {
 proc pkg_source_upload (pkg; p Dict) {
     ### Upload the processed source tarball to the repository server.
     if (KOMINKA_REPO === '') { die "KOMINKA_REPO not set" }
-    var _tarball = "${mir_dir}/${pkg}@$[p.ver]-$[p.rel].tar.bz2"
+    _src_arch_suffix (p)
+    var _tarball = "${mir_dir}/${pkg}@$[p.ver]-$[p.rel]${_arch_suffix}.tar.bz2"
     if ! builtin test -f $_tarball {
         log $pkg "No source tarball cached — run 'pm src $pkg' first to generate it" WARNING
         return
     }
 
-    # Skip if the source tarball is already indexed for this ver-rel.
+    # Skip if the source tarball is already indexed for this ver-rel and arch.
     index_load
     if (pkg in _remote_index) {
         var _ri = _remote_index[pkg]
         var _src_sha = _ri => get('src_sha256', '')
         if (_src_sha !== '' and _ri['ver'] === p.ver and _ri['rel'] === p.rel) {
-            log $pkg "Source already uploaded at $[p.ver]-$[p.rel]"
+            log $pkg "Source already uploaded at $[p.ver]-$[p.rel] (${sys_arch%%-*})"
             return
         }
     }
@@ -1681,6 +1694,7 @@ proc pkg_source_upload (pkg; p Dict) {
         --header="X-Pkg: ${pkg}" \
         --header="X-Ver: $[p.ver]" \
         --header="X-Rel: $[p.rel]" \
+        --header="X-Arch: ${sys_arch}" \
         -O $_resp_tmp \
         "${KOMINKA_REPO}/api/upload-src" \
         || { war $pkg "Source upload failed"; return }
@@ -1698,6 +1712,7 @@ proc pkg_source_upload (pkg; p Dict) {
 proc pkg_source_cmd (...pkgs) {
     ### Download, process, pack, and upload source tarballs without building.
     ### Use this to backfill the source mirror for existing packages.
+    ### When the PKGBUILD has arch-specific checksums, both arches are handled.
     if (KOMINKA_REPO === '') { die "KOMINKA_REPO not set" }
 
     var _token = ''
@@ -1713,24 +1728,43 @@ proc pkg_source_cmd (...pkgs) {
             continue
         }
 
-        # Skip if already mirrored at this exact ver-rel.
-        index_load
-        if (pkg in _remote_index) {
-            var _ri = _remote_index[pkg]
-            var _src_sha = _ri => get('src_sha256', '')
-            if (_src_sha !== '' and _ri['ver'] === p.ver and _ri['rel'] === p.rel) {
-                log $pkg "Already mirrored at $[p.ver]-$[p.rel]"
-                continue
+        var _archs = []
+        if (len(p.checksums_aarch64) > 0) { call _archs->append('aarch64-linux-gnu') }
+        if (len(p.checksums_x86_64) > 0)  { call _archs->append('x86_64-linux-gnu')  }
+        if (len(_archs) === 0) { call _archs->append(sys_arch) }
+
+        var saved_arch = sys_arch
+
+        for arch in (_archs) {
+            setglobal sys_arch = arch
+
+            # Skip if local arch-specific tarball already exists and is already uploaded.
+            _src_arch_suffix (p)
+            var _local_tar = "${mir_dir}/${pkg}@$[p.ver]-$[p.rel]${_arch_suffix}.tar.bz2"
+            var _arch_short = ${arch%%-*}
+            index_load
+            if builtin test -f $_local_tar {
+                if (pkg in _remote_index) {
+                    var _ri = _remote_index[pkg]
+                    var _src_sha = _ri => get('src_sha256', '')
+                    if (_src_sha !== '' and _ri['ver'] === p.ver and _ri['rel'] === p.rel) {
+                        log $pkg "Already mirrored at $[p.ver]-$[p.rel] ($_arch_short)"
+                        continue
+                    }
+                }
             }
+
+            seed rm -rf "${mak_dir}/$pkg"
+            pkg_source (p)
+            if (len(p.sources) > 0) { pkg_verify (p) }
+            pkg_extract (p)
+            pkg_git_strip (p)
+            pkg_source_process (p)
+            pkg_source_pack (p)
+            pkg_source_upload $pkg (p)
         }
 
-        pkg_source (p)
-        if (len(p.sources) > 0) { pkg_verify (p) }
-        pkg_extract (p)
-        pkg_git_strip (p)
-        pkg_source_process (p)
-        pkg_source_pack (p)
-        pkg_source_upload $pkg (p)
+        setglobal sys_arch = saved_arch
     }
 }
 
@@ -1969,6 +2003,8 @@ proc pkg_checksum (pkg) {
 proc pkg_update_checksums (pkg) {
     ### Recompute checksums and update them in-place in PKGBUILD.ysh.
     # SKIP entries are preserved; only real hash entries are replaced.
+    # When the PKGBUILD has arch-specific checksum fields, all arches are
+    # updated in one run; each arch's sources are downloaded separately.
     var p = null
     pkg_find_and_load $pkg (&p)
 
@@ -1977,83 +2013,86 @@ proc pkg_update_checksums (pkg) {
         return
     }
 
-    pkg_source 'c' (p)
-    pkg_checksum_gen (p)
-
-    var new_sums = @(builtin echo $hash)
-
-    # Choose which field to update based on arch-specific presence.
-    var _arch = ${sys_arch%%-*}
-    var field = 'checksums'
-    var _stored = p.checksums
-    case (_arch) {
-        aarch64 {
-            if (len(p.checksums_aarch64) > 0) {
-                setvar field = 'checksums_aarch64'
-                setvar _stored = p.checksums_aarch64
-            }
-        }
-        x86_64 {
-            if (len(p.checksums_x86_64) > 0) {
-                setvar field = 'checksums_x86_64'
-                setvar _stored = p.checksums_x86_64
-            }
-        }
+    # Build the list of (arch, field, stored-checksums) triples to update.
+    var _fields = []
+    if (len(p.checksums_aarch64) > 0) {
+        call _fields->append(['aarch64-linux-gnu', 'checksums_aarch64', p.checksums_aarch64])
+    }
+    if (len(p.checksums_x86_64) > 0) {
+        call _fields->append(['x86_64-linux-gnu', 'checksums_x86_64', p.checksums_x86_64])
+    }
+    if (len(_fields) === 0) {
+        call _fields->append([sys_arch, 'checksums', p.checksums])
     }
 
-    # Merge: SKIP positions stay SKIP, hash positions take the new value.
-    var merged = []
-    var idx = 0
-    for s in (_stored) {
-        if (s === 'SKIP') {
-            call merged->append('SKIP')
-        } else {
-            if (idx < len(new_sums)) {
-                call merged->append(new_sums[idx])
-            } else {
-                call merged->append(s)
-            }
-            setvar idx += 1
-        }
-    }
-
+    var saved_arch = sys_arch
     var pkgbuild = "${repo_dir}/PKGBUILD.ysh"
-    var tmp      = "${pkgbuild}.tmp"
 
-    # Rewrite the checksum array in-place using a line-by-line pass.
-    # Lines between "var FIELD ..." and the closing "]" are replaced with
-    # the new entries; every other line is passed through unchanged.
-    var in_block = false
-    var found    = false
+    for entry in (_fields) {
+        setglobal sys_arch = entry[0]
+        var field   = entry[1]
+        var _stored = entry[2]
 
-    while builtin read -r line {
-        if (not in_block) {
-            if (line => startsWith("var $field ") or line => startsWith("var $field=")) {
-                setvar in_block = true
-                setvar found    = true
-                write -- "var $field = ["
-                for h in (merged) {
-                    write -- "    '$h',"
+        pkg_source 'c' (p)
+        pkg_checksum_gen (p)
+
+        var new_sums = @(builtin echo $hash)
+
+        # Merge: SKIP positions stay SKIP, hash positions take the new value.
+        var merged = []
+        var idx = 0
+        for s in (_stored) {
+            if (s === 'SKIP') {
+                call merged->append('SKIP')
+            } else {
+                if (idx < len(new_sums)) {
+                    call merged->append(new_sums[idx])
+                } else {
+                    call merged->append(s)
                 }
-                write -- "]"
-                # single-line form: var checksums = ['h1', 'h2']
+                setvar idx += 1
+            }
+        }
+
+        var tmp = "${pkgbuild}.tmp"
+        var in_block = false
+        var found    = false
+
+        # Rewrite the checksum array in-place using a line-by-line pass.
+        # Lines between "var FIELD ..." and the closing "]" are replaced with
+        # the new entries; every other line is passed through unchanged.
+        while builtin read --raw-line {
+            var line = _reply
+            if (not in_block) {
+                if (line => startsWith("var $field ") or line => startsWith("var $field=")) {
+                    setvar in_block = true
+                    setvar found    = true
+                    write -- "var $field = ["
+                    for h in (merged) {
+                        write -- "    '$h',"
+                    }
+                    write -- "]"
+                    # single-line form: var checksums = ['h1', 'h2']
+                    if (line => contains(']')) { setvar in_block = false }
+                    continue
+                }
+            } else {
                 if (line => contains(']')) { setvar in_block = false }
                 continue
             }
-        } else {
-            if (line => contains(']')) { setvar in_block = false }
-            continue
-        }
-        write -- "$line"
-    } < $pkgbuild > $tmp
+            write -- $line
+        } < $pkgbuild > $tmp
 
-    if (not found) {
-        seed rm -f $tmp
-        die $pkg "field '$field' not found in $pkgbuild"
+        if (not found) {
+            seed rm -f $tmp
+            die $pkg "field '$field' not found in $pkgbuild"
+        }
+
+        seed mv $tmp $pkgbuild
+        log $pkg "Updated $field in $pkgbuild"
     }
 
-    seed mv $tmp $pkgbuild
-    log $pkg "Updated $field in $pkgbuild"
+    setglobal sys_arch = saved_arch
 }
 
 proc pkg_checksum_gen (; p Dict) {
@@ -2940,8 +2979,7 @@ proc args (action='', ...pkgs) {
         a | alternatives { pkg_alternatives @pkgs }
         b | build        { pkg_build_all @pkgs }
         t | tree         { pkg_tree @pkgs }
-        c | checksum        { for pkg in (pkgs) { pkg_checksum $pkg } }
-        uc | update-checksums { for pkg in (pkgs) { pkg_update_checksums $pkg } }
+        c | checksum | uc | update-checksums { for pkg in (pkgs) { pkg_update_checksums $pkg } }
         d | download     {
             var p = null
             for pkg in (pkgs) {

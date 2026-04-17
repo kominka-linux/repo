@@ -20,7 +20,7 @@ var sources = [
 'files/udhcpc.ysh',
 ]
 var checksums_aarch64 = [
-    '237af0395052f5e53d89b517d6f98ee04233577f346571917b97487eed17fd92',
+    '88639be2547a39d7eec6ca8c9373d70c3c52213014eefe034125ea2940d4c9d3',
     'SKIP',
     'SKIP',
     'SKIP',
@@ -31,9 +31,17 @@ var checksums_aarch64 = [
     'SKIP',
     'SKIP',
 ]
-var checksums_x86_64  = [
-'c0362ed2bb3e257236ad722ccae15788e3a99ca203e975a3d2faf8028e05924e',
-'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP', 'SKIP',
+var checksums_x86_64 = [
+    '085b98c9be6bb5976b1494b264800f1942a3e5e0335dabe9dd530180e7aa644d',
+    'SKIP',
+    'SKIP',
+    'SKIP',
+    'SKIP',
+    'SKIP',
+    'SKIP',
+    'SKIP',
+    'SKIP',
+    'SKIP',
 ]
 
 proc build(dest) {
