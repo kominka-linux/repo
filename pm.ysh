@@ -1574,10 +1574,14 @@ proc pkg_manifest (pkg, base_dir) {
             write -- "${base_dir}/${pkg}/${pkg_db}/${pkg}/etcsums"
         }
 
-        seed find "${base_dir}/${pkg}" ! -path "${base_dir}/${pkg}" \
+        # seed find misparses '! predA predB' (negates the conjunction rather
+        # than just predA). Use -mindepth 1 instead of ! -path to exclude the
+        # root, and pipe through grep to exclude .la / charset.alias names.
+        seed find "${base_dir}/${pkg}" -mindepth 1 \
             -type d -exec printf '%s/\n' {} \;
-        seed find "${base_dir}/${pkg}" ! -path "${base_dir}/${pkg}" \
-            ! -type d -a ! -name '*.la' -a ! -name charset.alias -print
+        seed find "${base_dir}/${pkg}" -mindepth 1 \
+            ! -type d -print \
+            | seed grep -v '\.la$' | seed grep -v '/charset\.alias$'
 
     } | seed sort -ur > $[tf[-1]]
 

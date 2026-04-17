@@ -7,7 +7,9 @@ var deps    = ['musl']
 var mkdeps  = ['zig', 'make', 'm4']
 
 var sources = ['https://ftp.gnu.org/gnu/bison/bison-VERSION.tar.xz']
-var checksums = ['9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2']
+var checksums = [
+    '9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2',
+]
 
 proc build(dest) {
 
@@ -30,10 +32,16 @@ proc build(dest) {
     sed -i '/^@[a-zA-Z_][a-zA-Z0-9_]*@$/d' Makefile
     touch Makefile
 
-    make ACLOCAL=true AUTOCONF=true AUTOMAKE=true MAKEINFO=true PERL=true
+    # Touch pre-generated gperf headers so make doesn't try to rebuild them
+    # (gperf is not available; these AIX/HPUX compat headers aren't needed
+    # on Linux/musl and the tarball ships pre-generated versions).
+    seed find lib -name '*.h' -exec touch {} \;
+
+    make ACLOCAL=true AUTOCONF=true AUTOMAKE=true MAKEINFO=true PERL=true \
+        GPERF=true
 
     make DESTDIR=$dest \
-        ACLOCAL=true AUTOCONF=true AUTOMAKE=true MAKEINFO=true PERL=true \
+        ACLOCAL=true AUTOCONF=true AUTOMAKE=true MAKEINFO=true PERL=true GPERF=true \
         install-libLIBRARIES \
         install-binPROGRAMS \
         install-nodist_binSCRIPTS \

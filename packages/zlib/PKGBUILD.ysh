@@ -7,7 +7,9 @@ var deps    = ['musl']
 var mkdeps  = ['zig', 'cmake', 'samurai']
 
 var sources = ['https://zlib.net/fossils/zlib-VERSION.tar.gz']
-var checksums = ['bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16']
+var checksums = [
+    'bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16',
+]
 
 proc build(dest) {
     cmake -GNinja -B build \

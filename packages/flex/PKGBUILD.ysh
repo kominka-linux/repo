@@ -1,0 +1,46 @@
+#!/usr/local/bin/ysh
+
+var name    = 'flex'
+var ver     = '2.6.4'
+var rel     = '1'
+var deps    = ['musl']
+var mkdeps  = ['zig', 'make', 'm4']
+
+var sources = ['https://github.com/westes/flex/releases/download/v2.6.4/flex-2.6.4.tar.gz']
+var checksums = [
+    'e87aae032bf07c26f85ac0ed3250998c37621d95f8bd748b31f15b33c45ee995',
+]
+
+proc build(dest) {
+    # The m4 in the build environment (from the remote repo) may have been
+    # built with the old zig cc setup (no -target) and produce SIGILL.
+    # Rebuild m4 from source so the local cache gets a working binary, then
+    # reinstall it.
+    if ! m4 --version >/dev/null 2>&1 {
+        pm b m4
+        pm i m4
+    }
+
+    ./configure \
+        --prefix=/usr \
+        --disable-nls \
+        --disable-dependency-tracking \
+        --disable-shared
+
+    sed -i '/^@MAINT_MAKEFILE@$/d' Makefile
+    touch Makefile
+
+    # Prevent autoheader/autoconf regeneration cascades from stale timestamps.
+    touch config.h.in configure
+
+    # flex uses itself to regenerate src/scan.c; touch all pre-generated C
+    # sources so make considers them up to date.
+    seed find src -name '*.c' -exec touch {} \;
+
+    make \
+        ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true HELP2MAN=true
+
+    make -C src DESTDIR=$dest \
+        ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true HELP2MAN=true \
+        install-binPROGRAMS
+}
