@@ -1,7 +1,7 @@
 #!/usr/local/bin/ysh
 
 var name    = 'seed'
-var ver     = '2138a1ae863d05591ecda011703364ebc0f05958'
+var ver     = 'edd1a14aa531497401cd772532e1bee4800f6f8f'
 var rel     = '1'
 var deps    = []
 var mkdeps  = []
