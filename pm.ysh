@@ -1581,7 +1581,7 @@ proc pkg_manifest_validate (pkg) {
     var missing = 0
     while builtin read -r line {
         if ! builtin test -e "${tar_dir}/${pkg}${line}" && ! builtin test -h "${tar_dir}/${pkg}${line}" {
-            write -- $line
+            write -- "$line"
             setvar missing += 1
         }
     } < "${pkg_db}/${pkg}/manifest"
@@ -2044,7 +2044,7 @@ proc pkg_update_checksums (pkg) {
             if (line => contains(']')) { setvar in_block = false }
             continue
         }
-        write -- $line
+        write -- "$line"
     } < $pkgbuild > $tmp
 
     if (not found) {
