@@ -2,7 +2,7 @@
 
 var name    = 'binutils'
 var ver     = '2.44'
-var rel     = '1'
+var rel     = '6'
 var deps    = ['musl']
 var mkdeps  = ['zig', 'make']
 
@@ -21,7 +21,8 @@ proc build(dest) {
 --enable-64-bit-bfd \
 --disable-ld \
 --disable-gold \
---disable-gprof
+--disable-gprof \
+--disable-libctf
 
 # Top-level configure recurses into all sub-packages, creating their Makefiles.
 # config.status's awk getline can't expand AC_SUBST_FILE variables, leaving bare
@@ -39,11 +40,12 @@ touch Makefile
 # Sub-package Makefiles are created lazily by make configure-XXX (not by top-level
 # configure). Pre-configure all sub-packages we need so we can patch their Makefiles
 # before any build step tries to parse them.
-make configure-libiberty configure-bfd configure-binutils \
+make configure-libiberty configure-bfd configure-opcodes configure-binutils \
   ACLOCAL=true AUTOCONF=true AUTOMAKE=true
 # Patch all newly-created sub-package Makefiles.
 for mf in libiberty/Makefile libiberty/testsuite/Makefile \
            bfd/Makefile bfd/po/Makefile \
+           opcodes/Makefile opcodes/po/Makefile \
            binutils/Makefile binutils/po/Makefile {
     if test -f $mf {
         sed -i '/^@[a-zA-Z_][a-zA-Z0-9_]*@$/d' $mf
@@ -51,12 +53,15 @@ for mf in libiberty/Makefile libiberty/testsuite/Makefile \
     }
 }
 
-# Build only the sub-libraries and the two tools we need.
+# Build only the sub-libraries and the tools we need.
 make all-libiberty ACLOCAL=true AUTOCONF=true AUTOMAKE=true MAKEINFO=true
 make all-bfd ACLOCAL=true AUTOCONF=true AUTOMAKE=true MAKEINFO=true
-make -C binutils strip-new nm-new \
+make all-opcodes ACLOCAL=true AUTOCONF=true AUTOMAKE=true MAKEINFO=true
+make -C binutils strip-new nm-new objcopy objdump \
   ACLOCAL=true AUTOCONF=true AUTOMAKE=true MAKEINFO=true PERL=true
 
 seed install -Dm755 binutils/strip-new "${dest}/usr/bin/strip"
 seed install -Dm755 binutils/nm-new    "${dest}/usr/bin/nm"
+seed install -Dm755 binutils/objcopy   "${dest}/usr/bin/objcopy"
+seed install -Dm755 binutils/objdump   "${dest}/usr/bin/objdump"
 }

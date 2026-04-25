@@ -4,7 +4,7 @@ var name    = 'linux'
 var ver     = '6.19.12'
 var rel     = '10'
 var deps    = []
-var mkdeps  = ['make', 'bison', 'flex', 'm4', 'binutils']
+var mkdeps  = ['make', 'bison', 'flex', 'm4', 'perl']
 
 var sources = [
     'https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-VERSION.tar.xz',
@@ -13,15 +13,49 @@ var sources = [
     'files/machines/dell-xps13-9343.config',
     'files/machines/generic-x86_64.config',
     'files/machines/index',
+    'files/cpucap-defs.h',
+    'files/sysreg-defs.h',
+    'files/timeconst.h',
+    'files/unistd_64.h',
+    'files/sha256-core.S',
+    'files/sha512-core.S',
+    'files/unistd_compat_32.h',
 ]
 var checksums = [
     'ce5c4f1205f9729286b569b037649591555f31ca1e03cc504bd3b70b8e58a8d5',
-    '0125c9ae402accd9fa5c2d05aec3ede0d919d10c0aba513292ab6ae813967da1',
+    '36d699d6ae5c9435267257e0080b38dd24aa10303ebdf84d91dafacca6247de9',
     '04e885aaa2deff3bdeaf72f1ff18aec5daece7ec74a7cfee0a957c3dcb92fc2d',
     '4869eea9729d3dab78b67d28fe8027afaf5aaf9197914044bc80f38f2c458591',
     '6eb882bfc1db00ff75e11f17da73aae496146a04a6e0e2d00dcaabbbf5c55c5a',
     '841aaa44cd8f08daf2f51132f167a55ceb49866c21f2c4e25e88d085f2622bf5',
+    '8c3773b9e142351bb418b101f1c6bd177750ce033614d561af0376c1a16e68a6',
+    '1f799d545f5f3ad162f5e46486bc21ef2132e30b107ffa29211582d0778f1901',
+    '0db01d74b846e39dca3612d96dee8b8f6addfaeb738cc4f5574086828487c2b9',
+    '0af2afc68a0e163f6aa3dec52c139ec317408f278daf792fa2ddf84a9ec2a8ab',
+    '1b7d66d6d221e3663be0da7d0516564e6d5d10c07e8c0612ee0ac87bcb9dc519',
+    '527009fbdd1faa79dee68028a3fd92440412c24e29ec95b32718f911216d27ec',
+    '76d67d4f196c4712ebc9a44780c34dab2e3e7a0159fb8af61a974522d33e81ae',
 ]
+
+proc process(src) {
+    # Documentation (~150MB) is never compiled.
+    # Documentation/Kconfig and samples/Kconfig are sourced by the Kconfig
+    # tree; replace each with an empty stub so allnoconfig doesn't error.
+    for dir in (["${src}/Documentation", "${src}/samples"]) {
+        seed rm -rf $dir
+        seed mkdir $dir
+        builtin true > "${dir}/Kconfig"
+    }
+
+    # zig cc (LLVM 20) rejects `smc #0` inline asm with "instruction requires: el3".
+    # Replace SMCCC_SMC_INST with the raw .inst encoding (0xD4000003 = smc #0 in AArch64).
+    seed sed -i 's/#define SMCCC_SMC_INST.*/#define SMCCC_SMC_INST ".inst 0xD4000003"/' \
+        "${src}/include/linux/arm-smccc.h"
+
+    # busybox chmod rejects `chmod -x` (treats -x as an unknown flag option).
+    # Replace with the POSIX `chmod a-x` form that busybox accepts.
+    seed sed -i 's/chmod -x/chmod a-x/g' "${src}/scripts/Makefile.vmlinux"
+}
 
 proc build(dest) {
     # uname -m returns aarch64/x86_64; kernel ARCH uses arm64/x86_64.
@@ -29,21 +63,7 @@ proc build(dest) {
     var ARCH = MACH
     if (MACH === 'aarch64') { setvar ARCH = 'arm64' }
 
-    # zig objcopy doesn't implement -S (strip-all) used by the arm64 vdso strip
-    # step. Use Alpine's binutils objcopy saved in Dockerfile.bootstrap.
-    var OBJCOPY = '/usr/local/bin/gnu-objcopy'
-    if ! builtin test -f $OBJCOPY { setvar OBJCOPY = $(builtin command -v objcopy) }
-
-    # x86 realmode trampoline (arch/x86/realmode/rm/) uses a linker script
-    # that lld can't handle (pa_* physical-address symbols). GNU ld required.
-    # arm64 works fine with lld; no LD override needed there.
-    var ld_args = []
-    if (MACH === 'x86_64') {
-        var gnu_ld = '/usr/local/bin/gnu-ld'
-        if builtin test -f $gnu_ld { setvar ld_args = ["LD=$gnu_ld"] }
-    }
-
-    var host_args = ['HOSTCC=cc']
+    var host_args = ['HOSTCC=cc', 'CC=cc', 'HOSTCFLAGS=-Wno-bitwise-op-parentheses -Wno-shift-op-parentheses']
 
     # -fintegrated-as: prevents Makefile.clang from adding --target=... and
     # -Werror=unused-command-line-argument to KBUILD_CPPFLAGS, which break
@@ -51,43 +71,129 @@ proc build(dest) {
     var clang_flags = ['CLANG_FLAGS=-fintegrated-as']
 
     # arch/arm64/tools scripts use gawk extensions; seed awk can't handle them.
-    # Override with no-ops since we supply pre-generated headers in sources[].
+    # Copy pre-generated headers into place; override the gen rules with no-ops.
+    seed mkdir -p arch/arm64/include/generated/asm
+    seed cp -f cpucap-defs.h arch/arm64/include/generated/asm/cpucap-defs.h
+    seed cp -f sysreg-defs.h arch/arm64/include/generated/asm/sysreg-defs.h
     var gen_overrides = ['cmd_gen_cpucaps=:', 'cmd_gen_sysreg=:']
 
-    # zig cc -S + -MMD produces no output (zig bug). Strip -Wp% dep flags and
-    # emit a minimal dep file manually so assembly compilation succeeds.
+    # arm64 64-bit syscall_64.tbl is intentionally empty (arm64 uses the generic
+    # syscall table). Makefile.asm-headers overrides syscalltbl to that empty file,
+    # producing an empty unistd_64.h (no __NR_* defines). Pre-populate from the
+    # generic table so kernel code that needs __NR_read etc. compiles correctly.
+    seed mkdir -p arch/arm64/include/generated/uapi/asm
+    seed cp -f unistd_64.h arch/arm64/include/generated/uapi/asm/unistd_64.h
+    # arch/arm64/include/asm/seccomp.h unconditionally includes unistd_compat_32.h.
+    # Generated from arch/arm64/tools/syscall_32.tbl with --prefix "compat32_" --abis common,32.
+    seed mkdir -p arch/arm64/include/generated/asm
+    seed cp -f unistd_compat_32.h arch/arm64/include/generated/asm/unistd_compat_32.h
+    var syshdr_override = ['cmd_syshdr=:']
+
+    # perlasm generates sha256-core.S and sha512-core.S; the perl binary from R2
+    # may crash with SIGILL on this host. Pre-populate both so if_changed skips them.
+    seed mkdir -p lib/crypto/arm64
+    seed cp -f sha256-core.S lib/crypto/arm64/sha256-core.S
+    seed cp -f sha512-core.S lib/crypto/arm64/sha512-core.S
+    var perlasm_override = ['cmd_perlasm_with_args=:']
+
+    # timeconst.h is generated by: echo HZ | bc -q kernel/time/timeconst.bc
+    # bc is not available. Provide a fake bc that outputs the pre-generated file
+    # (cwd during recipe execution is the kernel build dir, so the relative path
+    # resolves correctly). The filechk mechanism compares .tmp to the existing
+    # file and no-ops if they match.
+    seed mkdir -p include/generated
+    seed cp -f timeconst.h include/generated/timeconst.h
+    seed mkdir -p /tmp/kominka-fake-bin
+    builtin echo '#!/bin/sh' > /tmp/kominka-fake-bin/bc
+    builtin echo 'cat include/generated/timeconst.h' >> /tmp/kominka-fake-bin/bc
+    seed chmod +x /tmp/kominka-fake-bin/bc
+    # Base image ships zig objcopy at /usr/bin/objcopy; it lacks --prefix-symbols
+    # (needed for .pi.o early-boot objects) and fails on StaticElfFile-type vDSO .so.
+    # Both dirs prepended in one setglobal so they don't shadow each other.
+    seed mkdir -p /tmp/gnu-bin
+    seed tar xzf /root/.cache/kominka/bin/binutils@2.44-6.tar.gz -C /tmp
+    seed cp -f /tmp/usr/bin/objcopy /tmp/gnu-bin/objcopy
+    seed cp -f /tmp/usr/bin/objdump /tmp/gnu-bin/objdump
+    seed cp -f /tmp/usr/bin/strip /tmp/gnu-bin/strip
+    seed cp -f /tmp/usr/bin/nm /tmp/gnu-bin/nm
+    seed chmod +x /tmp/gnu-bin/objcopy /tmp/gnu-bin/objdump /tmp/gnu-bin/strip /tmp/gnu-bin/nm
+    setglobal ENV.PATH = "/tmp/gnu-bin:/tmp/kominka-fake-bin:${PATH}"
+
+    # Override all tool names that Makefile.clang would set to llvm-* variants.
+    var tool_overrides = ['OBJCOPY=/tmp/gnu-bin/objcopy', 'LLVM_OBJCOPY=/tmp/gnu-bin/objcopy', 'OBJDUMP=/tmp/gnu-bin/objdump', 'LLVM_OBJDUMP=/tmp/gnu-bin/objdump', 'STRIP=/tmp/gnu-bin/strip', 'LLVM_STRIP=/tmp/gnu-bin/strip']
+    var timeconst_override = []
+
+    # arm64 vDSO Makefile strips -D__KERNEL__ so asm/unistd.h's #ifdef __KERNEL__
+    # guard fires and __NR_* are left undefined. Replace with fixed arm64 ABI
+    # values (from include/uapi/asm-generic/unistd.h; these are stable).
+    if (MACH === 'aarch64') {
+        seed sed 's/__NR_rt_sigreturn/139/g' \
+            arch/arm64/kernel/vdso/sigreturn.S > /tmp/sigreturn.S.tmp
+        seed cp /tmp/sigreturn.S.tmp arch/arm64/kernel/vdso/sigreturn.S
+        seed sed 's/__NR_gettimeofday/169/g' \
+            arch/arm64/include/asm/vdso/gettimeofday.h > /tmp/vdso-gettimeofday.h.tmp
+        seed sed 's/__NR_clock_gettime/113/g' \
+            /tmp/vdso-gettimeofday.h.tmp > /tmp/vdso-gettimeofday2.h.tmp
+        seed sed 's/__NR_clock_getres/114/g' \
+            /tmp/vdso-gettimeofday2.h.tmp > arch/arm64/include/asm/vdso/gettimeofday.h
+        seed sed 's/__NR_getrandom/278/g' \
+            arch/arm64/include/asm/vdso/getrandom.h > /tmp/vdso-getrandom.h.tmp
+        seed cp /tmp/vdso-getrandom.h.tmp arch/arm64/include/asm/vdso/getrandom.h
+    }
+
+    # m4 from the remote repo may have been built with old zig cc and produce
+    # SIGILL at runtime. flex and bison both call m4 internally (via popen);
+    # if m4 crashes, they get SIGPIPE (exit 141). Rebuild from source if broken.
+    if ! m4 --version >/dev/null 2>&1 {
+        pm b m4
+        pm i m4
+    }
+
+    # zig cc -S + any dep-tracking flag (-Wp,-MMD or -MMD -MF) produces no
+    # .s output (zig bug). Strip all -Wp% flags and compile clean. Write the
+    # dep file first so fixdep never sees a missing file on compilation errors.
     var cc_s_c_override = [
-        "cmd_cc_s_c=\$(CC) \$(filter-out -Wp%,\$(c_flags)) -fno-integrated-as -Wa,-gdwarf-2 -S -o \$@ \$< && echo \"\$@:\" > \$(depfile)"
+        "cmd_cc_s_c=printf '%s: %s\\n' \$@ \$< > \$(depfile); \$(CC) \$(filter-out -Wp%,\$(c_flags)) -fno-integrated-as -Wa,-gdwarf-2 -S -o \$@ \$<"
     ]
 
+    # zig cc adds -fsanitize=* implicitly when compiling with -O0 (debug mode).
+    # jitterentropy.c is compiled with -O0; the kernel disables UBSAN for it
+    # via UBSAN_SANITIZE_jitterentropy.o=n but that only suppresses the kernel's
+    # own scripts/Makefile.ubsan additions, not zig's implicit instrumentation.
+    var kcflags_override = ['KCFLAGS=-fno-sanitize=all']
+
     # Merge tinyconfig with our arch-specific fragment.
-    make ARCH=$ARCH @host_args @clang_flags tinyconfig
+    make ARCH=$ARCH @host_args @clang_flags @tool_overrides @timeconst_override tinyconfig
 
     case (MACH) {
         x86_64  { scripts/kconfig/merge_config.sh -m .config kernel-x86_64.config }
         *       { scripts/kconfig/merge_config.sh -m .config kernel.config }
     }
 
-    make ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args @host_args @clang_flags olddefconfig
+    make ARCH=$ARCH @host_args @clang_flags @tool_overrides @timeconst_override olddefconfig
+
+    # COMPAT_VDSO (arm32 vDSO) defaults to y when CC_IS_CLANG && LD_IS_LLD.
+    # zig lld fails with "error: unimplemented" on the arm32 VDSO .so.
+    seed sed -i 's/^CONFIG_COMPAT_VDSO=.*/# CONFIG_COMPAT_VDSO is not set/' .config
 
     var _nproc = $(seed nproc 2>/dev/null || builtin echo 4)
 
     # Build the kernel image.
     case (MACH) {
         x86_64 {
-            make -j$_nproc ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args @host_args @clang_flags @gen_overrides @cc_s_c_override bzImage
+            make -j$_nproc ARCH=$ARCH @host_args @clang_flags @tool_overrides @gen_overrides @syshdr_override @perlasm_override @timeconst_override @cc_s_c_override @kcflags_override bzImage
             seed mkdir -p "${dest}/usr/share/kominka"
             seed cp arch/x86/boot/bzImage "${dest}/usr/share/kominka/Image"
         }
         * {
-            make -j$_nproc ARCH=$ARCH OBJCOPY=$OBJCOPY @host_args @clang_flags @gen_overrides @cc_s_c_override Image
+            make -j$_nproc ARCH=$ARCH @host_args @clang_flags @tool_overrides @gen_overrides @syshdr_override @perlasm_override @timeconst_override @cc_s_c_override @kcflags_override Image
             seed mkdir -p "${dest}/usr/share/kominka"
             seed cp arch/arm64/boot/Image "${dest}/usr/share/kominka/Image"
         }
     }
 
     # Install kernel headers.
-    make ARCH=$ARCH OBJCOPY=$OBJCOPY @ld_args @host_args @clang_flags headers
+    make ARCH=$ARCH @host_args @clang_flags @tool_overrides @timeconst_override headers
 
     seed find usr/include -name '*.h' -type f | while builtin read -r file {
         seed mkdir -p "${dest}/${file%/*}"
