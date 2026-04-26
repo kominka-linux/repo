@@ -24,7 +24,7 @@ fn main() {
     let db = kominka_repo::db::Db::open(&env_required("DB_PATH"))
         .expect("failed to open auth database");
 
-    let webauthn = kominka_repo::webauthn::RelyingParty::new(&rp_id, &rp_origin, "Kominka Repo");
+    let webauthn = webauthn_minimal::RelyingParty::new(&rp_id, &rp_origin, "Kominka Repo");
 
     let jwks = if let Ok(jwks_url) = std::env::var("JWT_JWKS_URL") {
         let config = kominka_repo::jwt::JwtConfig {

@@ -129,6 +129,22 @@ pub fn route(
     body: &[u8],
     state: &AppState,
 ) -> Response {
+    // Serve static files from server/static/
+    if method == "GET" && (path.starts_with("/static/") || path.ends_with(".js") || path.ends_with(".css")) {
+        let static_path = if path.starts_with("/static/") {
+            path.strip_prefix("/static/").unwrap()
+        } else {
+            format!("js{}", path.strip_prefix('/').unwrap())
+        };
+        let full_path = format!("static/{}", static_path);
+        if let Ok(bytes) = std::fs::read(&full_path) {
+            let ct = if full_path.ends_with(".js") { "application/javascript" }
+                    else if full_path.ends_with(".css") { "text/css" }
+                    else { "application/octet-stream" };
+            return Response { status: 200, content_type: ct, body: bytes, extra_headers: vec![] };
+        }
+    }
+
     match method {
         "GET" => {
             if path == "/" {
@@ -225,29 +241,8 @@ fn root_index(headers: &HashMap<String, String>, state: &AppState) -> Response {
     let mut html = format!(
         "<!doctype html>\
         <html><head><meta charset=utf-8><meta name=viewport content=\"width=device-width\">\
-        <title>Kominka Packages</title><style>\
-        *{{margin:0;padding:0;box-sizing:border-box}}\
-        body{{font-family:system-ui,sans-serif;max-width:960px;margin:0 auto;padding:2rem 1rem;\
-        color:#e0e0e0;background:#1a1a1a}}\
-        header{{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1.5rem}}\
-        h1{{font-size:1.4rem;color:#fff}}\
-        .signin{{font-size:.8rem;color:#666}}\
-        .userbar{{font-size:.8rem;color:#888}}.userbar a{{color:#888;text-decoration:none}}.userbar a:hover{{text-decoration:underline}}\
-        .count{{font-size:.85rem;color:#666;margin-bottom:.75rem}}\
-        table{{width:100%;border-collapse:collapse;font-size:.85rem}}\
-        th{{text-align:left;padding:.3rem .5rem;border-bottom:1px solid #333;color:#888;font-weight:normal}}\
-        td{{padding:.4rem .5rem;border-bottom:1px solid #222;vertical-align:top}}\
-        a{{color:#6ba3f7;text-decoration:none}}a:hover{{text-decoration:underline}}\
-        .dep{{color:#888}}.mkdep{{color:#666}}\
-        .arch-row{{display:block;font-size:.8rem;color:#999;margin-top:.15rem}}\
-        .arch-row a{{color:#aac8f7}}\
-        .empty{{color:#666;padding:2rem 0}}\
-        @media(prefers-color-scheme:light){{body{{color:#222;background:#fff}}\
-        h1{{color:#000}}th{{color:#666;border-color:#ddd}}\
-        td{{border-color:#eee}}a{{color:#1a6be0}}.dep{{color:#555}}.mkdep{{color:#888}}\
-        .signin{{color:#999}}.userbar,.userbar a{{color:#aaa}}\
-        .arch-row{{color:#666}}.arch-row a{{color:#1a6be0}}.count{{color:#999}}}}\
-        </style></head><body>\
+        <title>Kominka Packages</title><link rel=\"stylesheet\" href=\"/static/css/index.css\">\
+        </head><body>\
         <header><h1>Kominka Packages</h1>{userbar}</header>",
     );
 
@@ -787,7 +782,7 @@ mod tests {
         AppState {
             s3: s3::Storage::memory(),
             db: Mutex::new(crate::db::Db::open(":memory:").unwrap()),
-            webauthn: crate::webauthn::RelyingParty::new("localhost", "http://localhost", "Test"),
+            webauthn: webauthn_minimal::RelyingParty::new("localhost", "http://localhost", "Test"),
             jwks: None,
             allowed_users: vec![],
             indexes: RwLock::new(HashMap::new()),

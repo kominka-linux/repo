@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::webauthn::{AuthChallenge, RegChallenge, StoredCredential};
+use webauthn_minimal::{AuthChallenge, RegChallenge, StoredCredential};
 
 use crate::AppState;
 use crate::packages::{Response, session_cookie};
@@ -108,7 +108,7 @@ pub fn register_verify(body: &[u8], state: &AppState) -> Response {
         }
     };
 
-    let cred_id = cred.cred_id.clone();
+    let cred_id = crate::db::hex_encode(&cred.cred_id);
     let passkey_json = serde_json::to_string(&cred).unwrap();
 
     let (new_token, browser_session) = {
@@ -250,7 +250,8 @@ pub fn authenticate_verify(body: &[u8], state: &AppState) -> Response {
 
         // Persist updated sign counter.
         let updated_json = serde_json::to_string(&updated_cred).unwrap();
-        let _ = db.update_passkey(&updated_cred.cred_id, &updated_json);
+        let cred_id_hex = crate::db::hex_encode(&updated_cred.cred_id);
+        let _ = db.update_passkey(&cred_id_hex, &updated_json);
 
         // Only create an API token if user has none yet.
         let token = if !db.has_any_token(&user_id).unwrap_or(false) {
@@ -413,42 +414,7 @@ pub fn settings_page(headers: &HashMap<String, String>, state: &AppState) -> Res
             <a href=\"/auth/settings\">Done</a>\
           </div>\
         </div>\
-        <script>\
-        document.getElementById('create-btn').addEventListener('click', async () => {{\
-          const name = document.getElementById('name-input').value.trim();\
-          if (!name) {{ setMsg('create-msg', 'Enter a name', true); return; }}\
-          const ttl = document.getElementById('ttl-select').value;\
-          const body = JSON.stringify({{name, expires_days: ttl ? parseInt(ttl) : null}});\
-          document.getElementById('create-btn').disabled = true;\
-          setMsg('create-msg', '', false);\
-          const resp = await fetch('/auth/tokens', {{method:'POST',headers:{{'Content-Type':'application/json'}},body}});\
-          const data = await resp.json().catch(() => ({{}}));\
-          document.getElementById('create-btn').disabled = false;\
-          if (!resp.ok) {{ setMsg('create-msg', data.error || 'Error', true); return; }}\
-          document.getElementById('create-section').style.display = 'none';\
-          document.getElementById('new-token-value').textContent = data.token;\
-          document.getElementById('new-token-section').style.display = 'block';\
-        }});\
-        document.getElementById('copy-btn').addEventListener('click', async () => {{\
-          await navigator.clipboard.writeText(document.getElementById('new-token-value').textContent).catch(() => {{}});\
-          document.getElementById('copy-btn').textContent = 'Copied!';\
-          setTimeout(() => {{ document.getElementById('copy-btn').textContent = 'Copy'; }}, 2000);\
-        }});\
-        document.querySelectorAll('.del-btn').forEach(btn => {{\
-          btn.addEventListener('click', async () => {{\
-            if (!confirm('Delete token ' + btn.closest('tr').querySelector('td').textContent + '?')) return;\
-            const resp = await fetch('/auth/tokens/delete', {{method:'POST',\
-              headers:{{'Content-Type':'application/json'}},\
-              body:JSON.stringify({{id:btn.dataset.id}})}});\
-            if (resp.ok) btn.closest('tr').remove();\
-          }});\
-        }});\
-        function setMsg(id, text, isErr) {{\
-          const el = document.getElementById(id);\
-          el.textContent = text;\
-          el.className = 'msg' + (isErr ? ' err' : '');\
-        }}\
-        </script>\
+        <script src=\"/static/js/settings.js\"></script>\
         </body></html>"
     );
 

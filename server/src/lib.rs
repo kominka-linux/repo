@@ -3,7 +3,6 @@ pub mod db;
 pub mod jwt;
 pub mod packages;
 pub mod s3;
-pub mod webauthn;
 pub mod webauthn_handlers;
 
 use std::collections::HashMap;
@@ -12,7 +11,7 @@ use std::sync::{Mutex, RwLock};
 pub struct AppState {
     pub s3: s3::Storage,
     pub db: Mutex<db::Db>,
-    pub webauthn: webauthn::RelyingParty,
+    pub webauthn: webauthn_minimal::RelyingParty,
     pub jwks: Option<Mutex<jwt::JwksCache>>,
     pub allowed_users: Vec<String>,
     pub indexes: RwLock<HashMap<String, packages::PackageIndex>>,

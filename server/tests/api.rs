@@ -14,7 +14,7 @@ fn make_state() -> AppState {
     AppState {
         s3: s3::Storage::memory(),
         db: std::sync::Mutex::new(db),
-        webauthn: kominka_repo::webauthn::RelyingParty::new(
+        webauthn: webauthn_minimal::RelyingParty::new(
             "test.example.com",
             "https://test.example.com",
             "Test",
