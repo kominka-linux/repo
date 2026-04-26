@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+base64ct = { version = "1", features = ["alloc"] }
 webauthn-minimal = { path = "../../webauthn-minimal" }
 hmac = "0.12"
 jsonwebtoken = "9"

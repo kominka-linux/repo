@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use base64ct::{Base64UrlUnpadded, Encoding};
 
 use webauthn_minimal::{AuthChallenge, RegChallenge, StoredCredential};
 
@@ -77,6 +78,11 @@ pub fn register_verify(body: &[u8], state: &AppState) -> Response {
         Err(_) => return Response::bad_request("invalid json"),
     };
 
+    let req: Req = match serde_json::from_slice(body) {
+        Ok(r) => r,
+        Err(_) => return Response::bad_request("invalid json"),
+    };
+
     let (user_id, challenge_json) = {
         let db = state.db.lock().unwrap();
         let session = match db.get_session(&req.session_id) {
@@ -100,7 +106,12 @@ pub fn register_verify(body: &[u8], state: &AppState) -> Response {
         Err(e) => return Response::json(400, &format!(r#"{{"error":"bad challenge: {e}"}}"#)),
     };
 
-    let cred = match state.webauthn.finish_registration(&req.credential, &reg_state) {
+    let credential: webauthn_minimal::RegistrationResponse = match serde_json::from_value(req.credential) {
+        Ok(c) => c,
+        Err(e) => return Response::bad_request(&format!("invalid credential format: {e}")),
+    };
+
+    let cred = match state.webauthn.finish_registration(&credential, &reg_state) {
         Ok(c) => c,
         Err(e) => {
             tracing::warn!("passkey registration failed: {e}");
@@ -232,12 +243,27 @@ pub fn authenticate_verify(body: &[u8], state: &AppState) -> Response {
         Err(e) => return Response::json(400, &format!(r#"{{"error":"bad challenge: {e}"}}"#)),
     };
 
+    let credential: webauthn_minimal::AuthenticationResponse = match serde_json::from_value(req.credential) {
+        Ok(c) => c,
+        Err(e) => return Response::bad_request(&format!("invalid credential format: {e}")),
+    };
+
     let stored_creds: Vec<StoredCredential> = passkey_rows
         .iter()
         .filter_map(|(_, json)| serde_json::from_str(json).ok())
         .collect();
 
-    let updated_cred = match state.webauthn.finish_authentication(&req.credential, &auth_state, &stored_creds) {
+    let matched_cred = stored_creds
+        .iter()
+        .find(|c| c.cred_id == Base64UrlUnpadded::decode_vec(credential.raw_id.trim_end_matches('=')).unwrap_or_default())
+        .ok_or_else(|| Response::json(401, r#"{"error":"credential not found"}"#));
+
+    let cred = match matched_cred {
+        Ok(c) => c,
+        Err(resp) => return resp,
+    };
+
+    let updated_cred = match state.webauthn.finish_authentication(&credential, &auth_state, cred) {
         Ok(c) => c,
         Err(e) => {
             tracing::warn!("passkey authentication failed: {e}");

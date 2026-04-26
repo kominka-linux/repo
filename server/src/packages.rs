@@ -132,7 +132,7 @@ pub fn route(
     // Serve static files from server/static/
     if method == "GET" && (path.starts_with("/static/") || path.ends_with(".js") || path.ends_with(".css")) {
         let static_path = if path.starts_with("/static/") {
-            path.strip_prefix("/static/").unwrap()
+            path.strip_prefix("/static/").unwrap().to_string()
         } else {
             format!("js{}", path.strip_prefix('/').unwrap())
         };
