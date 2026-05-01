@@ -37,7 +37,7 @@ baseline:
 %: builder
 	@mkdir -p $(CACHE)/bin $(CACHE)/src $(CACHE)/sources
 	docker run --rm \
-		-v "$(CURDIR)/packages:/packages:ro" \
+		-v "$(CURDIR)/packages:/packages" \
 		-v "$(CURDIR)/pm.ysh:/usr/bin/pm:ro" \
 		-v "$(CACHE)/bin:/root/.cache/kominka/bin" \
 		-v "$(CACHE)/src:/root/.cache/kominka/src" \

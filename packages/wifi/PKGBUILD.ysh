@@ -16,7 +16,7 @@ var checksums = [
     '660f1dea106ac35de06ec8ff4f4bb4279cef67c78b8131bd1dd7636aba90c726',
     '98e0ef47ed4269410fb23ac07e1c8da8a8ee869bdae598665fd7064ed23ef935',
     '40cff5755dacc0f7e883382756e2fd5d36c7c2c5c01ebb2b9b731ae934e98d2c',
-    '319ac5bd99d3e067fe322a0bade79b6deed0783c1fe671e3f3fa1de682c72505',
+    '8d930b359baedd3eb62b4e5111b9ed82fbe171d2358fb4fa3c5001c49ea7cf23',
 ]
 
 proc build(dest) {

@@ -88,6 +88,7 @@ var oct = ''
 # Build / install state.
 var tar_file = ''
 var hash = ''
+var _synced_checksums = null
 var build_install = '1'
 var prefer_cache = ''
 var user = ''
@@ -1844,6 +1845,15 @@ proc pkg_build_all (...pkgs) {
                 setglobal mirror_used[pkg] = true
             } else {
                 pkg_source (p)
+                pkg_sync_local_checksums (p)
+                if (_synced_checksums !== null) {
+                    var _sarch = ${sys_arch%%-*}
+                    case (_sarch) {
+                        aarch64 { if (len(p.checksums_aarch64) > 0) { setvar p['checksums_aarch64'] = _synced_checksums } else { setvar p['checksums'] = _synced_checksums } }
+                        x86_64  { if (len(p.checksums_x86_64) > 0)  { setvar p['checksums_x86_64']  = _synced_checksums } else { setvar p['checksums'] = _synced_checksums } }
+                        *       { setvar p['checksums'] = _synced_checksums }
+                    }
+                }
                 pkg_verify (p)
             }
         }
@@ -2101,6 +2111,86 @@ proc pkg_checksum_gen (; p Dict) {
     }
 
     _sh256 @files
+}
+
+proc pkg_sync_local_checksums (; p Dict) {
+    ### Recompute checksums for repo-owned (local) source files.
+    ### Sets _synced_checksums to the merged list, or null if nothing changed.
+    ### If the PKGBUILD is writable, also updates it in-place.
+    ### Remote URL/git sources and SKIP entries are left unchanged.
+    setglobal _synced_checksums = null
+    var _arch = ${sys_arch%%-*}
+    var _stored = []
+    var _field = 'checksums'
+    case (_arch) {
+        aarch64 { if (len(p.checksums_aarch64) > 0) { setvar _stored = p.checksums_aarch64; setvar _field = 'checksums_aarch64' } }
+        x86_64  { if (len(p.checksums_x86_64) > 0)  { setvar _stored = p.checksums_x86_64;  setvar _field = 'checksums_x86_64'  } }
+    }
+    if (len(_stored) === 0) { setvar _stored = p.checksums }
+    if (len(_stored) === 0) { return }
+
+    var merged = []
+    var changed = false
+    var idx = 0
+
+    for src_line in (p.sources) {
+        var src = ${src_line%% *}
+        var stored = _stored[idx]
+        setvar idx += 1
+
+        if (stored === 'SKIP') { call merged->append('SKIP'); continue }
+
+        pkg_source_resolve $src '' 'q' (p)
+
+        if (not (_res => startsWith(p.dir))) { call merged->append(stored); continue }
+        if ! builtin test -f $_res { call merged->append(stored); continue }
+
+        _sh256 $_res >/dev/null
+        if (hash !== stored) {
+            call merged->append(hash)
+            setvar changed = true
+        } else {
+            call merged->append(stored)
+        }
+    }
+
+    if (not changed) { return }
+
+    # Try to persist updated checksums to PKGBUILD.ysh (may be read-only).
+    var pkgbuild = "${repo_dir}/PKGBUILD.ysh"
+    var tmp = "${pkgbuild}.tmp"
+    var in_block = false
+    var found = false
+
+    try {
+        while builtin read --raw-line {
+            var line = _reply
+            if (not in_block) {
+                if (line => startsWith("var $_field ") or line => startsWith("var $_field=")) {
+                    setvar in_block = true
+                    setvar found = true
+                    write -- "var $_field = ["
+                    for h in (merged) { write -- "    '$h'," }
+                    write -- "]"
+                    if (line => contains(']')) { setvar in_block = false }
+                    continue
+                }
+            } else {
+                if (line => contains(']')) { setvar in_block = false }
+                continue
+            }
+            write -- $line
+        } < $pkgbuild > $tmp
+    }
+    if ! failed {
+        if (found) {
+            try { seed mv $tmp $pkgbuild }
+            if ! failed { log $[p.name] "Updated local checksums" }
+        }
+        seed rm -f $tmp
+    }
+
+    setglobal _synced_checksums = merged
 }
 
 proc pkg_verify (; p Dict) {
@@ -2912,17 +3002,21 @@ proc args (action='', ...pkgs) {
                 }
             }
 
-            case (action) {
-                i | install { setglobal order_mode = 'install' }
-                *           { setglobal order_mode = 'raw' }
-            }
-            pkg_order @pkgs
-            # build resolves deps internally in pkg_build_all; using the order
-            # list here would mark implicit make-deps as "explicit", bypassing
-            # the pre-built binary cache check.
+            # build resolves deps internally in pkg_build_all; calling
+            # pkg_order here would trigger pkg_cache for explicitly-requested
+            # packages, causing spurious 404 fetches for unreleased versions.
             case (action) {
                 b | build | c | checksum | uc | update-checksums | src | p | upload { builtin true }
-                *                                            { setvar pkgs = order }
+                i | install {
+                    setglobal order_mode = 'install'
+                    pkg_order @pkgs
+                    setvar pkgs = order
+                }
+                * {
+                    setglobal order_mode = 'raw'
+                    pkg_order @pkgs
+                    setvar pkgs = order
+                }
             }
         }
     }
