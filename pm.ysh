@@ -11,7 +11,7 @@ var KOMINKA_ROOT = ''
 var KOMINKA_PATH = ''
 var KOMINKA_COLOR = ''
 var KOMINKA_PROMPT = ''
-var KOMINKA_COMPRESS = ''
+var KOMINKA_COMPRESS = 'gz'
 var KOMINKA_PID = ''
 var KOMINKA_FORCE = ''
 var KOMINKA_CHOICE = ''
@@ -20,10 +20,9 @@ var KOMINKA_STRIP = ''
 var KOMINKA_HOOK = ''
 var KOMINKA_TMPDIR = ''
 var KOMINKA_KEEPLOG = ''
-var KOMINKA_SU = ''
-var KOMINKA_ELF = ''
+var KOMINKA_SU = '/usr/bin/su'
+var KOMINKA_ELF = 'readelf'
 var KOMINKA_AUDITDEPS = ''
-var KOMINKA_CHK = ''
 var KOMINKA_BIN_MIRROR = ''
 var KOMINKA_REPO = ''
 var KOMINKA_TOKEN = ''
@@ -46,7 +45,6 @@ var newline = \n
 
 var cmd_su = ''
 var cmd_elf = ''
-var cmd_sha = ''
 
 var sys_db = ''
 var sys_ch = ''
@@ -340,29 +338,16 @@ proc sh256 (...files) {
 }
 
 proc _sh256 (...files) {
-    ### Generate sha256 checksums using whatever utility is available.
-    # Output matches sha256sum format: '<checksum>  <file>'
+    ### Generate sha256 checksums. Output: '<checksum>  <file>'
     setglobal hash = ''
 
     if (len(files) === 0) {
         return
     }
 
-    var sha_args = []
-    case (cmd_sha) {
-        */sha256  { setvar sha_args = :| -r | }
-        */shasum  { setvar sha_args = :| -a 256 | }
-        */seed    { setvar sha_args = :| sha256sum | }
-    }
-
     var raw = ''
-    try { setvar raw = $($cmd_sha @sha_args @files) }
-    if failed {
-        # sha256sum may exist but be non-executable (0644 from busybox package);
-        # fall back to the seed multicall binary's sha256sum applet.
-        try { setvar raw = $(seed sha256sum @files) }
-        if failed { die "Failed to generate checksums" }
-    }
+    try { setvar raw = $(seed sha256sum @files) }
+    if failed { die "Failed to generate checksums" }
 
     var result = []
     for line in @(builtin echo $raw) {
@@ -3074,18 +3059,6 @@ proc create_tmp_dirs () {
              $mak_dir $pkg_dir $tar_dir $tmp_dir
 }
 
-proc _discover_tool (env_override, ...fallbacks) {
-    ### Find the first available command from fallbacks, or use env override.
-    if (env_override !== '') {
-        write -- $env_override
-        return
-    }
-    for cmd in (fallbacks) {
-        try { builtin command -v $cmd 2>/dev/null }
-        if ! failed { return }
-    }
-}
-
 proc main (...argv) {
     # Import environment variables into YSH globals.
     setglobal HOME           = ENV => get("HOME", "")
@@ -3103,10 +3076,9 @@ proc main (...argv) {
     setglobal KOMINKA_HOOK      = ENV => get("KOMINKA_HOOK", "")
     setglobal KOMINKA_TMPDIR    = ENV => get("KOMINKA_TMPDIR", "")
     setglobal KOMINKA_KEEPLOG   = ENV => get("KOMINKA_KEEPLOG", "")
-    setglobal KOMINKA_SU        = ENV => get("KOMINKA_SU", "")
-    setglobal KOMINKA_ELF       = ENV => get("KOMINKA_ELF", "")
+    setglobal KOMINKA_SU        = ENV => get("KOMINKA_SU", "/usr/bin/su")
+    setglobal KOMINKA_ELF       = ENV => get("KOMINKA_ELF", "readelf")
     setglobal KOMINKA_AUDITDEPS   = ENV => get("KOMINKA_AUDITDEPS", "0")
-    setglobal KOMINKA_CHK       = ENV => get("KOMINKA_CHK", "")
     setglobal KOMINKA_BIN_MIRROR  = ENV => get("KOMINKA_BIN_MIRROR", "")
     setglobal KOMINKA_REPO        = ENV => get("KOMINKA_REPO", "")
     setglobal KOMINKA_TOKEN       = ENV => get("KOMINKA_TOKEN", "")
@@ -3120,7 +3092,7 @@ proc main (...argv) {
     setglobal DESTDIR        = ENV => get("DESTDIR", "")
     setglobal GOPATH         = ENV => get("GOPATH", "")
     setglobal GOFLAGS        = ENV => get("GOFLAGS", "")
-    setglobal KOMINKA_COMPRESS  = ENV => get("KOMINKA_COMPRESS", "")
+    setglobal KOMINKA_COMPRESS  = ENV => get("KOMINKA_COMPRESS", "gz")
 
     setglobal PWD = $(builtin pwd)
     setglobal ppwd = PWD
@@ -3134,7 +3106,6 @@ proc main (...argv) {
       }
     }
 
-    if (KOMINKA_COMPRESS === '') { setglobal KOMINKA_COMPRESS = 'gz' }
     setglobal KOMINKA_PID = ${KOMINKA_PID:-$$}
 
     # Architecture detection for binary package mirror.
@@ -3157,18 +3128,10 @@ proc main (...argv) {
     try { setglobal _nproc = $(seed nproc 2>/dev/null || seed grep -c '^processor' /proc/cpuinfo 2>/dev/null || seed sysctl -n hw.ncpu 2>/dev/null || builtin echo 4) }
 
 
-    # Discover tools via fallback chains.
-    setglobal cmd_su = $(_discover_tool $KOMINKA_SU sudo su)
-    if (cmd_su === '') { setglobal cmd_su = 'su' }
+    setglobal cmd_su = KOMINKA_SU
+    try { builtin command -v $cmd_su >/dev/null 2>/dev/null }
+    if failed { die "su binary not found: $cmd_su" }
 
-    setglobal cmd_elf = $(_discover_tool $KOMINKA_ELF readelf eu-readelf llvm-readelf)
-    if (cmd_elf === '') { setglobal cmd_elf = 'ldd' }
-
-    setglobal cmd_sha = $(_discover_tool $KOMINKA_CHK sha256sum sha256)
-    # Fall back to the seed multicall binary (sha256sum applet) if no standalone
-    # sha256sum is found or it isn't executable (command -v checks executability).
-    if (cmd_sha === '') { setglobal cmd_sha = $(builtin command -v seed 2>/dev/null) }
-    if (cmd_sha === '') { die "No sha256 utility found" }
 
     # Config dict — single source of truth for runtime configuration.
     setglobal config = {
@@ -3183,7 +3146,6 @@ proc main (...argv) {
         color:      KOMINKA_COLOR,
         hook:       KOMINKA_HOOK,
         get:        'wget',
-        sha:        cmd_sha,
         elf:        cmd_elf,
     }
 
