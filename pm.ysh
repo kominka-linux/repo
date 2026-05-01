@@ -20,7 +20,6 @@ var KOMINKA_STRIP = ''
 var KOMINKA_HOOK = ''
 var KOMINKA_TMPDIR = ''
 var KOMINKA_KEEPLOG = ''
-var KOMINKA_SU = '/usr/bin/su'
 var KOMINKA_ELF = 'readelf'
 var KOMINKA_AUDITDEPS = ''
 var KOMINKA_BIN_MIRROR = ''
@@ -3076,7 +3075,6 @@ proc main (...argv) {
     setglobal KOMINKA_HOOK      = ENV => get("KOMINKA_HOOK", "")
     setglobal KOMINKA_TMPDIR    = ENV => get("KOMINKA_TMPDIR", "")
     setglobal KOMINKA_KEEPLOG   = ENV => get("KOMINKA_KEEPLOG", "")
-    setglobal KOMINKA_SU        = ENV => get("KOMINKA_SU", "/usr/bin/su")
     setglobal KOMINKA_ELF       = ENV => get("KOMINKA_ELF", "readelf")
     setglobal KOMINKA_AUDITDEPS   = ENV => get("KOMINKA_AUDITDEPS", "0")
     setglobal KOMINKA_BIN_MIRROR  = ENV => get("KOMINKA_BIN_MIRROR", "")
@@ -3126,12 +3124,6 @@ proc main (...argv) {
 
     # CPU count for parallel make.
     try { setglobal _nproc = $(seed nproc 2>/dev/null || seed grep -c '^processor' /proc/cpuinfo 2>/dev/null || seed sysctl -n hw.ncpu 2>/dev/null || builtin echo 4) }
-
-
-    setglobal cmd_su = KOMINKA_SU
-    try { builtin command -v $cmd_su >/dev/null 2>/dev/null }
-    if failed { die "su binary not found: $cmd_su" }
-
 
     # Config dict — single source of truth for runtime configuration.
     setglobal config = {

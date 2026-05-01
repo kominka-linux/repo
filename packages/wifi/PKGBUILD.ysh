@@ -2,7 +2,7 @@
 
 var name    = 'wifi'
 var ver     = '1.0.0'
-var rel     = '3'
+var rel     = '4'
 var deps    = ['wpa_supplicant', 'seed', 'ysh']
 var mkdeps  = []
 

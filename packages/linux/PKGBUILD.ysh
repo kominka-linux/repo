@@ -2,7 +2,7 @@
 
 var name    = 'linux'
 var ver     = '6.19.12'
-var rel     = '10'
+var rel     = '9'
 var deps    = []
 var mkdeps  = ['make', 'bison', 'flex', 'm4', 'perl']
 
