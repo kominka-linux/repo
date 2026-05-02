@@ -8,7 +8,6 @@
 FROM alpine:latest AS bootstrap
 
 ARG KARCH=aarch64-linux-gnu
-ARG SEED_VER=edd1a14aa531497401cd772532e1bee4800f6f8f
 ARG REPO_URL=
 ARG R2_PUBLIC_URL=https://pub-15b3a4c25627476493c0e1a68993f4d8.r2.dev
 
@@ -17,6 +16,7 @@ ADD packages/ca-certificates/files/cacert.pem /etc/ssl/certs/ca-certificates.crt
 RUN mkdir -p /kominka-root/usr/bin /kominka-root/etc/ssl/certs && \
     wget -q -O - "$R2_PUBLIC_URL/$KARCH/ysh/0.37.0-4.tar.gz" | tar xzf - -C /kominka-root/ && \
     SARCH=$(echo "$KARCH" | cut -d- -f1) && \
+    SEED_VER=$(wget -qO- "https://api.github.com/repos/kominka-linux/seed/releases/latest" | grep '"tag_name"' | sed 's/.*"seed-\(.*\)".*/\1/') && \
     wget -q -O - "https://github.com/kominka-linux/seed/releases/download/seed-$SEED_VER/seed-linux-$SARCH.tar.gz" | tar xzf - --strip-components=1 -C /kominka-root/usr/ && \
     find /kominka-root/usr/bin /kominka-root/usr/local/bin -maxdepth 1 -type f -exec chmod +x {} + && \
     cp /etc/ssl/certs/ca-certificates.crt /kominka-root/etc/ssl/certs/ca-certificates.crt

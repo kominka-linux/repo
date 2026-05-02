@@ -1845,7 +1845,7 @@ proc pkg_build_all (...pkgs) {
                 setglobal mirror_used[pkg] = true
             } else {
                 pkg_source (p)
-                pkg_sync_local_checksums (p)
+                pkg_sync_checksums (p)
                 if (_synced_checksums !== null) {
                     var _sarch = ${sys_arch%%-*}
                     case (_sarch) {
@@ -1854,7 +1854,6 @@ proc pkg_build_all (...pkgs) {
                         *       { setvar p['checksums'] = _synced_checksums }
                     }
                 }
-                pkg_verify (p)
             }
         }
     }
@@ -2112,11 +2111,11 @@ proc pkg_checksum_gen (; p Dict) {
     _sh256 @files
 }
 
-proc pkg_sync_local_checksums (; p Dict) {
-    ### Recompute checksums for repo-owned (local) source files.
+proc pkg_sync_checksums (; p Dict) {
+    ### Recompute checksums for all downloaded sources.
     ### Sets _synced_checksums to the merged list, or null if nothing changed.
     ### If the PKGBUILD is writable, also updates it in-place.
-    ### Remote URL/git sources and SKIP entries are left unchanged.
+    ### Git sources and SKIP entries are left unchanged.
     setglobal _synced_checksums = null
     var _arch = ${sys_arch%%-*}
     var _stored = []
@@ -2141,7 +2140,6 @@ proc pkg_sync_local_checksums (; p Dict) {
 
         pkg_source_resolve $src '' 'q' (p)
 
-        if (not (_res => startsWith(p.dir))) { call merged->append(stored); continue }
         if ! builtin test -f $_res { call merged->append(stored); continue }
 
         _sh256 $_res >/dev/null

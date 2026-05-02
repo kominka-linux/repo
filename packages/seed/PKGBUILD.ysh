@@ -1,7 +1,7 @@
 #!/usr/local/bin/ysh
 
 var name    = 'seed'
-var ver     = 'edd1a14aa531497401cd772532e1bee4800f6f8f'
+var ver     = 'b558737b10a75f2569d6cf97e5d368150cade09d'
 var rel     = '1'
 var deps    = []
 var mkdeps  = []
@@ -20,7 +20,7 @@ var sources = [
 'files/udhcpc.ysh',
 ]
 var checksums_aarch64 = [
-    '88639be2547a39d7eec6ca8c9373d70c3c52213014eefe034125ea2940d4c9d3',
+    '237af0395052f5e53d89b517d6f98ee04233577f346571917b97487eed17fd92',
     'SKIP',
     'SKIP',
     'SKIP',
@@ -32,16 +32,16 @@ var checksums_aarch64 = [
     'SKIP',
 ]
 var checksums_x86_64 = [
-    '085b98c9be6bb5976b1494b264800f1942a3e5e0335dabe9dd530180e7aa644d',
-    'SKIP',
-    'SKIP',
-    'SKIP',
-    'SKIP',
-    'SKIP',
-    'SKIP',
-    'SKIP',
-    'SKIP',
-    'SKIP',
+'085b98c9be6bb5976b1494b264800f1942a3e5e0335dabe9dd530180e7aa644d',
+'SKIP',
+'SKIP',
+'SKIP',
+'SKIP',
+'SKIP',
+'SKIP',
+'SKIP',
+'SKIP',
+'SKIP',
 ]
 
 proc build(dest) {
@@ -56,10 +56,10 @@ seed chmod +x "${dest}/usr/bin/seed" "${dest}/usr/bin/wget"
 # tarball. Install them as symlinks so bind-mounting /usr/bin/seed at
 # build time overrides all applet paths, not just /usr/bin/seed itself.
 for f in (glob('bin/*')) {
-    var applet = $(seed basename $f)
-    if test $applet = seed { continue }
-    if test $applet = wget { continue }
-    seed ln -sf seed "${dest}/usr/bin/$applet"
+var applet = $(seed basename $f)
+if test $applet = seed { continue }
+if test $applet = wget { continue }
+seed ln -sf seed "${dest}/usr/bin/$applet"
 }
 
 seed mkdir -p "${dest}/etc/acpi"
