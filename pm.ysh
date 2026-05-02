@@ -826,22 +826,50 @@ proc pkg_cache (pkg) {
     var p = null
     pkg_find_and_load $pkg (&p)
 
+    # Ensure the remote index is loaded so we can verify cached files by sha256.
+    index_load
+
     # Prefer the published version from the remote index — the local PKGBUILD
     # may be ahead of what has been built and uploaded.
     var _cver = p.ver
     var _crel = p.rel
+    var _expected_sha = ''
+    var _actual_sha = ''
     if (_remote_loaded and pkg in _remote_index) {
         setvar _cver = _remote_index[pkg]['ver']
         setvar _crel = _remote_index[pkg]['rel']
+        setvar _expected_sha = _remote_index[pkg] => get('sha256', '')
     }
 
     setglobal tar_file = "${bin_dir}/${pkg}@${_cver}-${_crel}.tar.${KOMINKA_COMPRESS}"
 
-    if builtin test -f $tar_file { return 0 }
+    var _remote_name = "${_cver}-${_crel}.tar.${KOMINKA_COMPRESS}"
+    var _remote_url = ''
+    var _server_failed = false
+
+    # Check locally cached file first. Verify sha256 if available to guard
+    # against corrupted downloads left in the cache from previous runs.
+    if builtin test -f $tar_file {
+        if (_expected_sha !== '') {
+            setvar _actual_sha = $(seed sha256sum $tar_file | seed awk '{print $1}')
+            if (_actual_sha === _expected_sha) { return 0 }
+            war $pkg "sha256 mismatch for cached file (expected $_expected_sha, got $_actual_sha) — re-downloading"
+            seed rm -f $tar_file
+        } else {
+            return 0
+        }
+    }
 
     for f in @[glob("${bin_dir}/${pkg}@${_cver}-${_crel}.tar.*")] {
-        setglobal tar_file = f
-        return 0
+        if (_expected_sha !== '') {
+            setvar _actual_sha = $(seed sha256sum $f | seed awk '{print $1}')
+            if (_actual_sha === _expected_sha) { setglobal tar_file = f; return 0 }
+            war $pkg "sha256 mismatch for cached file $f — re-downloading"
+            seed rm -f $f
+        } else {
+            setglobal tar_file = f
+            return 0
+        }
     }
 
     # Metapackages have no tarball. For remote-index packages, sha256 is the
@@ -849,16 +877,7 @@ proc pkg_cache (pkg) {
     # though sources=[] (remote index never stores sources).
     if (len(p.sources) === 0 and ('sha256' not in p or p.sha256 === '')) { return 1 }
 
-    var _remote_name = "${_cver}-${_crel}.tar.${KOMINKA_COMPRESS}"
     setglobal tar_file = "${bin_dir}/${pkg}@${_cver}-${_crel}.tar.${KOMINKA_COMPRESS}"
-
-    var _remote_url = ''
-    var _server_failed = false
-    var _expected_sha = ''
-    var _actual_sha = ''
-    if (_remote_loaded and pkg in _remote_index) {
-        setvar _expected_sha = _remote_index[pkg] => get('sha256', '')
-    }
 
     # R2 public URL: direct download, no server needed.
     if (R2_PUBLIC_URL !== '') {
@@ -3100,7 +3119,7 @@ proc args (action='', ...pkgs) {
         p | upload       { for pkg in (pkgs) { pkg_upload $pkg } }
         U | upgrade      { pkg_upgrade }
         auth             { pm_auth }
-        v | version      { write -- '5.5.31' }
+        v | version      { write -- '5.5.33' }
 
         h | help | '' {
             log 'pm [a|b|c|d|h|i|l|p|r|s|u|U|v] [pkg]...'
