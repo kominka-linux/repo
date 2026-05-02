@@ -5,6 +5,6 @@
 # runit service supervision
 ::respawn:runsvdir -P /var/service 'log: ................................................................................................................................................................................................................................................................'
 
-# Virtual terminal gettys — id prefix triggers seed init's TTY setup
+# id prefix triggers seed init's TTY setup (setsid + TIOCSCTTY)
 hvc0::respawn:/usr/local/bin/autologin
 tty1::respawn:/bin/getty 38400 tty1

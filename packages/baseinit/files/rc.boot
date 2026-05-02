@@ -45,14 +45,13 @@ log "Starting device manager..." {
     }
 }
 
+var _root_dev = $(awk '$2 == "/" {print $1; exit}' /proc/mounts)
+
 log "Remounting rootfs as read-only..." {
-    var _root_dev = $(awk '$2 == "/" {print $1; exit}' /proc/mounts)
     mount $_root_dev / -t ext4 -o remount,ro || sos
 }
 
-
 log "Mounting rootfs as read-write..." {
-    var _root_dev = $(awk '$2 == "/" {print $1; exit}' /proc/mounts)
     mount $_root_dev / -t ext4 -o remount,rw || sos
 }
 

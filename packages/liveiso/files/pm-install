@@ -360,6 +360,8 @@ seed rm -f "${MNT}/usr/bin/pm-install"
 builtin echo "==> Installing kernel"
 install_kernel
 
+builtin echo "kominka" > "${MNT}/etc/hostname"
+
 builtin echo "==> Writing fstab"
 builtin printf '%s\n' \
     "${FP}3  /      ext4  noauto    0 0" \
