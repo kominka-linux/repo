@@ -1778,6 +1778,10 @@ proc pkg_source_cmd (...pkgs) {
 proc pkg_build_all (...pkgs) {
     ### Build packages and turn them into tarballs.
 
+    # Load the remote index upfront so pkg_cache can verify sha256 on downloads.
+    index_refresh
+    index_load
+
     # Mark packages passed on the command-line as explicit.
     setglobal explicit = []
     setglobal explicit_seen = {}
@@ -3096,7 +3100,7 @@ proc args (action='', ...pkgs) {
         p | upload       { for pkg in (pkgs) { pkg_upload $pkg } }
         U | upgrade      { pkg_upgrade }
         auth             { pm_auth }
-        v | version      { write -- '5.5.30' }
+        v | version      { write -- '5.5.31' }
 
         h | help | '' {
             log 'pm [a|b|c|d|h|i|l|p|r|s|u|U|v] [pkg]...'

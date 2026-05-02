@@ -1,7 +1,7 @@
 #!/usr/local/bin/ysh
 
 var name    = 'pm'
-var ver     = '5.5.30'
+var ver     = '5.5.31'
 var rel     = '1'
 var deps    = ['ysh', 'seed']
 var mkdeps  = []
