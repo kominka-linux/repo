@@ -365,6 +365,12 @@ proc _download (dest, url) {
     seed mv $_tmp $dest
 }
 
+proc _tarball_ok (f) {
+    ### Return 0 if the tarball passes an integrity check, 1 if corrupt.
+    try { seed gzip -t $f }
+    if failed { return 1 }
+}
+
 proc index_load () {
     ### Load the cached remote package index into _remote_index.
     if (_remote_loaded) { return }
@@ -847,29 +853,46 @@ proc pkg_cache (pkg) {
     var _remote_url = ''
     var _server_failed = false
 
-    # Check locally cached file first. Verify sha256 if available to guard
-    # against corrupted downloads left in the cache from previous runs.
+    # Check locally cached file first. Verify sha256 (if available) and gzip
+    # integrity to guard against corrupted or wrong-version cached files.
     if builtin test -f $tar_file {
+        var _ok = true
         if (_expected_sha !== '') {
             setvar _actual_sha = $(seed sha256sum $tar_file | seed awk '{print $1}')
-            if (_actual_sha === _expected_sha) { return 0 }
-            war $pkg "sha256 mismatch for cached file (expected $_expected_sha, got $_actual_sha) — re-downloading"
-            seed rm -f $tar_file
-        } else {
-            return 0
+            if (_actual_sha !== _expected_sha) {
+                war $pkg "sha256 mismatch for cached file (expected $_expected_sha, got $_actual_sha) — re-downloading"
+                setvar _ok = false
+            }
         }
+        if (_ok) {
+            _tarball_ok $tar_file
+            if failed {
+                war $pkg "cached file failed integrity check — re-downloading"
+                setvar _ok = false
+            }
+        }
+        if (_ok) { return 0 }
+        seed rm -f $tar_file
     }
 
     for f in @[glob("${bin_dir}/${pkg}@${_cver}-${_crel}.tar.*")] {
+        var _ok = true
         if (_expected_sha !== '') {
             setvar _actual_sha = $(seed sha256sum $f | seed awk '{print $1}')
-            if (_actual_sha === _expected_sha) { setglobal tar_file = f; return 0 }
-            war $pkg "sha256 mismatch for cached file $f — re-downloading"
-            seed rm -f $f
-        } else {
-            setglobal tar_file = f
-            return 0
+            if (_actual_sha !== _expected_sha) {
+                war $pkg "sha256 mismatch for cached file $f — re-downloading"
+                setvar _ok = false
+            }
         }
+        if (_ok) {
+            _tarball_ok $f
+            if failed {
+                war $pkg "cached file $f failed integrity check — re-downloading"
+                setvar _ok = false
+            }
+        }
+        if (_ok) { setglobal tar_file = f; return 0 }
+        seed rm -f $f
     }
 
     # Metapackages have no tarball. For remote-index packages, sha256 is the
@@ -884,14 +907,20 @@ proc pkg_cache (pkg) {
         setvar _remote_url = "${R2_PUBLIC_URL}/${sys_arch}/${pkg}/${_remote_name}"
         try { _download $tar_file $_remote_url }
         if ! failed {
+            var _ok = true
             if (_expected_sha !== '') {
                 setvar _actual_sha = $(seed sha256sum $tar_file | seed awk '{print $1}')
-                if (_actual_sha === _expected_sha) { return 0 }
-                war $pkg "sha256 mismatch from R2 (expected $_expected_sha, got $_actual_sha)"
-                seed rm -f $tar_file
-            } else {
-                return 0
+                if (_actual_sha !== _expected_sha) {
+                    war $pkg "sha256 mismatch from R2 (expected $_expected_sha, got $_actual_sha)"
+                    setvar _ok = false
+                }
             }
+            if (_ok) {
+                _tarball_ok $tar_file
+                if failed { war $pkg "download from R2 failed integrity check"; setvar _ok = false }
+            }
+            if (_ok) { return 0 }
+            seed rm -f $tar_file
         }
     }
 
@@ -900,14 +929,20 @@ proc pkg_cache (pkg) {
         setvar _remote_url = "${KOMINKA_REPO}/${sys_arch}/${pkg}/${_remote_name}"
         try { _download $tar_file $_remote_url }
         if ! failed {
+            var _ok = true
             if (_expected_sha !== '') {
                 setvar _actual_sha = $(seed sha256sum $tar_file | seed awk '{print $1}')
-                if (_actual_sha === _expected_sha) { return 0 }
-                war $pkg "sha256 mismatch from repo server (expected $_expected_sha, got $_actual_sha)"
-                seed rm -f $tar_file
-            } else {
-                return 0
+                if (_actual_sha !== _expected_sha) {
+                    war $pkg "sha256 mismatch from repo server (expected $_expected_sha, got $_actual_sha)"
+                    setvar _ok = false
+                }
             }
+            if (_ok) {
+                _tarball_ok $tar_file
+                if failed { war $pkg "download from repo server failed integrity check"; setvar _ok = false }
+            }
+            if (_ok) { return 0 }
+            seed rm -f $tar_file
         } else {
             setvar _server_failed = true
         }
@@ -3119,7 +3154,7 @@ proc args (action='', ...pkgs) {
         p | upload       { for pkg in (pkgs) { pkg_upload $pkg } }
         U | upgrade      { pkg_upgrade }
         auth             { pm_auth }
-        v | version      { write -- '5.5.33' }
+        v | version      { write -- '5.5.34' }
 
         h | help | '' {
             log 'pm [a|b|c|d|h|i|l|p|r|s|u|U|v] [pkg]...'
