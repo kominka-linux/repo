@@ -195,7 +195,7 @@ class SearchTests:
         self.assertIn("zlib", r.stdout)
 
     def test_search_finds_multiple(self):
-        for pkg in ["boringssl", "curl", "musl", "seed"]:
+        for pkg in ["musl", "seed"]:
             r = self.pm("s", pkg)
             self.assertIn(pkg, r.stdout)
 
@@ -509,10 +509,10 @@ class MakeDepTests:
     def test_build_skips_make_deps_of_installed_packages(self):
         """pm b should not pull make deps of already-installed packages.
 
-        Mirrors the CI scenario: boringssl is installed (has cmake/go/samurai
-        as make deps), curl depends on boringssl at runtime.  pm b curl must
-        NOT resolve cmake/go/samurai.  Crucially, the make deps themselves
-        are NOT installed — only the parent is.
+        Mirrors the CI scenario: libevent is installed (has zig/make as make
+        deps), tmux depends on libevent at runtime.  pm b tmux must NOT
+        resolve zig/make.  Crucially, the make deps themselves are NOT
+        installed — only the parent is.
         """
         # buildtool is a make dep of mylib — exists in repo but NOT installed.
         self.create_repo_pkg("buildtool", version="1.0 1")

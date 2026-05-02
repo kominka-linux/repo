@@ -42,7 +42,7 @@ var c3 = ''
 var ppwd = ''
 var newline = \n
 
-var cmd_su = ''
+var cmd_su = 'su'
 var cmd_elf = ''
 
 var sys_db = ''
@@ -241,7 +241,7 @@ proc am_owner (path) {
     try { setvar inf = $(seed ls -ld $path) }
     if failed { return 1 }  # can't stat path; treat as not-owner
 
-    builtin read -r (&line) <<< $inf
+    builtin read -r line <<< $inf
     var fields = line => split(/ ' '+ /)
     setglobal user = fields[2]
 
@@ -1065,8 +1065,8 @@ proc pkg_source_tar (file; p Dict) {
     try { seed tar tf $[tf[-2]] | seed sort -ut / -k1,1 > $[tf[-1]] }
     if failed { die $[p.name] "Failed to extract manifest" }
 
-    while builtin read -r {
-        var _parts = REPLY => split('/')
+    while builtin read -r _line {
+        var _parts = _line => split('/')
         var dir = _parts[0]
         var dir_stripped = ${dir#.}
         case (dir_stripped) {
@@ -1596,8 +1596,8 @@ proc pkg_manifest_replace (pkg, old_entry, new_entry) {
     ### Replace a line in a package's manifest.
     tmp_file $pkg "manifest-replace-${old_entry##*/}"
 
-    while builtin read -r {
-        var out = REPLY
+    while builtin read -r _rline {
+        var out = _rline
         if (out === old_entry) {
             setvar out = new_entry
         }
@@ -2059,8 +2059,7 @@ proc pkg_update_checksums (pkg) {
         # Rewrite the checksum array in-place using a line-by-line pass.
         # Lines between "var FIELD ..." and the closing "]" are replaced with
         # the new entries; every other line is passed through unchanged.
-        while builtin read -r {
-            var line = REPLY
+        while builtin read -r line {
             if (not in_block) {
                 if (line => startsWith("var $field ") or line => startsWith("var $field=")) {
                     setvar in_block = true
@@ -2163,8 +2162,7 @@ proc pkg_sync_local_checksums (; p Dict) {
     var found = false
 
     try {
-        while builtin read -r {
-            var line = REPLY
+        while builtin read -r line {
             if (not in_block) {
                 if (line => startsWith("var $_field ") or line => startsWith("var $_field=")) {
                     setvar in_block = true

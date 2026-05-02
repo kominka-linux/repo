@@ -28,7 +28,7 @@ seed cp -a lib "${dest}/usr/lib/zig"
 var ARCH = $(seed uname -m)
 var MUSL_TRIPLE = "${ARCH}-linux-musl"
 # Append -I/usr/include AFTER user args so zig cc uses installed system
-# headers (musl-dev, boringssl, etc.) instead of zig's bundled musl headers.
+# headers (musl-dev) instead of zig's bundled musl headers.
 # Appending (not prepending) preserves user include priority: packages can
 # still put -Icompat/etc before -I/usr/include by ordering their own flags.
 write -- "#!/bin/sh
