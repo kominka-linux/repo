@@ -1066,7 +1066,7 @@ proc pkg_source_tar (file; p Dict) {
     if failed { die $[p.name] "Failed to extract manifest" }
 
     while builtin read -r {
-        var _parts = _reply => split('/')
+        var _parts = REPLY => split('/')
         var dir = _parts[0]
         var dir_stripped = ${dir#.}
         case (dir_stripped) {
@@ -1597,7 +1597,7 @@ proc pkg_manifest_replace (pkg, old_entry, new_entry) {
     tmp_file $pkg "manifest-replace-${old_entry##*/}"
 
     while builtin read -r {
-        var out = _reply
+        var out = REPLY
         if (out === old_entry) {
             setvar out = new_entry
         }
@@ -2060,7 +2060,7 @@ proc pkg_update_checksums (pkg) {
         # Lines between "var FIELD ..." and the closing "]" are replaced with
         # the new entries; every other line is passed through unchanged.
         while builtin read -r {
-            var line = _reply
+            var line = REPLY
             if (not in_block) {
                 if (line => startsWith("var $field ") or line => startsWith("var $field=")) {
                     setvar in_block = true
@@ -2164,7 +2164,7 @@ proc pkg_sync_local_checksums (; p Dict) {
 
     try {
         while builtin read -r {
-            var line = _reply
+            var line = REPLY
             if (not in_block) {
                 if (line => startsWith("var $_field ") or line => startsWith("var $_field=")) {
                     setvar in_block = true
