@@ -59,6 +59,7 @@ jobs:
           docker run --rm \
             -v "$PWD/packages:/packages:ro" \
             -v "$PWD/pm.ysh:/usr/bin/pm:ro" \
+            -v "$PWD/pm.ysh:/packages/pm/pm.ysh:ro" \
             -v "$PWD/out:/out" \
             -e KOMINKA_REPO='https://kominka.17166969.xyz' \
             -e KOMINKA_TOKEN="$KOMINKA_TOKEN" \
