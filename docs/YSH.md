@@ -176,7 +176,7 @@ for i in (0 ..< 10) {
 
 # While
 while (true) {
-  read --raw-line
+  read -r
   echo $_reply
 }
 ```
@@ -235,8 +235,8 @@ write -- $msg                           # write one line (replaces printf '%s\n'
 write --end '' -- $msg                  # no trailing newline
 write -- @items                         # one item per line
 
-read --raw-line                         # read into $_reply (no IFS splitting)
-read --raw-line (&myvar)               # read into named variable
+read -r                         # read into $_reply (no IFS splitting)
+read -r (&myvar)               # read into named variable
 
 # Redirections work as usual
 write 'log msg' >&2
@@ -282,7 +282,7 @@ seed find /usr -name '*.so' -delete
 ```ysh
 builtin echo "hello"
 builtin printf '%s\n' "$val"
-builtin read --raw-line (&line)
+builtin read -r (&line)
 builtin test -f "$path"
 builtin source /usr/lib/init/rc.lib
 builtin cd /tmp
@@ -341,7 +341,7 @@ Things that work in POSIX/bash but break in YSH (`ysh:all` mode):
 - **`while read ...; do` uses `{` not `do`.** All YSH loops use braces:
   `while read -r line { ... }`, `for x in (list) { ... }`.
 - **`setvar` requires a prior `var` declaration.** Variables set by `read -r`
-  aren't declared with `var`. Declare first or use `read --raw-line` + `_reply`.
+  aren't declared with `var`. Declare first or use `read -r` + `_reply`.
 - **`$@` / `set --` patterns won't work.** Use Lists: `var args = []`,
   `call args->append(x)`, `@args` to splice.
 - **No `@list` spread in list literals.** `[a, @b]` fails. Use
@@ -392,7 +392,7 @@ Things that work in POSIX/bash but break in YSH (`ysh:all` mode):
   `var dest = ARGV[0]` instead of `var dest = $1`.  `@ARGV` splices all args.
 - **`IFS=x read` leaks.** In POSIX shell, `while IFS=/ read -r a b` scopes
   `IFS` to the `read` command.  In YSH, the assignment persists after the loop,
-  corrupting later `read` calls.  Use `read --raw-line` + `=> split('/')`.
+  corrupting later `read` calls.  Use `read -r` + `=> split('/')`.
 - **Backslashes in single-quoted strings (OILS-ERR-20).** `'\n'` and `'\('`
   are ambiguous.  Use `r'\('` (raw string) for literal backslashes, or
   `u'\n'` (J8/unicode string) for escape sequences.

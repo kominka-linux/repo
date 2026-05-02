@@ -171,7 +171,7 @@ proc prompt (msg='') {
         log $msg
     }
     log "Continue?: Press Enter to continue or Ctrl+C to abort"
-    builtin read --raw-line || exit 1
+    builtin read -r || exit 1
 }
 
 proc mkcd (...dirs) {
@@ -241,7 +241,7 @@ proc am_owner (path) {
     try { setvar inf = $(seed ls -ld $path) }
     if failed { return 1 }  # can't stat path; treat as not-owner
 
-    builtin read --raw-line (&line) <<< $inf
+    builtin read -r (&line) <<< $inf
     var fields = line => split(/ ' '+ /)
     setglobal user = fields[2]
 
@@ -1065,7 +1065,7 @@ proc pkg_source_tar (file; p Dict) {
     try { seed tar tf $[tf[-2]] | seed sort -ut / -k1,1 > $[tf[-1]] }
     if failed { die $[p.name] "Failed to extract manifest" }
 
-    while builtin read --raw-line {
+    while builtin read -r {
         var _parts = _reply => split('/')
         var dir = _parts[0]
         var dir_stripped = ${dir#.}
@@ -1596,7 +1596,7 @@ proc pkg_manifest_replace (pkg, old_entry, new_entry) {
     ### Replace a line in a package's manifest.
     tmp_file $pkg "manifest-replace-${old_entry##*/}"
 
-    while builtin read --raw-line {
+    while builtin read -r {
         var out = _reply
         if (out === old_entry) {
             setvar out = new_entry
@@ -2059,7 +2059,7 @@ proc pkg_update_checksums (pkg) {
         # Rewrite the checksum array in-place using a line-by-line pass.
         # Lines between "var FIELD ..." and the closing "]" are replaced with
         # the new entries; every other line is passed through unchanged.
-        while builtin read --raw-line {
+        while builtin read -r {
             var line = _reply
             if (not in_block) {
                 if (line => startsWith("var $field ") or line => startsWith("var $field=")) {
@@ -2163,7 +2163,7 @@ proc pkg_sync_local_checksums (; p Dict) {
     var found = false
 
     try {
-        while builtin read --raw-line {
+        while builtin read -r {
             var line = _reply
             if (not in_block) {
                 if (line => startsWith("var $_field ") or line => startsWith("var $_field=")) {
@@ -2930,8 +2930,8 @@ proc pkg_help_ext () {
 
         var cmt = ''
         {
-            builtin read --raw-line
-            builtin read --raw-line (&cmt)
+            builtin read -r
+            builtin read -r (&cmt)
         } < $path
         setvar cmt = ${cmt#*\#}
 

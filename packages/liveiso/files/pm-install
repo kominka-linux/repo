@@ -14,6 +14,11 @@ var KERNEL_VER = '6.19.12'
 var KERNEL_SHA = 'ce5c4f1205f9729286b569b037649591555f31ca1e03cc504bd3b70b8e58a8d5'
 
 var MACHINE_PROFILE = ''
+
+# Non-interactive (no TTY): use safe defaults so the dev/CI loop can run
+# unattended. All prompts below gate on this flag.
+var TTY = false
+if builtin test -t 0 { setvar TTY = true }
 var MACHINE_NAME    = ''
 
 builtin echo "Kominka Linux Installer"
@@ -25,22 +30,22 @@ proc setup_network() {
     var wlan = ''
     for _d in @[glob('/sys/class/net/*/wireless')] {
         if builtin test -d $_d {
-            setvar wlan = $(seed basename $(seed dirname $_d))
+            setvar wlan = "${_d%/wireless}"; setvar wlan = "${wlan##*/}"
             break
         }
     }
-    if (wlan === '') { return }
+    if (wlan === '' or not TTY) { return }
 
     builtin echo "Wireless interface $wlan detected. Connect to WiFi now? [y/N]"
     builtin echo "(needed for machine-specific kernel download)"
-    var ans; builtin read --line (&ans)
+    var ans; try { builtin read -r (&ans) }
     if (ans === 'y' or ans === 'Y') { wifi-setup }
 }
 
 # ── Machine selection ─────────────────────────────────────────────────────────
 
 proc detect_machine() {
-    if (ARCH !== 'x86_64') { return }
+    if (ARCH !== 'x86_64' or not TTY) { return }
     var machines_dir = '/usr/share/kominka/machines'
     if ! builtin test -d $machines_dir { return }
 
@@ -57,7 +62,7 @@ proc detect_machine() {
         builtin echo "    Detected: $dmi"
         builtin echo ""
         builtin printf "    Build kernel for '%s'? [Y/n/list] " $match
-        builtin read --line (&ans)
+        try { builtin read -r (&ans) }
         case (ans) {
             n|N          { setglobal MACHINE_PROFILE = '' }
             l|L|list     { select_machine }
@@ -68,7 +73,7 @@ proc detect_machine() {
         builtin echo "    Machine not in profile list (DMI: ${dmi:-unknown})"
         builtin echo ""
         builtin printf "    Build a machine-specific kernel? [y/N/list] "
-        builtin read --line (&ans)
+        try { builtin read -r (&ans) }
         case (ans) {
             y|Y | l|L|list { select_machine }
             *               { setglobal MACHINE_PROFILE = '' }
@@ -96,7 +101,7 @@ proc select_machine() {
     }
     builtin echo ""
     builtin printf "    Enter number (or blank to use baseline): "
-    var num; builtin read --line (&num)
+    var num; try { builtin read -r (&num) }
     if (num === '') { return }
 
     setvar i = 1
@@ -206,7 +211,7 @@ proc list_disks() {
         var size = $(seed cat "${dev}/size" 2>/dev/null || builtin echo 0)
         var size_mb = int(size) // 2048
         if (size_mb <= 0) { continue }
-        var model = $(seed cat "${dev}/device/model" 2>/dev/null | seed sed 's/ *$//' || builtin true)
+        var model = $( { seed cat "${dev}/device/model" 2>/dev/null || true; } | seed sed 's/ *$//' )
         builtin printf '  /dev/%-10s %6d MB  %s\n' $name $size_mb $model
     }
 }
@@ -221,32 +226,57 @@ builtin echo ""
 list_disks
 builtin echo ""
 
-builtin printf "Install to (e.g. /dev/sda): "
-var DISK; builtin read --line (&DISK)
+var DISK = ''
+var FSTAB_DISK = ''
 
-if (DISK === '') { builtin echo "Aborted."; exit 0 }
+if (len(ARGV) > 0) {
+    setvar DISK = ARGV[0]
+    builtin echo "Installing to $DISK"
+    if (len(ARGV) > 1) { setvar FSTAB_DISK = ARGV[1] }
+} elif (TTY) {
+    builtin printf "Install to (e.g. /dev/sda): "
+    try { builtin read -r (&DISK) }
+    if (DISK === '') { builtin echo "Aborted."; exit 0 }
+} else {
+    builtin echo "error: no disk specified (pass as argument or run interactively)"; exit 1
+}
 
 if ! builtin test -b $DISK { builtin echo "error: $DISK is not a block device"; exit 1 }
 
-var size    = $(seed cat "/sys/block/$(seed basename $DISK)/size" 2>/dev/null || builtin echo 0)
+var size    = $(seed cat "/sys/block/${DISK##*/}/size" 2>/dev/null || builtin echo 0)
 var size_mb = int(size) // 2048
 var root_mb = size_mb - 256 - 8192
+
+var P
+case (DISK) {
+    *nvme*|*mmcblk*|*loop* { setvar P = "${DISK}p" }
+    *                       { setvar P = DISK }
+}
+
+# Partition prefix for fstab — may differ from P when installing via loop device.
+if (FSTAB_DISK === '') { setvar FSTAB_DISK = DISK }
+var FP
+case (FSTAB_DISK) {
+    *nvme*|*mmcblk*|*loop* { setvar FP = "${FSTAB_DISK}p" }
+    *                       { setvar FP = FSTAB_DISK }
+}
 
 builtin echo ""
 builtin echo "WARNING: all data on $DISK will be destroyed."
 builtin echo ""
 builtin echo "  Partition layout (MBR):"
-builtin echo "    ${DISK}1   256M   EFI System (FAT32)   /boot"
-builtin echo "    ${DISK}2     8G   Linux swap"
-builtin echo "    ${DISK}3  ${root_mb}M   Linux (ext4)          /"
+builtin echo "    ${P}1   256M   EFI System (FAT32)   /boot"
+builtin echo "    ${P}2     8G   Linux swap"
+builtin echo "    ${P}3  ${root_mb}M   Linux (ext4)          /"
 builtin echo ""
-builtin printf "Continue? [y/N] "
-var ans; builtin read --line (&ans)
-if (ans !== 'y' and ans !== 'Y') { builtin echo "Aborted."; exit 0 }
+if (TTY) {
+    builtin printf "Continue? [y/N] "
+    var ans; try { builtin read -r (&ans) }
+    if (ans !== 'y' and ans !== 'Y') { builtin echo "Aborted."; exit 0 }
+}
 
 builtin echo ""
 builtin echo "==> Partitioning $DISK (MBR)"
-seed dd if=/dev/zero of=$DISK bs=1M count=1 2>/dev/null
 
 seed fdisk $DISK <<'FDISK'
 o
@@ -256,6 +286,7 @@ p
 
 +256M
 t
+
 ef
 n
 p
@@ -276,31 +307,53 @@ FDISK
 
 seed sleep 1
 
-var P
+# Loop devices don't respond to BLKRRPART. Detach and reattach with -P so
+# the kernel scans the freshly-written partition table before mkfs runs.
 case (DISK) {
-    *nvme*|*mmcblk* { setvar P = "${DISK}p" }
-    *               { setvar P = DISK }
+    *loop* {
+        var backing = $(seed cat "/sys/block/${DISK##*/}/loop/backing_file")
+        seed losetup -d $DISK
+        seed losetup -P $DISK $backing
+        var disk_base = "${DISK##*/}"
+        for part_sys in @[glob("/sys/block/${disk_base}/${disk_base}p[0-9]*")] {
+            var part = "${part_sys##*/}"
+            var devnum = $(seed cat "${part_sys}/dev")
+            seed mknod "/dev/${part}" b "${devnum%%:*}" "${devnum##*:}"
+        }
+    }
 }
 
 builtin echo "==> Formatting partitions"
 mkfs.vfat -F32 -n KOMINKA_EFI "${P}1"
-seed mkswap -L KOMINKA_SWAP "${P}2"
+# seed mkswap uses stat(2) size which returns 0 for block devices; write
+# the header via a correctly-sized sparse temp file and copy the first page.
+var _swap = "${P}2"
+var _sectors = $(seed cat "/sys/block/${DISK##*/}/${_swap##*/}/size" 2>/dev/null || builtin echo 0)
+if (int(_sectors) > 0) {
+    seed dd if=/dev/zero of=/tmp/swap.img bs=512 count=0 seek=$_sectors
+    seed mkswap -L KOMINKA_SWAP /tmp/swap.img
+    seed dd if=/tmp/swap.img of=$_swap bs=4096 count=1
+    seed rm /tmp/swap.img
+} else {
+    seed mkswap -L KOMINKA_SWAP $_swap
+}
 mkfs.ext4 -q -L KOMINKA_ROOT "${P}3"
 
 builtin echo "==> Mounting target"
 seed mkdir -p $MNT
-seed mount "${P}3" $MNT
+seed mount -t ext4 "${P}3" $MNT
 seed mkdir -p "${MNT}/boot"
-seed mount "${P}1" "${MNT}/boot"
+seed mount -t vfat "${P}1" "${MNT}/boot"
 
 builtin echo "==> Copying rootfs"
-for dir in usr etc var root {
-    if builtin test -d "/$dir" { seed cp -a "/$dir" "${MNT}/" }
+for item in @[glob('/*')] {
+    var base = "${item##*/}"
+    case (base) {
+        dev|proc|sys|run|tmp|mnt|out|packages|boot { continue }
+        * { seed cp -a $item "${MNT}/" }
+    }
 }
-seed mkdir -p "${MNT}/dev" "${MNT}/proc" "${MNT}/sys" "${MNT}/tmp" "${MNT}/mnt"
-seed ln -sf usr/bin "${MNT}/bin"
-seed ln -sf usr/bin "${MNT}/sbin"
-seed ln -sf usr/lib "${MNT}/lib"
+seed mkdir -p "${MNT}/dev" "${MNT}/proc" "${MNT}/sys" "${MNT}/run" "${MNT}/tmp"
 
 seed rm -f "${MNT}/usr/bin/pm-install"
 
@@ -308,17 +361,20 @@ builtin echo "==> Installing kernel"
 install_kernel
 
 builtin echo "==> Writing fstab"
-seed cat > "${MNT}/etc/fstab" <<'EOF'
-LABEL=KOMINKA_ROOT  /      ext4  defaults  0 0
-LABEL=KOMINKA_EFI   /boot  vfat  defaults  0 0
-LABEL=KOMINKA_SWAP  none   swap  defaults  0 0
-EOF
+builtin printf '%s\n' \
+    "${FP}3  /      ext4  noauto    0 0" \
+    "${FP}1  /boot  vfat  defaults  0 0" \
+    "${FP}2  none   swap  sw,noauto 0 0" \
+    > "${MNT}/etc/fstab"
 
 builtin echo ""
 builtin echo "==> Setting up user account"
 builtin echo ""
-builtin printf "Username: "
-var NEW_USER; builtin read --line (&NEW_USER)
+var NEW_USER = ''
+if (TTY) {
+    builtin printf "Username: "
+    try { builtin read -r (&NEW_USER) }
+}
 
 if (NEW_USER !== '') {
     seed grep -q '^wheel:' "${MNT}/etc/group" || builtin echo "wheel:x:10:" >> "${MNT}/etc/group"
@@ -351,15 +407,15 @@ builtin echo "==> WiFi setup"
 var WLAN = ''
 for _d in @[glob('/sys/class/net/*/wireless')] {
     if builtin test -d $_d {
-        setvar WLAN = $(seed basename $(seed dirname $_d))
+        setvar WLAN = "${_d%/wireless}"; setvar WLAN = "${WLAN##*/}"
         break
     }
 }
 
-if (WLAN !== '') {
+if (WLAN !== '' and TTY) {
     if builtin test -f /etc/wifi.conf {
         builtin printf "Reuse WiFi config from this session on installed system? [Y/n] "
-        var _ans; builtin read --line (&_ans)
+        var _ans; try { builtin read -r (&_ans) }
         if (_ans === 'n' or _ans === 'N') {
             wifi-setup --target $MNT
         } else {
@@ -369,7 +425,7 @@ if (WLAN !== '') {
         }
     } else {
         builtin printf "Wireless interface %s detected. Configure WiFi? [y/N] " $WLAN
-        var _ans; builtin read --line (&_ans)
+        var _ans; try { builtin read -r (&_ans) }
         if (_ans === 'y' or _ans === 'Y') { wifi-setup --target $MNT }
     }
 

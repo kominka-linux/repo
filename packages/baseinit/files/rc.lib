@@ -2,13 +2,14 @@
 # Init library — sourced by rc.boot and rc.shutdown.
 # Not executed directly.
 
-proc log(...msgs) {
+proc log(...msgs; ; ; block = null) {
     for msg in (msgs) {
         printf '\033[31;1m=>\033[m %s\n' $msg
         if test -w /dev/null && test -w /dev/kmsg {
             printf 'init: %s\n' $msg > /dev/kmsg 2>/dev/null || true
         }
     }
+    if (block !== null) { call io->eval(block) }
 }
 
 proc mounted(path) {
@@ -17,7 +18,8 @@ proc mounted(path) {
 }
 
 proc mnt(opts, fstype, src, target) {
-    if mounted $target {
+    try { mounted $target }
+    if (_status === 0) {
         mount -o "remount,$opts" -t $fstype $src $target
     } else {
         mount -o $opts -t $fstype $src $target

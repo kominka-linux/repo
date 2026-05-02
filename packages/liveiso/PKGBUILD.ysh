@@ -7,7 +7,7 @@ var deps    = ['core', 'e2fsprogs', 'dosfstools', 'wifi', 'iwlwifi-firmware']
 var mkdeps  = []
 
 var sources = [
-    'files/install.ysh',
+    'files/pm-install',
 ]
 var checksums = [
     '097676a876f711ebca95c2f772149215e3ed65e3315d48b36a56e97b86b9f76e',
@@ -15,5 +15,5 @@ var checksums = [
 
 proc build(dest) {
     seed mkdir -p "${dest}/usr/bin"
-    seed install -m755 install.ysh "${dest}/usr/bin/pm-install"
+    seed install -m755 pm-install "${dest}/usr/bin/pm-install"
 }

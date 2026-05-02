@@ -39,25 +39,21 @@ log "Starting device manager..." {
         var pid_mdevd = $!
         mdevd-coldplug
     } elif command -v mdev >/dev/null 2>&1 {
-        mdev -s
+        mdev -s || true
         fork { mdev -df }
         var pid_mdev = $!
     }
 }
 
 log "Remounting rootfs as read-only..." {
-    mount -o remount,ro / || sos
+    var _root_dev = $(awk '$2 == "/" {print $1; exit}' /proc/mounts)
+    mount $_root_dev / -t ext4 -o remount,ro || sos
 }
 
-log "Checking filesystems..." {
-    if command -v fsck.ext4 >/dev/null 2>&1 {
-        fsck -pATat noopts=_netdev
-        if ($? > 1) { sos }
-    }
-}
 
 log "Mounting rootfs as read-write..." {
-    mount -o remount,rw / || sos
+    var _root_dev = $(awk '$2 == "/" {print $1; exit}' /proc/mounts)
+    mount $_root_dev / -t ext4 -o remount,rw || sos
 }
 
 log "Mounting all local filesystems..." {
@@ -73,15 +69,15 @@ log "Seeding random..." {
 }
 
 log "Setting up loopback..." {
-    ip link set up dev lo
+    ifconfig lo up
 }
 
 log "Setting hostname..." {
     if test -f /etc/hostname {
-        read --line < /etc/hostname
-        echo $_reply > /proc/sys/kernel/hostname
+        builtin read --raw-line < /etc/hostname
+        echo $_reply > /proc/sys/kernel/hostname 2>/dev/null || true
     }
-} 2>/dev/null || true
+}
 
 log "Loading sysctl settings..." {
     var seen = ''
@@ -102,19 +98,19 @@ log "Loading sysctl settings..." {
 
 log "Killing device manager to make way for services..." {
     if command -v udevd >/dev/null 2>&1 {
-        udevadm control --exit
-    } elif test -n ${pid_mdevd:-} {
-        kill $pid_mdevd
-    } elif test -n ${pid_mdev:-} {
-        kill $pid_mdev
-        command -v mdev > /proc/sys/kernel/hotplug
+        udevadm control --exit 2>/dev/null || true
+    } elif builtin test -n "${pid_mdevd:-}" {
+        kill $pid_mdevd 2>/dev/null || true
+    } elif builtin test -n "${pid_mdev:-}" {
+        kill $pid_mdev 2>/dev/null || true
+        command -v mdev > /proc/sys/kernel/hotplug 2>/dev/null || true
     }
-} 2>/dev/null || true
+}
 
 log "Running boot hooks..." {
     run_hook boot
 }
 
-read --line < /proc/uptime
+builtin read --raw-line < /proc/uptime
 var boot_time = _reply.split('.')[0]
 log "Boot stage completed in ${boot_time}s..."
