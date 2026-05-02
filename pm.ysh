@@ -3082,7 +3082,7 @@ proc args (action='', ...pkgs) {
         p | upload       { for pkg in (pkgs) { pkg_upload $pkg } }
         U | upgrade      { pkg_upgrade }
         auth             { pm_auth }
-        v | version      { write -- '5.5.28' }
+        v | version      { write -- '5.5.29' }
 
         h | help | '' {
             log 'pm [a|b|c|d|h|i|l|p|r|s|u|U|v] [pkg]...'

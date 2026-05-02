@@ -1,18 +1,16 @@
 #!/usr/local/bin/ysh
 
 var name    = 'pm'
-var ver     = '5.5.28'
-var rel     = '2'
+var ver     = '5.5.29'
+var rel     = '1'
 var deps    = ['ysh', 'seed']
 var mkdeps  = []
 
-var _commit = '18f0fbf4ab85f018d6d1a77ec4497c196be84de2'
-var sources   = ["https://github.com/kominka-linux/repo/archive/${_commit}.zip"]
-var checksums = ['98e52030346fa774626f80e13295e26f60b436080a5b8b543fd5871e98f62221']
+var sources   = ['pm.ysh']
+var checksums = ['SKIP']
 
 proc build(dest) {
     seed mkdir -p "${dest}/usr/bin"
-    # Archive extracts as repo-<commit>/pm.ysh
-    seed cp -f "repo-${_commit}/pm.ysh" "${dest}/usr/bin/pm"
+    seed cp -f pm.ysh "${dest}/usr/bin/pm"
     seed chmod +x "${dest}/usr/bin/pm"
 }

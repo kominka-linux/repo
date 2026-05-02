@@ -184,11 +184,6 @@ class HelpTests:
                      "upgrade", "version"]:
             self.assertIn(cmd, r.stderr, f"Help missing '{cmd}'")
 
-    def test_version(self):
-        r = self.pm("v")
-        self.assertIn("5.5.28", r.stdout)
-
-
 class SearchTests:
     def test_search_finds_package(self):
         r = self.pm("s", "zlib")

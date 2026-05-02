@@ -1,13 +1,13 @@
 KARCH  := aarch64-linux-gnu
 CACHE  ?= $(CURDIR)/.cache
-SEED   ?= $(HOME)/d/seed/target/aarch64-unknown-linux-musl/debug/seed
+SEED   ?= $(HOME)/d/kominka/seed/target/aarch64-unknown-linux-musl/debug/seed
 
 ifneq ($(wildcard $(SEED)),)
 # The published tarball has applets as hardlinks; mounting /usr/bin/seed alone
 # does not override them. Derive the full applet list from applet_list.rs and
 # mount the dev binary at each path. Once the builder image is rebuilt with the
 # symlink-based seed package, this reduces to a single -v for /usr/bin/seed.
-_SEED_APPLETS := $(shell grep -E 'name: "[^"]+"' $(HOME)/d/seed/src/applet_list.rs \
+_SEED_APPLETS := $(shell grep -E 'name: "[^"]+"' $(HOME)/d/kominka/seed/src/applet_list.rs \
     | sed 's/.*name: "\([^"]*\)".*/\1/' | sort -u)
 _SEED_MOUNT := $(foreach a,$(_SEED_APPLETS),-v "$(SEED):/usr/bin/$(a):ro")
 else
@@ -39,6 +39,7 @@ baseline:
 	docker run --rm \
 		-v "$(CURDIR)/packages:/packages" \
 		-v "$(CURDIR)/pm.ysh:/usr/bin/pm:ro" \
+		-v "$(CURDIR)/pm.ysh:/packages/pm/pm.ysh:ro" \
 		-v "$(CACHE)/bin:/root/.cache/kominka/bin" \
 		-v "$(CACHE)/src:/root/.cache/kominka/src" \
 		-v "$(CACHE)/sources:/root/.cache/kominka/sources" \
