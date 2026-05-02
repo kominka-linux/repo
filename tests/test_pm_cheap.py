@@ -558,7 +558,7 @@ class MakeDepTests:
         self.pm("b", "mypkg4")
 
         # Wipe the installed db: simulate a fresh system that has the tarball
-        # (via KOMINKA_BIN_MIRROR / pre-downloaded cache) but has never had
+        # (via pre-downloaded cache) but has never had
         # buildtool or mypkg4 installed.
         db = self.kominka_root / "var/db/kominka/installed"
         shutil.rmtree(db / "buildtool", ignore_errors=True)

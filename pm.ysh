@@ -22,7 +22,6 @@ var KOMINKA_TMPDIR = ''
 var KOMINKA_KEEPLOG = ''
 var KOMINKA_ELF = 'readelf'
 var KOMINKA_AUDITDEPS = ''
-var KOMINKA_BIN_MIRROR = ''
 var KOMINKA_REPO = ''
 var KOMINKA_TOKEN = ''
 var R2_PUBLIC_URL = ''
@@ -360,8 +359,10 @@ proc _sh256 (...files) {
 
 proc _download (dest, url) {
     ### Download a URL to a local file. Returns 1 on failure.
-    try { seed wget -q -O $dest $url }
-    if failed { seed rm -f $dest; return 1 }
+    var _tmp = "${dest}.tmp"
+    try { seed wget -q -O $_tmp $url }
+    if failed { seed rm -f $_tmp; return 1 }
+    seed mv $_tmp $dest
 }
 
 proc index_load () {
@@ -853,27 +854,44 @@ proc pkg_cache (pkg) {
 
     var _remote_url = ''
     var _server_failed = false
+    var _expected_sha = ''
+    var _actual_sha = ''
+    if (_remote_loaded and pkg in _remote_index) {
+        setvar _expected_sha = _remote_index[pkg] => get('sha256', '')
+    }
 
     # R2 public URL: direct download, no server needed.
     if (R2_PUBLIC_URL !== '') {
         setvar _remote_url = "${R2_PUBLIC_URL}/${sys_arch}/${pkg}/${_remote_name}"
         try { _download $tar_file $_remote_url }
-        if ! failed { return 0 }
+        if ! failed {
+            if (_expected_sha !== '') {
+                setvar _actual_sha = $(seed sha256sum $tar_file | seed awk '{print $1}')
+                if (_actual_sha === _expected_sha) { return 0 }
+                war $pkg "sha256 mismatch from R2 (expected $_expected_sha, got $_actual_sha)"
+                seed rm -f $tar_file
+            } else {
+                return 0
+            }
+        }
     }
 
     # Repo server (redirects to R2 when R2_PUBLIC_URL is also configured there).
     if (KOMINKA_REPO !== '') {
         setvar _remote_url = "${KOMINKA_REPO}/${sys_arch}/${pkg}/${_remote_name}"
         try { _download $tar_file $_remote_url }
-        if ! failed { return 0 }
-        setvar _server_failed = true
-    }
-
-    # Legacy binary mirror.
-    if (KOMINKA_BIN_MIRROR !== '') {
-        setvar _remote_url = "${KOMINKA_BIN_MIRROR}/${sys_arch}/${pkg}/${_remote_name}"
-        try { _download $tar_file $_remote_url }
-        if ! failed { return 0 }
+        if ! failed {
+            if (_expected_sha !== '') {
+                setvar _actual_sha = $(seed sha256sum $tar_file | seed awk '{print $1}')
+                if (_actual_sha === _expected_sha) { return 0 }
+                war $pkg "sha256 mismatch from repo server (expected $_expected_sha, got $_actual_sha)"
+                seed rm -f $tar_file
+            } else {
+                return 0
+            }
+        } else {
+            setvar _server_failed = true
+        }
     }
 
     if (_server_failed and R2_PUBLIC_URL === '') {
@@ -2595,8 +2613,6 @@ proc pkg_install_all (...pkgs) {
             setvar _url = "${R2_PUBLIC_URL}/${sys_arch}/${pkg}/${_dver}-${_drel}.tar.${KOMINKA_COMPRESS}"
         } elif (KOMINKA_REPO !== '') {
             setvar _url = "${KOMINKA_REPO}/${sys_arch}/${pkg}/${_dver}-${_drel}.tar.${KOMINKA_COMPRESS}"
-        } elif (KOMINKA_BIN_MIRROR !== '') {
-            setvar _url = "${KOMINKA_BIN_MIRROR}/${sys_arch}/${pkg}/${_dver}-${_drel}.tar.${KOMINKA_COMPRESS}"
         }
         if (_url !== '') {
             setvar urls[pkg] = _url
@@ -3080,7 +3096,7 @@ proc args (action='', ...pkgs) {
         p | upload       { for pkg in (pkgs) { pkg_upload $pkg } }
         U | upgrade      { pkg_upgrade }
         auth             { pm_auth }
-        v | version      { write -- '5.5.29' }
+        v | version      { write -- '5.5.30' }
 
         h | help | '' {
             log 'pm [a|b|c|d|h|i|l|p|r|s|u|U|v] [pkg]...'
@@ -3167,7 +3183,6 @@ proc main (...argv) {
     setglobal KOMINKA_KEEPLOG   = ENV => get("KOMINKA_KEEPLOG", "")
     setglobal KOMINKA_ELF       = ENV => get("KOMINKA_ELF", "readelf")
     setglobal KOMINKA_AUDITDEPS   = ENV => get("KOMINKA_AUDITDEPS", "0")
-    setglobal KOMINKA_BIN_MIRROR  = ENV => get("KOMINKA_BIN_MIRROR", "")
     setglobal KOMINKA_REPO        = ENV => get("KOMINKA_REPO", "")
     setglobal KOMINKA_TOKEN       = ENV => get("KOMINKA_TOKEN", "")
     setglobal R2_PUBLIC_URL       = ENV => get("R2_PUBLIC_URL", "")
